@@ -123,7 +123,7 @@ The implementation produces markdown documentation files and tests that verify t
     - [x] No linter warnings introduced: `uv run ruff check`
     - [x] Requirements 03-REQ-2.1 through 03-REQ-2.5, 03-REQ-2.E1, 03-REQ-6.2, 03-REQ-6.3 met
 
-- [ ] 4. Checkpoint — API references complete
+- [x] 4. Checkpoint — API references complete
   - Ensure Go and Python API references both pass all content tests.
   - Verify function signatures match design docs (TS-03-23, TS-03-24).
   - Ask the user if questions arise.
