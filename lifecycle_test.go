@@ -172,7 +172,7 @@ func TestTS01_30(t *testing.T) {
 		t.Errorf("IntentHash length = %d, want 64 (SHA-256 hex)", len(hash))
 	}
 	for _, c := range hash {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("IntentHash contains non-lowercase-hex character %q", c)
 			break
 		}

@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'pkg/afspec/v*'
+      - 'afspec-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-go:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref_name, 'pkg/afspec/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version
+        run: scripts/check-version.sh go "${{ github.ref_name }}"
+
+      - name: Create GitHub release
+        run: gh release create "${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  release-python:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref_name, 'afspec-v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Validate version
+        run: scripts/check-version.sh python "${{ github.ref_name }}"
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Create GitHub release with artifacts
+        run: gh release create "${{ github.ref_name }}" --generate-notes dist/*
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -129,8 +129,8 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 04-REQ-1.1 through 04-REQ-1.5, 04-REQ-1.E1, 04-REQ-1.E2, 04-REQ-5.3 met
 
-- [ ] 4. Release workflow and version validation
-  - [ ] 4.1 Create version validation script
+- [x] 4. Release workflow and version validation
+  - [x] 4.1 Create version validation script
     - Create `scripts/check-version.sh` (bash script)
     - Accept two arguments: language (`go` or `python`) and tag string
     - Go: strip `pkg/afspec/v` prefix from tag, extract `Version` constant from `internal/version/version.go`, compare
@@ -141,28 +141,28 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - Make script executable: `chmod +x scripts/check-version.sh`
     - _Requirements: 04-REQ-2.3, 04-REQ-3.1, 04-REQ-3.2, 04-REQ-3.3, 04-REQ-3.4_
 
-  - [ ] 4.2 Create `release.yml` with Go release job
+  - [x] 4.2 Create `release.yml` with Go release job
     - Define triggers: `on.push.tags: ['pkg/afspec/v*', 'afspec-v*']`
     - Add `permissions: contents: write`
     - Create `release-go` job with `if: startsWith(github.ref_name, 'pkg/afspec/v')`
     - Steps: checkout → check-version.sh go → gh release create with --generate-notes
     - _Requirements: 04-REQ-2.1, 04-REQ-2.4_
 
-  - [ ] 4.3 Add Python release job
+  - [x] 4.3 Add Python release job
     - Create `release-python` job with `if: startsWith(github.ref_name, 'afspec-v')`
     - Steps: checkout → setup-python (3.13) → setup-uv → check-version.sh python → uv build → gh release create with dist/* and --generate-notes
     - Ensure `uv build` step precedes `gh release create` (no continue-on-error)
     - _Requirements: 04-REQ-2.2, 04-REQ-2.4_
 
-  - [ ] 4.V Verify task group 4
-    - [ ] Spec tests TS-04-6 through TS-04-13 pass
-    - [ ] Edge case tests TS-04-E3, TS-04-E4, TS-04-E5 pass
-    - [ ] Property tests TS-04-P1 (tag exclusivity), TS-04-P2 (version extraction) pass
-    - [ ] Smoke tests TS-04-SMOKE-3 (Go release), TS-04-SMOKE-4 (Python release) pass
-    - [ ] All existing tests still pass: `go test -count=1 -timeout 300s ./...`
-    - [ ] `make check` still passes: `make check`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 04-REQ-2.1 through 04-REQ-2.4, 04-REQ-2.E1, 04-REQ-2.E2, 04-REQ-3.1 through 04-REQ-3.4, 04-REQ-3.E1 met
+  - [x] 4.V Verify task group 4
+    - [x] Spec tests TS-04-6 through TS-04-13 pass
+    - [x] Edge case tests TS-04-E3, TS-04-E4, TS-04-E5 pass
+    - [x] Property tests TS-04-P1 (tag exclusivity), TS-04-P2 (version extraction) pass
+    - [x] Smoke tests TS-04-SMOKE-3 (Go release), TS-04-SMOKE-4 (Python release) pass
+    - [ ] All existing tests still pass: `go test -count=1 -timeout 300s ./...` — blocked: spec 01 root package stubs fail (see docs/errata/04_integration_tests_blocked_by_spec01.md)
+    - [ ] `make check` still passes: `make check` — blocked: spec 01 root package stubs fail
+    - [x] No linter warnings introduced: `go vet ./...` and `golangci-lint run` both clean
+    - [x] Requirements 04-REQ-2.1 through 04-REQ-2.4, 04-REQ-2.E1, 04-REQ-2.E2, 04-REQ-3.1 through 04-REQ-3.4, 04-REQ-3.E1 met
 
 - [ ] 5. Wiring verification
 
