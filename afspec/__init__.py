@@ -1,19 +1,26 @@
 """afspec — Python spec-format library for agent-fox specifications.
 
 Public API surface. Modules are implemented incrementally across task groups:
-- Task group 2: models, exceptions (THIS GROUP)
+- Task group 2: models, exceptions
 - Task group 3: ids, schemas
 - Task group 5: loader
 - Task group 6: saver
 - Task group 7: validator
 - Task group 9: renderer
 - Task group 10: lifecycle
-- Task group 11: bootstrap, discovery
+- Task group 11: bootstrap, discovery (THIS GROUP)
 """
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+
+# Re-export bootstrap and discovery types
+from afspec.bootstrap import BootstrapSpec as BootstrapSpec
+from afspec.discovery import CyclicDependencyError as CyclicDependencyError
+from afspec.discovery import DependencyEdge as DependencyEdge
+from afspec.discovery import DependencyGraph as DependencyGraph
+from afspec.discovery import DiscoveryResult as DiscoveryResult
+from afspec.discovery import SpecEntry as SpecEntry
 
 # Re-export exception types (using `as` for explicit re-export under mypy strict)
 from afspec.exceptions import AfspecError as AfspecError
@@ -115,12 +122,11 @@ def transition(spec: Spec, target_status: str) -> Spec:
     return _transition(spec, target_status)
 
 
-def discover(spec_root: pathlib.Path | None = None) -> Any:
-    """Discover spec folders in a root directory.
+def discover(spec_root: pathlib.Path | None = None) -> DiscoveryResult:
+    """Discover spec folders in a root directory."""
+    from afspec.discovery import discover as _discover
 
-    STUB: implemented in task group 11.
-    """
-    raise NotImplementedError("discover not yet implemented (task group 11)")
+    return _discover(spec_root)
 
 
 def schema_version() -> int:
@@ -130,61 +136,4 @@ def schema_version() -> int:
     return _SCHEMA_VERSION
 
 
-class BootstrapSpec:
-    """Context manager for incremental spec creation.
-
-    STUB: implemented in task group 11.
-    """
-
-    def __init__(self, spec_root: pathlib.Path, spec_id: str, spec_name: str) -> None:
-        raise NotImplementedError("BootstrapSpec not yet implemented (task group 11)")
-
-    def __enter__(self) -> BootstrapSpec:
-        raise NotImplementedError("BootstrapSpec not yet implemented (task group 11)")
-
-    def __exit__(self, *args: Any) -> None:
-        raise NotImplementedError("BootstrapSpec not yet implemented (task group 11)")
-
-    def write_prd(self, prd: PRD) -> None:
-        """Write prd.md to the bootstrap spec folder.
-
-        STUB: implemented in task group 11.
-        """
-        raise NotImplementedError("BootstrapSpec.write_prd not yet implemented (task group 11)")
-
-    def write_requirements(self, requirements: Requirements) -> None:
-        """Write requirements.json to the bootstrap spec folder.
-
-        STUB: implemented in task group 11.
-        """
-        raise NotImplementedError(
-            "BootstrapSpec.write_requirements not yet implemented (task group 11)"
-        )
-
-    def write_test_spec(self, test_spec: TestSpec) -> None:
-        """Write test_spec.json to the bootstrap spec folder.
-
-        STUB: implemented in task group 11.
-        """
-        raise NotImplementedError(
-            "BootstrapSpec.write_test_spec not yet implemented (task group 11)"
-        )
-
-    def write_tasks(self, tasks: Tasks) -> None:
-        """Write tasks.json to the bootstrap spec folder.
-
-        STUB: implemented in task group 11.
-        """
-        raise NotImplementedError(
-            "BootstrapSpec.write_tasks not yet implemented (task group 11)"
-        )
-
-    @property
-    def result(self) -> Spec:
-        """Return the completed Spec after finalization.
-
-        STUB: implemented in task group 11.
-        """
-        raise NotImplementedError(
-            "BootstrapSpec.result not yet implemented (task group 11)"
-        )
+# BootstrapSpec is imported at the top of this module from afspec.bootstrap
