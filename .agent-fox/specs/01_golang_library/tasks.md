@@ -107,35 +107,36 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-1.1 through 01-REQ-1.6 acceptance criteria met
 
-- [ ] 3. Serialization and PRD parsing
-  - [ ] 3.1 Implement deterministic JSON marshaling
+- [x] 3. Serialization and PRD parsing
+  - [x] 3.1 Implement deterministic JSON marshaling
     - Create `internal/jsonutil/marshal.go`: `MarshalDeterministic()` — sorted keys, 2-space indent, trailing newline
     - Create `internal/jsonutil/unmarshal.go`: `UnmarshalStrict()` — reject unknown fields
     - Ensure `null` for nil pointers, `[]` for empty slices
     - _Requirements: 01-REQ-3.2, 01-REQ-1.E1, 01-REQ-1.E2_
 
-  - [ ] 3.2 Implement YAML frontmatter serialization
-    - Create `internal/prd/serialize.go`: `SerializePRD()` — fixed field order, `---` delimiters
-    - Use `gopkg.in/yaml.v3` encoder with ordered fields
-    - Add `go.sum` entries for yaml.v3 dependency
+  - [x] 3.2 Implement YAML frontmatter serialization
+    - Created `serialize.go` (root package, not internal/prd) to avoid import cycle: `serializePRD()` + `marshalFrontmatterOrdered()` — fixed field order, `---` delimiters via `internal/prd.AssemblePRDFile`
+    - Use `gopkg.in/yaml.v3` encoder with ordered fields via yaml.Node
     - _Requirements: 01-REQ-3.3_
 
-  - [ ] 3.3 Implement PRD parsing
-    - Create `internal/prd/parse.go`: `ParsePRD()` — split on `---` delimiters, parse YAML frontmatter, extract body
-    - Create `internal/prd/intent.go`: `ExtractIntent()` — find `## Intent` section, extract body between it and next `##` or EOF
+  - [x] 3.3 Implement PRD parsing
+    - Create `internal/prd/parse.go`: `SplitFrontmatterBody()` — split on `---` delimiters, return raw YAML + body
+    - Create `internal/prd/intent.go`: `ExtractIntent()` — find `## Intent` section, extract body between it and next `##` or EOF; `HasIntentSection()`
+    - Root package `load.go` does YAML unmarshal into `Frontmatter` (avoids import cycle)
     - _Requirements: 01-REQ-2.2_
 
-  - [ ] 3.4 Implement intent hash normalization
+  - [x] 3.4 Implement intent hash normalization
     - In `internal/lifecycle/intent.go`: `NormalizeIntent()` and `ComputeIntentHash()`
     - Pipeline: LF normalization → collapse blank lines → lower-case → trim → SHA-256
+    - Root package `lifecycle.go` re-exports `ComputeIntentHash` using internal package
     - _Requirements: 01-REQ-7.2_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Spec tests TS-01-8, TS-01-9, TS-01-11, TS-01-12, TS-01-E1, TS-01-E2 pass
-    - [ ] Property test TS-01-P10 (null preservation) passes
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-2.2, 01-REQ-3.2, 01-REQ-3.3, 01-REQ-1.E1, 01-REQ-1.E2 met
+  - [x] 3.V Verify task group 3
+    - [x] Spec tests TS-01-8, TS-01-9, TS-01-11, TS-01-12, TS-01-E1, TS-01-E2 pass
+    - [x] Property test TS-01-P10 (null preservation) passes
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-2.2, 01-REQ-3.2, 01-REQ-3.3, 01-REQ-1.E1, 01-REQ-1.E2 met
 
 - [ ] 4. File I/O (Load and Save)
   - [ ] 4.1 Implement LoadSpec
