@@ -245,33 +245,33 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-5.1 through 01-REQ-5.7, 01-REQ-10.1 through 01-REQ-10.3, all edge cases met
 
-- [ ] 8. Markdown rendering
-  - [ ] 8.1 Implement EARS sentence rendering
+- [x] 8. Markdown rendering
+  - [x] 8.1 Implement EARS sentence rendering
     - Create `internal/render/ears.go`: `RenderEARS(criterion)` — six templates from §5.2.1
     - Handle null `return_contract` (omit clause) and empty fields (`<missing>` placeholder)
     - Handle non-null `return_contract`: append " AND return {return_contract}"
     - _Requirements: 01-REQ-6.2, 01-REQ-6.E1, 01-REQ-6.E2_
 
-  - [ ] 8.2 Implement per-file rendering
+  - [x] 8.2 Implement per-file rendering
     - Create `internal/render/requirements.go`: `renderRequirements(req)` → markdown
     - Create `internal/render/testspec.go`: `renderTestSpec(ts)` → markdown
     - Create `internal/render/tasks.go`: `renderTasks(tasks)` → markdown
     - Create `render.go`: `RenderRequirements()`, `RenderTestSpec()`, `RenderTasks()` public API
     - _Requirements: 01-REQ-6.1, 01-REQ-6.3_
 
-  - [ ] 8.3 Implement combined rendering
+  - [x] 8.3 Implement combined rendering
     - In `render.go`: `RenderCombined(spec)` — PRD body verbatim + separator + rendered requirements + test_spec + tasks
     - Ensure correct section ordering
     - _Requirements: 01-REQ-6.4_
 
-  - [ ] 8.V Verify task group 8
-    - [ ] Spec tests TS-01-25 through TS-01-28 pass
-    - [ ] Edge case tests TS-01-E13, TS-01-E14 pass
-    - [ ] Property test TS-01-P2 (EARS determinism) passes
-    - [ ] Smoke tests TS-01-SMOKE-4, TS-01-SMOKE-5 pass
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-6.1 through 01-REQ-6.4, 01-REQ-6.E1, 01-REQ-6.E2 met
+  - [x] 8.V Verify task group 8
+    - [x] Spec tests TS-01-25 through TS-01-28 pass
+    - [x] Edge case tests TS-01-E13, TS-01-E14 pass
+    - [x] Property test TS-01-P2 (EARS determinism) passes
+    - [x] Smoke tests TS-01-SMOKE-4, TS-01-SMOKE-5 pass
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-6.1 through 01-REQ-6.4, 01-REQ-6.E1, 01-REQ-6.E2 met
 
 - [ ] 9. Lifecycle management
   - [ ] 9.1 Implement lifecycle transition graph
