@@ -128,39 +128,39 @@ The implementation produces markdown documentation files and tests that verify t
   - Verify function signatures match design docs (TS-03-23, TS-03-24).
   - Ask the user if questions arise.
 
-- [ ] 5. Write usage examples and comparison
-  - [ ] 5.1 Create docs/examples/ directory and write loading_and_saving.md
+- [x] 5. Write usage examples and comparison
+  - [x] 5.1 Create docs/examples/ directory and write loading_and_saving.md
     - Go and Python examples for LoadSpec/load_spec, SaveSpec/save_spec, round-trip
     - Each example is complete (package main / import afspec)
     - Prose descriptions before each code block
     - _Requirements: 03-REQ-3.1, 03-REQ-3.2, 03-REQ-3.3, 03-REQ-3.4, 03-REQ-3.5_
 
-  - [ ] 5.2 Write validation.md and rendering.md
+  - [x] 5.2 Write validation.md and rendering.md
     - validation.md: schema validation, cross-file validation, error handling examples
     - rendering.md: per-file rendering, combined rendering, EARS sentence examples
     - Both Go and Python in each file
     - _Requirements: 03-REQ-3.1, 03-REQ-3.2, 03-REQ-3.3, 03-REQ-3.4, 03-REQ-3.5_
 
-  - [ ] 5.3 Write lifecycle.md and bootstrap_and_discovery.md
+  - [x] 5.3 Write lifecycle.md and bootstrap_and_discovery.md
     - lifecycle.md: draft→active→sealed transitions, intent hash, mutation guards
     - bootstrap_and_discovery.md: BootstrapSpec/NewBootstrap, DiscoverSpecs/discover, dependency graph
     - Note Go/Python behavioral differences (error returns vs exceptions)
     - _Requirements: 03-REQ-3.1, 03-REQ-3.2, 03-REQ-3.3, 03-REQ-3.4, 03-REQ-3.5, 03-REQ-3.E1_
 
-  - [ ] 5.4 Write comparison.md
+  - [x] 5.4 Write comparison.md
     - Cover all 7 operations: loading, saving, validating, rendering, lifecycle, bootstrap, discovery
     - Alternating Go and Python code blocks per operation
     - Note any operations without direct equivalents (e.g., ValidateSchema as standalone)
     - _Requirements: 03-REQ-4.1, 03-REQ-4.2, 03-REQ-4.3, 03-REQ-4.E1_
 
-  - [ ] 5.V Verify task group 5
-    - [ ] Spec tests TS-03-11 through TS-03-18 pass
-    - [ ] Edge case tests TS-03-E3, TS-03-E4 pass
-    - [ ] Property test TS-03-P3 passes
-    - [ ] Smoke tests TS-03-SMOKE-4, TS-03-SMOKE-5 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check`
-    - [ ] Requirements 03-REQ-3.1 through 03-REQ-3.5, 03-REQ-3.E1, 03-REQ-4.1 through 03-REQ-4.3, 03-REQ-4.E1 met
+  - [x] 5.V Verify task group 5
+    - [x] Spec tests TS-03-11 through TS-03-18 pass
+    - [x] Edge case tests TS-03-E3, TS-03-E4 pass
+    - [x] Property test TS-03-P3 passes
+    - [x] Smoke tests TS-03-SMOKE-4, TS-03-SMOKE-5 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check`
+    - [x] Requirements 03-REQ-3.1 through 03-REQ-3.5, 03-REQ-3.E1, 03-REQ-4.1 through 03-REQ-4.3, 03-REQ-4.E1 met
 
 - [ ] 6. Update README and verify documentation accuracy
   - [ ] 6.1 Rewrite README.md

@@ -273,6 +273,15 @@ uv run mypy afspec/
 make check
 ```
 
+## Documentation
+
+| Resource | Description |
+|----------|-------------|
+| [Go API Reference](docs/api/go.md) | Complete reference for all public Go functions and types |
+| [Python API Reference](docs/api/python.md) | Complete reference for all public Python functions and types |
+| [Usage Examples](docs/examples/) | Runnable code examples covering all operation categories |
+| [Spec Format Specification](docs/spec-format.md) | Schema, glossary, and EARS-pattern reference |
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
