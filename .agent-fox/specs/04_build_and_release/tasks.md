@@ -103,31 +103,31 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - [x] No linter warnings introduced: `go vet ./...` and `golangci-lint run` both clean
     - [x] Requirements 04-REQ-4.1 through 04-REQ-4.6, 04-REQ-4.E1, 04-REQ-5.1, 04-REQ-5.2, 04-REQ-5.E1 met
 
-- [ ] 3. CI workflow
-  - [ ] 3.1 Create `.github/workflows/` directory structure
+- [x] 3. CI workflow
+  - [x] 3.1 Create `.github/workflows/` directory structure
     - Create `.github/workflows/` directory
     - _Requirements: 04-REQ-1.1_
 
-  - [ ] 3.2 Create `ci.yml` with Go and Python jobs
+  - [x] 3.2 Create `ci.yml` with Go and Python jobs
     - Define triggers: `on.push.branches: [main, develop]` and `on.pull_request.branches: [main, develop]`
     - Create `go` job: checkout → setup-go (go-version-file: go.mod) → golangci-lint-action → make lint-go → make test-go
     - Create `python` job: checkout → setup-python (matrix: 3.10, 3.13) → setup-uv → make lint-python → make test-python
     - All jobs use `runs-on: ubuntu-latest`
     - _Requirements: 04-REQ-1.1, 04-REQ-1.2, 04-REQ-1.3, 04-REQ-1.4, 04-REQ-1.5, 04-REQ-5.3_
 
-  - [ ] 3.3 Add conditional Python job execution
+  - [x] 3.3 Add conditional Python job execution
     - Add `if: hashFiles('pyproject.toml') != ''` to Python job
     - Verify no step uses `continue-on-error: true`
     - _Requirements: 04-REQ-1.E1, 04-REQ-1.E2_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Spec tests TS-04-1 through TS-04-5, TS-04-22 pass
-    - [ ] Edge case tests TS-04-E1, TS-04-E2 pass
-    - [ ] Property test TS-04-P4 (CI trigger correctness) passes
-    - [ ] Smoke test TS-04-SMOKE-2 (CI structural completeness) passes
-    - [ ] All existing tests still pass: `go test -count=1 -timeout 300s ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 04-REQ-1.1 through 04-REQ-1.5, 04-REQ-1.E1, 04-REQ-1.E2, 04-REQ-5.3 met
+  - [x] 3.V Verify task group 3
+    - [x] Spec tests TS-04-1 through TS-04-5, TS-04-22 pass
+    - [x] Edge case tests TS-04-E1, TS-04-E2 pass
+    - [x] Property test TS-04-P4 (CI trigger correctness) passes
+    - [x] Smoke test TS-04-SMOKE-2 (CI structural completeness) passes
+    - [ ] All existing tests still pass: `go test -count=1 -timeout 300s ./...` — blocked: release.yml and scripts/check-version.sh pending group 4
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 04-REQ-1.1 through 04-REQ-1.5, 04-REQ-1.E1, 04-REQ-1.E2, 04-REQ-5.3 met
 
 - [ ] 4. Release workflow and version validation
   - [ ] 4.1 Create version validation script
