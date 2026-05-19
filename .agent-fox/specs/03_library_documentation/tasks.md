@@ -20,13 +20,13 @@ The implementation produces markdown documentation files and tests that verify t
 
 ## Tasks
 
-- [ ] 1. Write failing spec tests
-  - [ ] 1.1 Set up test file structure
+- [x] 1. Write failing spec tests
+  - [x] 1.1 Set up test file structure
     - Create `tests/test_docs.py` with pytest test functions
     - Implement markdown parsing helpers: `extract_h2_headings()`, `extract_h3_headings()`, `extract_code_blocks()`, `extract_relative_links()`, `extract_section()`
     - _Test Spec: TS-03-1 through TS-03-25_
 
-  - [ ] 1.2 Translate file existence and structure tests
+  - [x] 1.2 Translate file existence and structure tests
     - TS-03-5: Go API reference file exists
     - TS-03-10: Python API reference file exists
     - TS-03-11: All six example files exist
@@ -34,7 +34,7 @@ The implementation produces markdown documentation files and tests that verify t
     - TS-03-22: README.md exists
     - _Test Spec: TS-03-5, TS-03-10, TS-03-11, TS-03-16, TS-03-22_
 
-  - [ ] 1.3 Translate Go API reference content tests
+  - [x] 1.3 Translate Go API reference content tests
     - TS-03-1: All public functions present
     - TS-03-2: Function entries have required sections
     - TS-03-3: Types section present
@@ -42,23 +42,23 @@ The implementation produces markdown documentation files and tests that verify t
     - TS-03-23: Signatures match design doc
     - _Test Spec: TS-03-1, TS-03-2, TS-03-3, TS-03-4, TS-03-23_
 
-  - [ ] 1.4 Translate Python API reference, example, README, and accuracy tests
+  - [x] 1.4 Translate Python API reference, example, README, and accuracy tests
     - TS-03-6 through TS-03-9: Python API content
     - TS-03-12 through TS-03-15: Example content
     - TS-03-17 through TS-03-21: Comparison and README content
     - TS-03-24, TS-03-25: Accuracy tests
     - _Test Spec: TS-03-6, TS-03-7, TS-03-8, TS-03-9, TS-03-12, TS-03-13, TS-03-14, TS-03-15, TS-03-17, TS-03-18, TS-03-19, TS-03-20, TS-03-21, TS-03-24, TS-03-25_
 
-  - [ ] 1.5 Translate edge case, property, and smoke tests
+  - [x] 1.5 Translate edge case, property, and smoke tests
     - Edge cases: TS-03-E1 through TS-03-E6
     - Property tests: TS-03-P1 through TS-03-P5
     - Smoke tests: TS-03-SMOKE-1 through TS-03-SMOKE-5
     - _Test Spec: TS-03-E1 through TS-03-E6, TS-03-P1 through TS-03-P5, TS-03-SMOKE-1 through TS-03-SMOKE-5_
 
-  - [ ] 1.V Verify task group 1
-    - [ ] All spec tests exist and are syntactically valid
-    - [ ] All spec tests FAIL (red) — no documentation files yet
-    - [ ] No linter warnings introduced: `uv run ruff check`
+  - [x] 1.V Verify task group 1
+    - [x] All spec tests exist and are syntactically valid
+    - [x] All spec tests FAIL (red) — no documentation files yet
+    - [x] No linter warnings introduced: `uv run ruff check`
 
 - [ ] 2. Write Go API reference
   - [ ] 2.1 Create docs/api/ directory and Go API reference skeleton
