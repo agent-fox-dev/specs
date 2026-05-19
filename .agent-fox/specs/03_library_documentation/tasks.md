@@ -190,9 +190,9 @@ The implementation produces markdown documentation files and tests that verify t
     - [x] No linter warnings introduced: `uv run ruff check`
     - [x] Requirements 03-REQ-5.1 through 03-REQ-5.4, 03-REQ-5.E1, 03-REQ-6.4 met
 
-- [ ] 7. Wiring verification
+- [x] 7. Wiring verification
 
-  - [ ] 7.1 Trace every execution path from design.md end-to-end
+  - [x] 7.1 Trace every execution path from design.md end-to-end
     - Path 1 (README discovery): Verify README → API docs links are live and target files have function entries
     - Path 2 (Go function lookup): Verify docs/api/go.md has navigable category → function structure
     - Path 3 (Python function lookup): Verify docs/api/python.md has navigable category → function structure
@@ -200,33 +200,33 @@ The implementation produces markdown documentation files and tests that verify t
     - Path 5 (Cross-library translation): Verify comparison.md has paired Go/Python blocks per operation
     - _Requirements: all_
 
-  - [ ] 7.2 Verify return values propagate correctly
+  - [x] 7.2 Verify return values propagate correctly
     - README links resolve to actual files (not 404s)
     - API doc function entries reference the correct types (types section exists with matching entries)
     - Example code blocks reference functions that exist in the API docs
     - _Requirements: all_
 
-  - [ ] 7.3 Run the integration smoke tests
+  - [x] 7.3 Run the integration smoke tests
     - All TS-03-SMOKE-1 through TS-03-SMOKE-5 pass
     - _Test Spec: TS-03-SMOKE-1 through TS-03-SMOKE-5_
 
-  - [ ] 7.4 Stub / dead-code audit
+  - [x] 7.4 Stub / dead-code audit
     - Search all documentation files for TODO markers, placeholder text (e.g., "TBD", "TODO", "FIXME"), or empty sections
     - Each hit must be resolved or justified
     - _Requirements: all_
 
-  - [ ] 7.5 Cross-spec entry point verification
+  - [x] 7.5 Cross-spec entry point verification
     - Verify all documented function signatures match the design docs (specs 01 and 02)
     - Verify the documentation is self-consistent (no internal contradictions between API docs, examples, and comparison)
     - Property test TS-03-P5 (type completeness) passes
     - _Requirements: all_
 
-  - [ ] 7.V Verify wiring group
-    - [ ] All smoke tests pass: `uv run pytest -q tests/test_docs.py -k smoke`
-    - [ ] No placeholder content remains in documentation files
-    - [ ] All execution paths from design.md are traceable in the documentation
-    - [ ] All documented signatures match design docs
-    - [ ] All existing tests still pass: `uv run pytest -q`
+  - [x] 7.V Verify wiring group
+    - [x] All smoke tests pass: `uv run pytest -q tests/test_docs.py -k smoke`
+    - [x] No placeholder content remains in documentation files
+    - [x] All execution paths from design.md are traceable in the documentation
+    - [x] All documented signatures match design docs
+    - [x] All existing tests still pass: `uv run pytest -q`
 
 ### Checkbox States
 
