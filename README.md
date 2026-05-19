@@ -150,6 +150,129 @@ go vet ./...
 make check
 ```
 
+---
+
+## Python Library (`afspec`)
+
+The `afspec` Python package provides identical functionality to the Go library
+and targets Python 3.10+.  It uses standard-library types throughout
+(`dataclasses`, `enum`, `hashlib`, `importlib.resources`, `pathlib`,
+`tempfile`) with two external dependencies: **PyYAML** and **jsonschema**.
+
+### Installation
+
+```sh
+# from the repository root (uses uv)
+uv pip install -e .
+```
+
+### Quick Start
+
+```python
+import pathlib
+import afspec
+
+# Load a spec from disk
+spec = afspec.load_spec(pathlib.Path("specs/01_my_feature"))
+
+# Validate (schema + ID format + cross-file integrity)
+errors = afspec.validate(spec)
+if errors:
+    for e in errors:
+        print(f"[{e.severity}] {e.file}#{e.path}: {e.message}")
+
+# Render to markdown
+doc = afspec.render_combined(spec)
+
+# Lifecycle transition: draft → active (computes intent hash)
+active = afspec.transition(spec, "active")
+afspec.save_spec(active, pathlib.Path("specs/01_my_feature"))
+
+# Discover all specs in a root directory
+result = afspec.discover(pathlib.Path("specs"))
+for entry in result.entries:
+    print(entry.spec_id, entry.spec_name, entry.status, entry.complete)
+
+# Topological order (respects cross-spec dependencies)
+order = result.dependency_graph.topological_sort()
+```
+
+### Bootstrap (Incremental Creation)
+
+```python
+from afspec import BootstrapSpec
+
+with BootstrapSpec(pathlib.Path("specs"), "05", "my_feature") as bs:
+    bs.write_prd(prd)           # per-file schema validation on each write
+    bs.write_requirements(req)
+    bs.write_test_spec(ts)
+    bs.write_tasks(tasks)
+# Full validation (schema + cross-file) runs on context exit.
+# bs.result holds the completed Spec.
+spec = bs.result
+```
+
+### Public API
+
+| Function | Description |
+|----------|-------------|
+| `load_spec(path)` | Load all four artifacts from a spec folder |
+| `save_spec(spec, path)` | Write artifacts atomically; auto-computes `updated_at` and `coverage` |
+| `validate(spec)` | Schema + ID format + cross-file integrity checks; returns all errors |
+| `render_requirements(req)` | Render requirements artifact to markdown |
+| `render_test_spec(ts)` | Render test-spec artifact to markdown |
+| `render_tasks(tasks)` | Render tasks artifact to markdown |
+| `render_combined(spec)` | PRD verbatim + all three rendered artifacts |
+| `transition(spec, status)` | Apply a lifecycle transition; returns updated `Spec` |
+| `discover(spec_root)` | Scan root for specs; returns entries + dependency graph |
+| `schema_version()` | Return the bundled schema version integer |
+
+### EARS Criterion Types
+
+```python
+from afspec import EARSCriterion
+
+criterion = EARSCriterion.from_dict({
+    "id": "05-REQ-1.1",
+    "ears_pattern": "event_driven",
+    "trigger": "a request arrives",
+    "system": "MySystem",
+    "action": "process the request",
+    "return_contract": "the processed result",
+})
+# Returns an EventDrivenCriterion instance
+```
+
+Six subclasses are available: `UbiquitousCriterion`, `EventDrivenCriterion`,
+`ComplexEventCriterion`, `StateDrivenCriterion`, `UnwantedCriterion`,
+`OptionalCriterion`.
+
+### Subtask State Machine
+
+```python
+from afspec import SubtaskState
+
+state = SubtaskState.PENDING
+assert state.can_transition_to(SubtaskState.QUEUED)   # True
+assert not state.can_transition_to(SubtaskState.DONE)  # False
+```
+
+### Python Development
+
+```sh
+# Run all Python tests
+uv run pytest -q afspec/tests/
+
+# Run linter
+uv run ruff check
+
+# Type check
+uv run mypy afspec/
+
+# Run quality gate (lint + tests for both Go and Python)
+make check
+```
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).

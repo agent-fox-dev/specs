@@ -335,7 +335,7 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 12. Checkpoint — Full library complete
+- [x] 12. Checkpoint — Full library complete
   - Ensure all unit, property, edge case, and integration tests pass.
   - Run golden fixture round-trip tests against `testdata/golden/`.
   - Run `uv run mypy afspec/` — no errors.
