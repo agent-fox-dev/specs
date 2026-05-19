@@ -1,67 +1,79 @@
 {
   "$schema": "https://agent-fox.dev/schemas/tasks.v1.json",
+  "dependencies": [],
+  "schema_version": 1,
   "spec_id": "05",
   "spec_name": "example_feature",
-  "schema_version": 1,
-  "test_commands": {
-    "spec_tests": "pytest -q afspec/tests/ -k 'example'",
-    "all_tests": "pytest -q",
-    "linter": "ruff check"
-  },
-  "dependencies": [],
   "task_groups": [
     {
       "id": 1,
       "kind": "tests",
-      "title": "Write failing tests",
       "subtasks": [
         {
+          "details": [
+            "Create test_example.py"
+          ],
           "id": "1.1",
-          "title": "Write test file",
-          "details": ["Create test_example.py"],
-          "test_spec_refs": ["TS-05-1"],
-          "requirement_refs": ["05-REQ-1.1"],
+          "optional": false,
+          "requirement_refs": [
+            "05-REQ-1.1"
+          ],
           "state": "pending",
-          "optional": false
+          "test_spec_refs": [
+            "TS-05-1"
+          ],
+          "title": "Write test file"
         }
       ],
+      "title": "Write failing tests",
       "verification": {
-        "id": "1.V",
         "checks": [
           "All tests fail (red): pytest -q",
           "No linter warnings: ruff check"
-        ]
+        ],
+        "id": "1.V"
       }
     },
     {
       "id": 2,
       "kind": "wiring_verification",
-      "title": "Wiring verification",
       "subtasks": [
         {
+          "details": [
+            "Verify all paths are live"
+          ],
           "id": "2.1",
-          "title": "Trace execution paths",
-          "details": ["Verify all paths are live"],
-          "test_spec_refs": ["TS-05-SMOKE-1"],
-          "requirement_refs": ["05-REQ-1.1"],
+          "optional": false,
+          "requirement_refs": [
+            "05-REQ-1.1"
+          ],
           "state": "pending",
-          "optional": false
+          "test_spec_refs": [
+            "TS-05-SMOKE-1"
+          ],
+          "title": "Trace execution paths"
         }
       ],
+      "title": "Wiring verification",
       "verification": {
-        "id": "2.V",
         "checks": [
           "All smoke tests pass: pytest -q -k smoke"
-        ]
+        ],
+        "id": "2.V"
       }
     }
   ],
+  "test_commands": {
+    "all_tests": "pytest -q",
+    "linter": "ruff check",
+    "spec_tests": "pytest -q afspec/tests/ -k 'example'"
+  },
   "traceability": [
     {
       "requirement_id": "05-REQ-1.1",
-      "test_spec_id": "TS-05-1",
       "task_id": "1.1",
-      "test_path": null
+      "test_path": null,
+      "test_spec_id": "TS-05-1"
     }
   ]
 }

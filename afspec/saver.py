@@ -13,8 +13,6 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
-import yaml
-
 from afspec.models import (
     PRD,
     CorrectnessProperty,
@@ -41,6 +39,63 @@ from afspec.models import (
 _SCHEMA_URL_REQUIREMENTS = "https://agent-fox.dev/schemas/requirements.v1.json"
 _SCHEMA_URL_TEST_SPEC = "https://agent-fox.dev/schemas/test_spec.v1.json"
 _SCHEMA_URL_TASKS = "https://agent-fox.dev/schemas/tasks.v1.json"
+
+# ---------------------------------------------------------------------------
+# YAML frontmatter serialization helpers
+# ---------------------------------------------------------------------------
+
+
+def _yaml_scalar(value: Any) -> str:
+    """Serialize a single YAML scalar value to its canonical string representation.
+
+    Rules:
+    - ``None`` → ``null``
+    - ``int`` → unquoted decimal integer string
+    - ``str`` → double-quoted string (with internal double-quotes escaped as ``\\"``)
+    - Other types → ``str(value)`` (fallback, should not occur in frontmatter)
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        # Escape backslashes first, then double-quotes
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return str(value)
+
+
+def _yaml_frontmatter(fm_dict: dict[str, Any]) -> str:
+    """Serialize a PRD frontmatter dict to a canonical YAML block.
+
+    Key names are unquoted; string values are double-quoted; None is ``null``;
+    integers are unquoted; lists use flow style (``[]``) when empty or block
+    style (``- "item"`` per line, 2-space indent) when non-empty.
+
+    This produces output compatible with the Go library's canonical YAML format,
+    enabling byte-identical round-trips across both implementations.
+
+    Args:
+        fm_dict: Ordered dict with frontmatter fields (insertion order preserved).
+
+    Returns:
+        YAML block string (without ``---`` delimiters).
+    """
+    lines: list[str] = []
+    for key, value in fm_dict.items():
+        if isinstance(value, list):
+            if not value:
+                lines.append(f"{key}: []")
+            else:
+                lines.append(f"{key}:")
+                for item in value:
+                    lines.append(f"  - {_yaml_scalar(item)}")
+        else:
+            lines.append(f"{key}: {_yaml_scalar(value)}")
+    return "\n".join(lines) + "\n"
+
 
 # Fixed YAML frontmatter field order (per spec-format.md §4.1 and design.md)
 _FM_FIELD_ORDER = [
@@ -295,9 +350,9 @@ def _serialize_prd(prd: PRD) -> str:
     fm_dict["intent_hash"] = fm.intent_hash
     fm_dict["schema_version"] = fm.schema_version
 
-    # Use yaml.dump with sort_keys=False to preserve field order.
-    # allow_unicode=True avoids escaping non-ASCII characters.
-    yaml_text = yaml.dump(fm_dict, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    # Use the custom YAML frontmatter serializer that double-quotes string values
+    # and leaves key names unquoted, matching the canonical format.
+    yaml_text = _yaml_frontmatter(fm_dict)
 
     # File format: opening ---, YAML block, closing ---, then body.
     # There is exactly one newline after the closing --- before the body.

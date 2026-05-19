@@ -1,67 +1,75 @@
 {
   "$schema": "https://agent-fox.dev/schemas/requirements.v1.json",
-  "spec_id": "05",
-  "spec_name": "example_feature",
-  "schema_version": 1,
-  "introduction": "An example feature for testing the afspec library.",
-  "glossary": {
-    "ExampleSystem": "The system under test in this golden fixture."
-  },
-  "requirements": [
-    {
-      "id": "05-REQ-1",
-      "title": "Example requirement",
-      "user_story": {
-        "role": "operator",
-        "goal": "do something useful",
-        "benefit": "get value"
-      },
-      "acceptance_criteria": [
-        {
-          "id": "05-REQ-1.1",
-          "ears_pattern": "ubiquitous",
-          "system": "`ExampleSystem`",
-          "action": "process the request",
-          "return_contract": "the processed result"
-        }
-      ],
-      "edge_cases": [
-        {
-          "id": "05-REQ-1.E1",
-          "ears_pattern": "unwanted",
-          "error_condition": "the input is null",
-          "system": "`ExampleSystem`",
-          "action": "return an error",
-          "return_contract": null
-        }
-      ]
-    }
-  ],
   "correctness_properties": [
     {
-      "id": "05-PROP-1",
-      "title": "Processing is idempotent",
       "for_any": "valid input",
+      "id": "05-PROP-1",
       "invariant": "processing twice yields the same result",
-      "validates": ["05-REQ-1.1"]
-    }
-  ],
-  "execution_paths": [
-    {
-      "id": "05-PATH-1",
-      "title": "Operator processes a request end-to-end",
-      "steps": [
-        {"actor": "operator", "action": "submit request"},
-        {"actor": "`ExampleSystem`", "action": "process and return result"}
+      "title": "Processing is idempotent",
+      "validates": [
+        "05-REQ-1.1"
       ]
     }
   ],
   "error_handling": [
     {
-      "id": "05-ERR-1",
-      "condition": "null input received",
       "behavior": "return error response",
+      "condition": "null input received",
+      "id": "05-ERR-1",
       "requirement_id": "05-REQ-1.E1"
     }
-  ]
+  ],
+  "execution_paths": [
+    {
+      "id": "05-PATH-1",
+      "steps": [
+        {
+          "action": "submit request",
+          "actor": "operator"
+        },
+        {
+          "action": "process and return result",
+          "actor": "`ExampleSystem`"
+        }
+      ],
+      "title": "Operator processes a request end-to-end"
+    }
+  ],
+  "glossary": {
+    "ExampleSystem": "The system under test in this golden fixture."
+  },
+  "introduction": "An example feature for testing the afspec library.",
+  "requirements": [
+    {
+      "acceptance_criteria": [
+        {
+          "action": "process the request",
+          "ears_pattern": "ubiquitous",
+          "id": "05-REQ-1.1",
+          "return_contract": "the processed result",
+          "system": "`ExampleSystem`"
+        }
+      ],
+      "edge_cases": [
+        {
+          "action": "return an error",
+          "ears_pattern": "unwanted",
+          "error_condition": "the input is null",
+          "id": "05-REQ-1.E1",
+          "return_contract": null,
+          "system": "`ExampleSystem`"
+        }
+      ],
+      "id": "05-REQ-1",
+      "title": "Example requirement",
+      "user_story": {
+        "benefit": "get value",
+        "goal": "do something useful",
+        "role": "operator"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "spec_id": "05",
+  "spec_name": "example_feature"
 }

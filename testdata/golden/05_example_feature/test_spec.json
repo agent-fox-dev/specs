@@ -1,57 +1,80 @@
 {
   "$schema": "https://agent-fox.dev/schemas/test_spec.v1.json",
-  "spec_id": "05",
-  "spec_name": "example_feature",
-  "schema_version": 1,
-  "test_cases": [
+  "coverage": {
+    "gaps": [],
+    "paths_covered": [
+      "05-PATH-1"
+    ],
+    "properties_covered": [
+      "05-PROP-1"
+    ],
+    "requirements_covered": [
+      "05-REQ-1.1",
+      "05-REQ-1.E1"
+    ]
+  },
+  "edge_case_tests": [
     {
-      "id": "TS-05-1",
-      "requirement_id": "05-REQ-1.1",
+      "assertion_pseudocode": "result = system.process(None); assert result.is_error",
+      "description": "Null input returns an error",
+      "expected": {
+        "error": true
+      },
+      "id": "TS-05-E1",
+      "input": {
+        "value": null
+      },
       "kind": "unit",
-      "description": "ExampleSystem processes a valid request",
-      "preconditions": ["system is initialized"],
-      "input": {"value": "test"},
-      "expected": {"result": "processed"},
-      "assertion_pseudocode": "result = system.process('test'); assert result == 'processed'"
+      "preconditions": [],
+      "requirement_id": "05-REQ-1.E1"
     }
   ],
   "property_tests": [
     {
-      "id": "TS-05-P1",
-      "property_id": "05-PROP-1",
-      "validates": ["05-REQ-1.1"],
       "description": "Processing any valid input twice yields same result",
       "for_any_strategy": "valid input strings",
-      "invariant_check": "system.process(x) == system.process(x)"
+      "id": "TS-05-P1",
+      "invariant_check": "system.process(x) == system.process(x)",
+      "property_id": "05-PROP-1",
+      "validates": [
+        "05-REQ-1.1"
+      ]
     }
   ],
-  "edge_case_tests": [
-    {
-      "id": "TS-05-E1",
-      "requirement_id": "05-REQ-1.E1",
-      "kind": "unit",
-      "description": "Null input returns an error",
-      "preconditions": [],
-      "input": {"value": null},
-      "expected": {"error": true},
-      "assertion_pseudocode": "result = system.process(None); assert result.is_error"
-    }
-  ],
+  "schema_version": 1,
   "smoke_tests": [
     {
-      "id": "TS-05-SMOKE-1",
-      "execution_path_id": "05-PATH-1",
       "description": "End-to-end request processing",
-      "trigger": "operator submits request",
-      "real_components": ["`ExampleSystem`"],
+      "execution_path_id": "05-PATH-1",
+      "expected_effects": [
+        "result returned to operator"
+      ],
+      "id": "TS-05-SMOKE-1",
       "mockable": [],
-      "expected_effects": ["result returned to operator"]
+      "real_components": [
+        "`ExampleSystem`"
+      ],
+      "trigger": "operator submits request"
     }
   ],
-  "coverage": {
-    "requirements_covered": ["05-REQ-1.1", "05-REQ-1.E1"],
-    "properties_covered": ["05-PROP-1"],
-    "paths_covered": ["05-PATH-1"],
-    "gaps": []
-  }
+  "spec_id": "05",
+  "spec_name": "example_feature",
+  "test_cases": [
+    {
+      "assertion_pseudocode": "result = system.process('test'); assert result == 'processed'",
+      "description": "ExampleSystem processes a valid request",
+      "expected": {
+        "result": "processed"
+      },
+      "id": "TS-05-1",
+      "input": {
+        "value": "test"
+      },
+      "kind": "unit",
+      "preconditions": [
+        "system is initialized"
+      ],
+      "requirement_id": "05-REQ-1.1"
+    }
+  ]
 }

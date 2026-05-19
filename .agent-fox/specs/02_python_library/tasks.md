@@ -241,7 +241,7 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 8. Checkpoint — Core I/O and validation complete
+- [x] 8. Checkpoint — Core I/O and validation complete
   - Ensure all loader, saver, and validator tests pass.
   - Verify idempotent round-trip with golden fixtures.
   - Ask the user if questions arise.
