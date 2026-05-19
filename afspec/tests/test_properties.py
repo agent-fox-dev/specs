@@ -5,9 +5,10 @@ Covers: TS-02-P1 through TS-02-P11
 from __future__ import annotations
 
 import pathlib
+import tempfile
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from afspec import (
@@ -118,12 +119,15 @@ def ears_criterion_dict(draw: st.DrawFn) -> dict:  # type: ignore[type-arg]
     )
 )
 @settings(max_examples=20)
-def test_p1_idempotent_roundtrip(tmp_path: pathlib.Path, new_title: str) -> None:
+def test_p1_idempotent_roundtrip(new_title: str) -> None:
     """TS-02-P1: loading and saving any valid spec produces byte-identical JSON files.
 
     The golden fixture is mutated with a randomly generated title so that the
     round-trip invariant is verified against a distribution of different spec
     states, not just the one fixed fixture.
+
+    Uses tempfile.TemporaryDirectory internally (not a pytest fixture) so that
+    Hypothesis can create a fresh temp directory for each generated example.
     """
     import dataclasses
 
@@ -136,15 +140,17 @@ def test_p1_idempotent_roundtrip(tmp_path: pathlib.Path, new_title: str) -> None
     new_prd = dataclasses.replace(spec.prd, frontmatter=new_fm)
     spec = dataclasses.replace(spec, prd=new_prd)
 
-    dir_a = tmp_path / "a"
-    dir_a.mkdir()
-    dir_b = tmp_path / "b"
-    dir_b.mkdir()
-    save_spec(spec, dir_a)
-    spec_loaded = load_spec(dir_a)
-    save_spec(spec_loaded, dir_b)
-    for fname in ["requirements.json", "test_spec.json", "tasks.json"]:
-        assert (dir_a / fname).read_bytes() == (dir_b / fname).read_bytes()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = pathlib.Path(tmpdir)
+        dir_a = tmp / "a"
+        dir_a.mkdir()
+        dir_b = tmp / "b"
+        dir_b.mkdir()
+        save_spec(spec, dir_a)
+        spec_loaded = load_spec(dir_a)
+        save_spec(spec_loaded, dir_b)
+        for fname in ["requirements.json", "test_spec.json", "tasks.json"]:
+            assert (dir_a / fname).read_bytes() == (dir_b / fname).read_bytes()
 
 
 @settings(max_examples=30)
@@ -172,7 +178,7 @@ def test_p3_subtask_state_machine_legal_only(
 
 
 @given(st.sampled_from(STATUSES), st.sampled_from(STATUSES))
-@settings(max_examples=25)
+@settings(max_examples=25, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_p4_lifecycle_transitions_match_graph(
     tmp_spec_dir: pathlib.Path, current: str, target: str
 ) -> None:
@@ -217,7 +223,7 @@ def test_p5_intent_hash_stable(text: str) -> None:
 
 
 @given(st.data())
-@settings(max_examples=5)
+@settings(max_examples=5, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_p6_cross_file_valid_spec_no_errors(
     tmp_spec_dir: pathlib.Path, data: st.DataObject
 ) -> None:
@@ -247,7 +253,7 @@ def test_p7_id_format_valid_ids_pass(spec_id: str, n: int, c: int) -> None:
 
 
 @given(st.data())
-@settings(max_examples=10)
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_p8_deterministic_rendering(
     tmp_spec_dir: pathlib.Path, data: st.DataObject
 ) -> None:
@@ -313,61 +319,74 @@ def test_p9_schema_catches_structural_violations(artifact_and_field: tuple[str, 
 
 
 @given(st.integers(min_value=1, max_value=4))
-@settings(max_examples=5)
+@settings(max_examples=5, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_p10_atomic_write_no_partial_files(
-    tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path, fail_at: int
+    tmp_spec_dir: pathlib.Path, fail_at: int
 ) -> None:
-    """TS-02-P10: after a failed save, no partial temp files remain."""
+    """TS-02-P10: after a failed save, no partial temp files remain.
+
+    tmp_spec_dir is read-only (only load_spec is called on it).
+    The output directory is created fresh per-example via tempfile to avoid
+    state accumulation across Hypothesis examples.
+    """
     from unittest.mock import patch
 
     spec = load_spec(tmp_spec_dir)
-    dst = tmp_path / "dst"
-    dst.mkdir()
 
-    call_count = 0
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dst = pathlib.Path(tmpdir) / "dst"
+        dst.mkdir()
 
-    def failing_write(path: pathlib.Path, content: str) -> None:
-        nonlocal call_count
-        call_count += 1
-        if call_count == fail_at:
-            raise OSError("Injected failure")
-        # Normal write
-        path.write_text(content, encoding="utf-8")
+        call_count = 0
 
-    with patch("afspec.saver._atomic_write", side_effect=failing_write):
-        try:
-            save_spec(spec, dst)
-        except Exception:
-            pass
+        def failing_write(path: pathlib.Path, content: str) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == fail_at:
+                raise OSError("Injected failure")
+            # Normal write
+            path.write_text(content, encoding="utf-8")
 
-    # No .tmp files should remain
-    tmp_files = [f for f in dst.iterdir() if ".tmp" in f.name]
-    assert len(tmp_files) == 0
+        with patch("afspec.saver._atomic_write", side_effect=failing_write):
+            try:
+                save_spec(spec, dst)
+            except Exception:
+                pass
+
+        # No .tmp files should remain
+        tmp_files = [f for f in dst.iterdir() if ".tmp" in f.name]
+        assert len(tmp_files) == 0
 
 
 @given(st.data())
-@settings(max_examples=5)
+@settings(max_examples=5, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_p11_computed_coverage_accuracy(
-    tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path, data: st.DataObject
+    tmp_spec_dir: pathlib.Path, data: st.DataObject
 ) -> None:
-    """TS-02-P11: saved coverage.requirements_covered ∪ gaps == all requirement IDs."""
+    """TS-02-P11: saved coverage.requirements_covered ∪ gaps == all requirement IDs.
+
+    tmp_spec_dir is read-only (only load_spec is called on it).
+    The output directory is created fresh per-example via tempfile to avoid
+    state accumulation across Hypothesis examples.
+    """
     spec = load_spec(tmp_spec_dir)
-    dst = tmp_path / "out"
-    dst.mkdir()
-    save_spec(spec, dst)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dst = pathlib.Path(tmpdir) / "out"
+        dst.mkdir()
+        save_spec(spec, dst)
 
-    from afspec.loader import _load_json
-    from afspec.models import TestSpec
+        from afspec.loader import _load_json
+        from afspec.models import TestSpec
 
-    ts = _load_json(dst / "test_spec.json", TestSpec)
-    all_ids = set()
-    for req in spec.requirements.requirements:
-        for crit in req.acceptance_criteria:
-            all_ids.add(crit.id)
-        for edge in req.edge_cases:
-            all_ids.add(edge.id)
+        ts = _load_json(dst / "test_spec.json", TestSpec)
+        all_ids = set()
+        for req in spec.requirements.requirements:
+            for crit in req.acceptance_criteria:
+                all_ids.add(crit.id)
+            for edge in req.edge_cases:
+                all_ids.add(edge.id)
 
-    covered = set(ts.coverage.requirements_covered)
-    gaps = set(ts.coverage.gaps)
-    assert covered | gaps == all_ids
-    assert covered & gaps == set()
+        covered = set(ts.coverage.requirements_covered)
+        gaps = set(ts.coverage.gaps)
+        assert covered | gaps == all_ids
+        assert covered & gaps == set()

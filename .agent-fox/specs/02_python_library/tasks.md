@@ -145,7 +145,7 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 4. Checkpoint — Data models and schemas complete
+- [x] 4. Checkpoint — Data models and schemas complete
   - Ensure all model, exception, ID, and schema tests pass.
   - Ask the user if questions arise.
   - The foundational types are now available for I/O, validation, and rendering modules.
