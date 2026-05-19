@@ -110,7 +110,6 @@ def ears_criterion_dict(draw: st.DrawFn) -> dict:  # type: ignore[type-arg]
 # ---------------------------------------------------------------------------
 
 
-@settings(max_examples=20)
 @given(
     st.text(
         min_size=1,
@@ -118,7 +117,8 @@ def ears_criterion_dict(draw: st.DrawFn) -> dict:  # type: ignore[type-arg]
         alphabet=st.characters(whitelist_categories=("L", "Zs")),
     )
 )
-def test_p1_idempotent_roundtrip(new_title: str, tmp_path: pathlib.Path) -> None:
+@settings(max_examples=20)
+def test_p1_idempotent_roundtrip(tmp_path: pathlib.Path, new_title: str) -> None:
     """TS-02-P1: loading and saving any valid spec produces byte-identical JSON files.
 
     The golden fixture is mutated with a randomly generated title so that the
@@ -171,10 +171,10 @@ def test_p3_subtask_state_machine_legal_only(
     assert result == expected
 
 
-@settings(max_examples=25)
 @given(st.sampled_from(STATUSES), st.sampled_from(STATUSES))
+@settings(max_examples=25)
 def test_p4_lifecycle_transitions_match_graph(
-    current: str, target: str, tmp_spec_dir: pathlib.Path
+    tmp_spec_dir: pathlib.Path, current: str, target: str
 ) -> None:
     """TS-02-P4: only legal lifecycle transitions are accepted."""
     import dataclasses
@@ -216,10 +216,10 @@ def test_p5_intent_hash_stable(text: str) -> None:
     assert h1 != h3
 
 
-@settings(max_examples=5)
 @given(st.data())
+@settings(max_examples=5)
 def test_p6_cross_file_valid_spec_no_errors(
-    data: st.DataObject, tmp_spec_dir: pathlib.Path
+    tmp_spec_dir: pathlib.Path, data: st.DataObject
 ) -> None:
     """TS-02-P6: valid consistent spec passes cross-file validation."""
     spec = load_spec(tmp_spec_dir)
@@ -246,10 +246,10 @@ def test_p7_id_format_valid_ids_pass(spec_id: str, n: int, c: int) -> None:
     assert len(wrong_errors) >= 1
 
 
-@settings(max_examples=10)
 @given(st.data())
+@settings(max_examples=10)
 def test_p8_deterministic_rendering(
-    data: st.DataObject, tmp_spec_dir: pathlib.Path
+    tmp_spec_dir: pathlib.Path, data: st.DataObject
 ) -> None:
     """TS-02-P8: rendering the same spec multiple times produces identical output."""
     spec = load_spec(tmp_spec_dir)
@@ -257,7 +257,6 @@ def test_p8_deterministic_rendering(
     assert all(o == outputs[0] for o in outputs)
 
 
-@settings(max_examples=5)
 @given(
     st.sampled_from(
         [
@@ -267,34 +266,36 @@ def test_p8_deterministic_rendering(
         ]
     )
 )
-def test_p9_schema_catches_structural_violations(
-    artifact_and_field: tuple[str, str], tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path
-) -> None:
+@settings(max_examples=5)
+def test_p9_schema_catches_structural_violations(artifact_and_field: tuple[str, str]) -> None:
     """TS-02-P9: removing any required field from an artifact triggers a schema validation error.
 
     For each JSON artifact, one required top-level field is deleted.  The
     library's schema validation layer MUST surface at least one error that
     references the removed field (via e.path or e.message).
+
+    Uses in-memory data to avoid function-scoped fixture issues with Hypothesis.
     """
     import copy
-    import json
-    import shutil
 
+    from afspec.tests.conftest import (
+        VALID_REQUIREMENTS_DATA,
+        VALID_TASKS_DATA,
+        VALID_TEST_SPEC_DATA,
+    )
     from afspec.validator import validate_dict_against_schema
 
     fname, required_field = artifact_and_field
 
-    # Copy spec to a scratch directory so we can safely corrupt one file
-    corrupted_dir = tmp_path / "corrupted"
-    shutil.copytree(str(tmp_spec_dir), str(corrupted_dir))
+    data_map: dict[str, dict] = {  # type: ignore[type-arg]
+        "requirements.json": VALID_REQUIREMENTS_DATA,
+        "test_spec.json": VALID_TEST_SPEC_DATA,
+        "tasks.json": VALID_TASKS_DATA,
+    }
 
-    artifact_path = corrupted_dir / fname
-    artifact_dict = json.loads(artifact_path.read_text(encoding="utf-8"))
-
-    # Remove the required field and write the corrupted JSON back
-    corrupted = copy.deepcopy(artifact_dict)
+    # Deep-copy so we don't mutate the module-level constant
+    corrupted = copy.deepcopy(data_map[fname])
     del corrupted[required_field]
-    artifact_path.write_text(json.dumps(corrupted, indent=2) + "\n", encoding="utf-8")
 
     # Validate the corrupted dict directly against the bundled schema
     errors = validate_dict_against_schema(fname, corrupted)
@@ -311,10 +312,10 @@ def test_p9_schema_catches_structural_violations(
     )
 
 
-@settings(max_examples=5)
 @given(st.integers(min_value=1, max_value=4))
+@settings(max_examples=5)
 def test_p10_atomic_write_no_partial_files(
-    fail_at: int, tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path
+    tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path, fail_at: int
 ) -> None:
     """TS-02-P10: after a failed save, no partial temp files remain."""
     from unittest.mock import patch
@@ -344,10 +345,10 @@ def test_p10_atomic_write_no_partial_files(
     assert len(tmp_files) == 0
 
 
-@settings(max_examples=5)
 @given(st.data())
+@settings(max_examples=5)
 def test_p11_computed_coverage_accuracy(
-    data: st.DataObject, tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path
+    tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path, data: st.DataObject
 ) -> None:
     """TS-02-P11: saved coverage.requirements_covered ∪ gaps == all requirement IDs."""
     spec = load_spec(tmp_spec_dir)

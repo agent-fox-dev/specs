@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tasks",
+  "description": "Schema for tasks.json spec artifact (v1)",
+  "type": "object",
+  "required": [
+    "spec_id",
+    "spec_name",
+    "schema_version",
+    "test_commands",
+    "dependencies",
+    "task_groups",
+    "traceability"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {},
+    "spec_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "test_commands": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/Dependency"}
+    },
+    "task_groups": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/TaskGroup"}
+    },
+    "traceability": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/TraceabilityEntry"}
+    }
+  },
+  "$defs": {
+    "Dependency": {
+      "type": "object",
+      "required": ["spec_id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "spec_id": {"type": "string"},
+        "kind": {"type": "string"}
+      }
+    },
+    "TaskGroup": {
+      "type": "object",
+      "required": ["id", "kind", "title", "subtasks", "verification"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "integer"},
+        "kind": {"type": "string"},
+        "title": {"type": "string"},
+        "subtasks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/Subtask"}
+        },
+        "verification": {"$ref": "#/$defs/VerificationSubtask"}
+      }
+    },
+    "Subtask": {
+      "type": "object",
+      "required": ["id", "title", "details", "test_spec_refs", "requirement_refs", "state", "optional"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "details": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "test_spec_refs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "requirement_refs": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "state": {
+          "type": "string",
+          "enum": ["pending", "queued", "in_progress", "done", "pending_reevaluation", "dropped"]
+        },
+        "optional": {"type": "boolean"}
+      }
+    },
+    "VerificationSubtask": {
+      "type": "object",
+      "required": ["id", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "checks": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "TraceabilityEntry": {
+      "type": "object",
+      "required": ["requirement_id", "test_spec_id", "task_id", "test_path"],
+      "additionalProperties": false,
+      "properties": {
+        "requirement_id": {"type": "string"},
+        "test_spec_id": {"type": "string"},
+        "task_id": {"type": "string"},
+        "test_path": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

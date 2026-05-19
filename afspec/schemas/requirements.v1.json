@@ -1,0 +1,232 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Requirements",
+  "description": "Schema for requirements.json spec artifact (v1)",
+  "type": "object",
+  "required": [
+    "spec_id",
+    "spec_name",
+    "schema_version",
+    "introduction",
+    "glossary",
+    "requirements",
+    "correctness_properties",
+    "execution_paths",
+    "error_handling"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {},
+    "spec_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "introduction": {
+      "type": "string"
+    },
+    "glossary": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "correctness_properties": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CorrectnessProperty"
+      }
+    },
+    "execution_paths": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExecutionPath"
+      }
+    },
+    "error_handling": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ErrorHandlingEntry"
+      }
+    }
+  },
+  "$defs": {
+    "Requirement": {
+      "type": "object",
+      "required": ["id", "title", "user_story", "acceptance_criteria", "edge_cases"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "user_story": {"$ref": "#/$defs/UserStory"},
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/EARSCriterion"}
+        },
+        "edge_cases": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/EARSCriterion"}
+        }
+      }
+    },
+    "UserStory": {
+      "type": "object",
+      "required": ["role", "goal", "benefit"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {"type": "string"},
+        "goal": {"type": "string"},
+        "benefit": {"type": "string"}
+      }
+    },
+    "EARSCriterion": {
+      "oneOf": [
+        {
+          "title": "ubiquitous",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "ubiquitous"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]}
+          }
+        },
+        {
+          "title": "event_driven",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action", "trigger"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "event_driven"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]},
+            "trigger": {"type": "string"}
+          }
+        },
+        {
+          "title": "complex_event",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action", "trigger", "condition"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "complex_event"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]},
+            "trigger": {"type": "string"},
+            "condition": {"type": "string"}
+          }
+        },
+        {
+          "title": "state_driven",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action", "state"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "state_driven"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]},
+            "state": {"type": "string"}
+          }
+        },
+        {
+          "title": "unwanted",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action", "error_condition"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "unwanted"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]},
+            "error_condition": {"type": "string"}
+          }
+        },
+        {
+          "title": "optional",
+          "type": "object",
+          "required": ["id", "ears_pattern", "system", "action", "feature"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {"type": "string"},
+            "ears_pattern": {"type": "string", "const": "optional"},
+            "system": {"type": "string"},
+            "action": {"type": "string"},
+            "return_contract": {"type": ["string", "null"]},
+            "feature": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "CorrectnessProperty": {
+      "type": "object",
+      "required": ["id", "title", "for_any", "invariant", "validates"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "for_any": {"type": "string"},
+        "invariant": {"type": "string"},
+        "validates": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "ExecutionPath": {
+      "type": "object",
+      "required": ["id", "title", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "steps": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ExecutionPathStep"}
+        }
+      }
+    },
+    "ExecutionPathStep": {
+      "type": "object",
+      "required": ["actor", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "actor": {"type": "string"},
+        "action": {"type": "string"}
+      }
+    },
+    "ErrorHandlingEntry": {
+      "type": "object",
+      "required": ["id", "condition", "behavior", "requirement_id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "condition": {"type": "string"},
+        "behavior": {"type": "string"},
+        "requirement_id": {"type": "string"}
+      }
+    }
+  }
+}

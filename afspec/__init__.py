@@ -132,11 +132,10 @@ def discover(spec_root: pathlib.Path | None = None) -> Any:
 
 
 def schema_version() -> int:
-    """Return the bundled schema version.
+    """Return the bundled schema version."""
+    from afspec.validator import _SCHEMA_VERSION
 
-    STUB: implemented in task group 3.
-    """
-    raise NotImplementedError("schema_version not yet implemented (task group 3)")
+    return _SCHEMA_VERSION
 
 
 class BootstrapSpec:

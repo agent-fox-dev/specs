@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PRDFrontmatter",
+  "description": "Schema for prd.md YAML frontmatter (v1)",
+  "type": "object",
+  "required": [
+    "spec_id",
+    "spec_name",
+    "title",
+    "status",
+    "created_at",
+    "updated_at",
+    "owner",
+    "source",
+    "supersedes",
+    "tags",
+    "schema_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spec_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "sealed", "superseded", "archived"]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "intent_hash": {
+      "type": ["string", "null"]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    }
+  }
+}
