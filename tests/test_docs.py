@@ -763,7 +763,6 @@ def test_python_signatures_match_design(func_name: str) -> None:
 def test_terminology_consistency() -> None:
     """TS-03-25: Domain terms in API docs are consistent with spec-format glossary."""
     # Check that API docs don't use deprecated or non-canonical terminology.
-    # This is a lightweight check; full review is done by human review.
     for doc_path in [GO_API_DOC, PYTHON_API_DOC]:
         assert doc_path.exists(), f"API doc not found at {doc_path}"
         content = read_file(doc_path)
@@ -771,6 +770,21 @@ def test_terminology_consistency() -> None:
         assert "afspec" in content.lower(), (
             f"{doc_path.name}: Does not reference 'afspec'"
         )
+        # TS pseudocode: if 'specification package' appears, canonical 'spec' must also appear.
+        # This guards against docs that use the deprecated verbose form without the
+        # canonical glossary term.
+        if "specification package" in content:
+            assert "spec" in content, (
+                f"{doc_path.name}: Uses 'specification package' but does not use "
+                f"canonical term 'spec'"
+            )
+        # TS pseudocode: if 'spec directory' appears, canonical 'spec root' must also appear.
+        # 'spec root' is the glossary-defined term (see docs/spec-format.md §2).
+        if "spec directory" in content.lower():
+            assert "spec root" in content.lower(), (
+                f"{doc_path.name}: Uses 'spec directory' but does not use "
+                f"canonical term 'spec root'"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -779,22 +793,40 @@ def test_terminology_consistency() -> None:
 
 
 def test_go_no_error_documented() -> None:
-    """TS-03-E1: Go functions with no error return still document an Errors section."""
+    """TS-03-E1: Go functions with no error return still document an Errors section.
+
+    LegalTransitions returns []SubtaskState (no error) but MUST still include an
+    Errors section stating "None" or equivalent, per 03-REQ-1.E1.
+    TopologicalOrder returns ([]string, error) and MUST document its error.
+    Both sections must be unconditionally present — the test does not silently
+    skip if a section is absent.
+    """
     assert GO_API_DOC.exists(), f"Go API reference not found at {GO_API_DOC}"
     content = read_file(GO_API_DOC)
-    # LegalTransitions is a method that returns []SubtaskState (no error)
+
+    # LegalTransitions is a method on SubtaskState that returns []SubtaskState (no error).
+    # The section must exist AND must mention errors/None/N/A.
     section = extract_section(content, "LegalTransitions")
-    if section:
-        lower = section.lower()
-        assert "error" in lower or "none" in lower or "n/a" in lower, (
-            "LegalTransitions section does not mention errors or state 'None'"
-        )
-    # Also check that TopologicalOrder (which does return error) has error documented
+    assert section, (
+        "LegalTransitions section not found in docs/api/go.md; "
+        "it must be documented (SubtaskState.LegalTransitions returns no error but "
+        "still requires an Errors section per 03-REQ-1.E1)"
+    )
+    lower = section.lower()
+    assert "error" in lower or "none" in lower or "n/a" in lower, (
+        "LegalTransitions section does not mention errors or state 'None'/'N/A'"
+    )
+
+    # TopologicalOrder is a method on DependencyGraph that returns ([]string, error).
+    # The section must exist AND must document the error return.
     section2 = extract_section(content, "TopologicalOrder")
-    if section2:
-        assert "error" in section2.lower(), (
-            "TopologicalOrder section does not mention errors"
-        )
+    assert section2, (
+        "TopologicalOrder section not found in docs/api/go.md; "
+        "it must be documented (DependencyGraph.TopologicalOrder returns an error)"
+    )
+    assert "error" in section2.lower(), (
+        "TopologicalOrder section does not mention errors"
+    )
 
 
 # ---------------------------------------------------------------------------
