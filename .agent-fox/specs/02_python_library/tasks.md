@@ -26,8 +26,8 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ## Tasks
 
-- [ ] 1. Write failing spec tests
-  - [ ] 1.1 Set up test file structure and fixtures
+- [x] 1. Write failing spec tests
+  - [x] 1.1 Set up test file structure and fixtures
     - Create `afspec/tests/` directory with `__init__.py` and `conftest.py`
     - Create shared test fixtures: valid spec folders (tmpdir-based), valid/invalid dataclass instances
     - Create golden fixture directory structure at `testdata/golden/` (with at least one complete spec)
@@ -35,24 +35,24 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
     - Add `hypothesis` to dev dependencies for property tests
     - _Test Spec: all_
 
-  - [ ] 1.2 Translate data model tests (TS-02-1 through TS-02-5)
+  - [x] 1.2 Translate data model tests (TS-02-1 through TS-02-5)
     - `afspec/tests/test_models.py`: frozen dataclass construction, EARS factory dispatch, subtask state transitions
     - Tests MUST fail (assert against not-yet-implemented types)
     - _Test Spec: TS-02-1, TS-02-2, TS-02-3, TS-02-4, TS-02-5_
 
-  - [ ] 1.3 Translate loading and saving tests (TS-02-6 through TS-02-13)
+  - [x] 1.3 Translate loading and saving tests (TS-02-6 through TS-02-13)
     - `afspec/tests/test_loader.py`: load spec, parse PRD, load JSON
     - `afspec/tests/test_saver.py`: deterministic JSON, deterministic YAML, round-trip, auto updated_at, auto coverage
     - Tests MUST fail
     - _Test Spec: TS-02-6, TS-02-7, TS-02-8, TS-02-9, TS-02-10, TS-02-11, TS-02-12, TS-02-13_
 
-  - [ ] 1.4 Translate validation tests (TS-02-14 through TS-02-24)
+  - [x] 1.4 Translate validation tests (TS-02-14 through TS-02-24)
     - `afspec/tests/test_validator.py`: schema validation, cross-file integrity rules 1-7
     - `afspec/tests/test_ids.py`: ID format patterns, spec_id consistency, positive integers
     - Tests MUST fail
     - _Test Spec: TS-02-14, TS-02-15, TS-02-16, TS-02-17, TS-02-18, TS-02-19, TS-02-20, TS-02-21, TS-02-22, TS-02-23, TS-02-24, TS-02-43, TS-02-44, TS-02-45_
 
-  - [ ] 1.5 Translate rendering, lifecycle, bootstrap, and discovery tests
+  - [x] 1.5 Translate rendering, lifecycle, bootstrap, and discovery tests
     - `afspec/tests/test_renderer.py`: deterministic rendering, EARS templates, per-file, combined (TS-02-25 through TS-02-28)
     - `afspec/tests/test_lifecycle.py`: transition graph, intent hash, mutation guards (TS-02-29 through TS-02-33)
     - `afspec/tests/test_bootstrap.py`: context manager, deferred validation, finalize (TS-02-34 through TS-02-37)
@@ -60,18 +60,18 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
     - Tests MUST fail
     - _Test Spec: TS-02-25 through TS-02-45_
 
-  - [ ] 1.6 Translate edge case and property tests
+  - [x] 1.6 Translate edge case and property tests
     - Edge case tests in their respective test files (TS-02-E1 through TS-02-E24)
     - `afspec/tests/test_properties.py`: Hypothesis-based property tests (TS-02-P1 through TS-02-P11)
     - Smoke tests in `afspec/tests/test_smoke.py` (TS-02-SMOKE-1 through TS-02-SMOKE-7)
     - Tests MUST fail
     - _Test Spec: TS-02-E1 through TS-02-E24, TS-02-P1 through TS-02-P11, TS-02-SMOKE-1 through TS-02-SMOKE-7_
 
-  - [ ] 1.V Verify task group 1
-    - [ ] All spec tests exist and are syntactically valid
-    - [ ] All spec tests FAIL (red) — no implementation yet
-    - [ ] No linter warnings introduced: `uv run ruff check`
-    - [ ] Type stubs/imports are minimal — just enough for tests to be parseable
+  - [x] 1.V Verify task group 1
+    - [x] All spec tests exist and are syntactically valid
+    - [x] All spec tests FAIL (red) — no implementation yet
+    - [x] No linter warnings introduced: `uv run ruff check`
+    - [x] Type stubs/imports are minimal — just enough for tests to be parseable
 
 ---
 
