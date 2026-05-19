@@ -89,7 +89,7 @@ sequenceDiagram
 6. **`internal/render`** — Markdown rendering for requirements, test_spec, and tasks. EARS sentence rendering from templates.
 7. **`internal/lifecycle`** — Lifecycle transition validation, guard enforcement, intent hash computation with normalization.
 8. **`internal/discovery`** — Spec root directory scanning, metadata loading from PRD frontmatter, dependency graph construction and cycle detection.
-9. **`internal/ioutil`** — Atomic file writing (write-to-temp-then-rename), file reading helpers.
+9. **`internal/ioutil`** — Atomic file writing (write-to-temp-then-rename), file reading helpers. SaveSpec tracks successfully written paths and removes them on failure to guarantee all-or-nothing semantics across the four-file write sequence (01-REQ-3.E2).
 
 ## Execution Paths
 
@@ -115,10 +115,11 @@ sequenceDiagram
 4. `internal/jsonutil/marshal.go: MarshalDeterministic(requirements)` → `[]byte` — sorted keys, 2-space indent
 5. `internal/jsonutil/marshal.go: MarshalDeterministic(testSpec)` → `[]byte`
 6. `internal/jsonutil/marshal.go: MarshalDeterministic(tasks)` → `[]byte`
-7. `internal/ioutil/write.go: WriteAtomic(prd.md, data)` — side effect: file written
-8. `internal/ioutil/write.go: WriteAtomic(requirements.json, data)` — side effect: file written
-9. `internal/ioutil/write.go: WriteAtomic(test_spec.json, data)` — side effect: file written
-10. `internal/ioutil/write.go: WriteAtomic(tasks.json, data)` — side effect: file written
+7. `internal/ioutil/write.go: WriteAtomic(prd.md, data)` — side effect: file written; path recorded
+8. `internal/ioutil/write.go: WriteAtomic(requirements.json, data)` — side effect: file written; path recorded
+9. `internal/ioutil/write.go: WriteAtomic(test_spec.json, data)` — side effect: file written; path recorded
+10. `internal/ioutil/write.go: WriteAtomic(tasks.json, data)` — side effect: file written; path recorded
+11. On error at any step 7–10: `save.go: rollbackWritten(written)` — removes files successfully written in steps prior to the failure, ensuring no partial results remain (01-REQ-3.E2)
 
 ### Path 3: Validate spec (full)
 

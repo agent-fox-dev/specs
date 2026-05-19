@@ -1819,10 +1819,13 @@ ASSERT NOT DirExists("/nonexistent/dir")
 **Assertion pseudocode:**
 ```
 tmpdir = TempDir()
+// pre-populate target so requirements.json write will fail on rename
 make_readonly(tmpdir + "/requirements.json")  // prevent write
 err = SaveSpec(tmpdir, spec)
 ASSERT err != nil
-// partial files from this save attempt should not exist
+// SaveSpec must roll back files written before the failure point.
+// prd.md was written before requirements.json failed, so it must be removed.
+ASSERT not exists(tmpdir + "/prd.md")  // rolled back
 ```
 
 ---
@@ -2161,10 +2164,11 @@ ASSERT entry.Complete == false
 ```
 // setup: 01 depends_on_spec "02", 02 depends_on_spec "01"
 result, err = DiscoverSpecs(root)
-// graph building may succeed, but TopologicalOrder detects cycle
-order, err = result.Graph.TopologicalOrder()
+// BuildGraph detects cycles during discovery; DiscoverSpecs propagates the error
 ASSERT err != nil
 ASSERT contains(err.Error(), "cycle")
+ASSERT contains(err.Error(), "01")
+ASSERT contains(err.Error(), "02")
 ```
 
 ---
