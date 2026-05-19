@@ -152,29 +152,29 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 5. Implement spec loading
-  - [ ] 5.1 Implement PRD loading
+- [x] 5. Implement spec loading
+  - [x] 5.1 Implement PRD loading
     - Create `afspec/loader.py`
     - `_load_prd(path)` → `PRD`: parse YAML frontmatter (delimited by `---`), extract markdown body, extract `## Intent` section
     - Handle malformed YAML, missing Intent section
     - _Requirements: 02-REQ-2.2, 02-REQ-2.E3, 02-REQ-2.E4_
 
-  - [ ] 5.2 Implement JSON loading
+  - [x] 5.2 Implement JSON loading
     - `_load_json(path, target_type)` → dataclass: deserialize JSON, construct typed instances, preserve nulls
     - Handle malformed JSON with file-name-in-error
     - _Requirements: 02-REQ-2.3, 02-REQ-2.E2_
 
-  - [ ] 5.3 Implement load_spec entry point
+  - [x] 5.3 Implement load_spec entry point
     - `load_spec(path)` → `Spec`: check all four files exist, load each, assemble Spec
     - Handle missing files (IncompleteSpecError), non-existent path
     - _Requirements: 02-REQ-2.1, 02-REQ-2.E1, 02-REQ-2.E5_
 
-  - [ ] 5.V Verify task group 5
-    - [ ] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_loader.py`
-    - [ ] Edge case tests TS-02-E3 through TS-02-E7 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check`
-    - [ ] Requirements 02-REQ-2.1 through 02-REQ-2.3, 02-REQ-2.E1 through 02-REQ-2.E5 acceptance criteria met
+  - [x] 5.V Verify task group 5
+    - [x] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_loader.py`
+    - [x] Edge case tests TS-02-E3 through TS-02-E7 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check`
+    - [x] Requirements 02-REQ-2.1 through 02-REQ-2.3, 02-REQ-2.E1 through 02-REQ-2.E5 acceptance criteria met
 
 ---
 

@@ -60,11 +60,10 @@ from afspec.models import VerificationSubtask as VerificationSubtask
 
 
 def load_spec(path: pathlib.Path) -> Spec:
-    """Load a spec folder from disk into in-memory dataclass instances.
+    """Load a spec folder from disk into in-memory dataclass instances."""
+    from afspec.loader import load_spec as _load_spec
 
-    STUB: implemented in task group 5.
-    """
-    raise NotImplementedError("load_spec not yet implemented (task group 5)")
+    return _load_spec(path)
 
 
 def save_spec(spec: Spec, path: pathlib.Path) -> None:
