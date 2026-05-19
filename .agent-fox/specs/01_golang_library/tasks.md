@@ -172,7 +172,7 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-2.1 through 01-REQ-2.3, 01-REQ-3.1 through 01-REQ-3.6, all edge cases met
 
-- [ ] 5. Checkpoint — Data model + I/O complete
+- [x] 5. Checkpoint — Data model + I/O complete
   - Ensure all model, serialization, and I/O tests pass.
   - Verify round-trip idempotency on golden fixtures.
   - Create or update documentation in README.md if needed.
