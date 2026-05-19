@@ -162,8 +162,8 @@ The implementation produces markdown documentation files and tests that verify t
     - [x] No linter warnings introduced: `uv run ruff check`
     - [x] Requirements 03-REQ-3.1 through 03-REQ-3.5, 03-REQ-3.E1, 03-REQ-4.1 through 03-REQ-4.3, 03-REQ-4.E1 met
 
-- [ ] 6. Update README and verify documentation accuracy
-  - [ ] 6.1 Rewrite README.md
+- [x] 6. Update README and verify documentation accuracy
+  - [x] 6.1 Rewrite README.md
     - One-paragraph afspec overview introducing both libraries
     - Quick-start section with Go example (load → validate → render)
     - Quick-start section with Python example (load → validate → render)
@@ -171,24 +171,24 @@ The implementation produces markdown documentation files and tests that verify t
     - Libraries section with import paths, version requirements, key features
     - _Requirements: 03-REQ-5.1, 03-REQ-5.2, 03-REQ-5.3, 03-REQ-5.4_
 
-  - [ ] 6.2 Verify terminology consistency
+  - [x] 6.2 Verify terminology consistency
     - Review all documentation files for consistent use of domain terms from docs/spec-format.md §2
     - Fix any inconsistencies found
     - _Requirements: 03-REQ-6.4_
 
-  - [ ] 6.3 Verify all cross-references and links
+  - [x] 6.3 Verify all cross-references and links
     - Check all relative links in README.md point to existing files
     - Check all internal cross-references between docs are valid
     - _Requirements: 03-REQ-5.3, 03-REQ-5.E1_
 
-  - [ ] 6.V Verify task group 6
-    - [ ] Spec tests TS-03-19 through TS-03-22, TS-03-25 pass
-    - [ ] Edge case tests TS-03-E5, TS-03-E6 pass
-    - [ ] Property test TS-03-P4 passes
-    - [ ] Smoke test TS-03-SMOKE-1 passes
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check`
-    - [ ] Requirements 03-REQ-5.1 through 03-REQ-5.4, 03-REQ-5.E1, 03-REQ-6.4 met
+  - [x] 6.V Verify task group 6
+    - [x] Spec tests TS-03-19 through TS-03-22, TS-03-25 pass
+    - [x] Edge case tests TS-03-E5, TS-03-E6 pass
+    - [x] Property test TS-03-P4 passes
+    - [x] Smoke test TS-03-SMOKE-1 passes
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check`
+    - [x] Requirements 03-REQ-5.1 through 03-REQ-5.4, 03-REQ-5.E1, 03-REQ-6.4 met
 
 - [ ] 7. Wiring verification
 
