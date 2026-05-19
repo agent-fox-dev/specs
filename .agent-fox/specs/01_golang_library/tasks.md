@@ -79,33 +79,33 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] All spec tests FAIL (red) — no implementation yet: `go test -count=1 ./...` shows failures
     - [x] No linter warnings introduced: `go vet ./...`
 
-- [ ] 2. Core data model types
-  - [ ] 2.1 Define core types and status enum
+- [x] 2. Core data model types
+  - [x] 2.1 Define core types and status enum
     - Create `spec.go`: `Spec`, `PRD`, `Frontmatter`, `Status` constants
     - Create `errors.go`: `ValidationError`, `Severity`, `LifecycleError`, `IncompleteSpecError`
     - _Requirements: 01-REQ-1.1, 01-REQ-1.6_
 
-  - [ ] 2.2 Define requirements types
+  - [x] 2.2 Define requirements types
     - Create `requirements.go`: `Requirements`, `Requirement`, `UserStory`, `Criterion`, `CorrectnessProperty`, `ExecutionPath`, `ExecutionPathStep`, `ErrorHandlingEntry`
     - Implement EARS discriminated union: `Criterion` struct with pattern-specific fields using `omitempty` for non-applicable fields, `return_contract` always serialized
     - _Requirements: 01-REQ-1.2, 01-REQ-1.4_
 
-  - [ ] 2.3 Define test spec and tasks types
+  - [x] 2.3 Define test spec and tasks types
     - Create `testspec.go`: `TestSpecDoc`, `TestCase`, `PropertyTest`, `EdgeCaseTest`, `SmokeTest`, `Coverage`
     - Create `tasks.go`: `Tasks`, `TestCommands`, `TaskDependency`, `TaskGroup`, `Subtask`, `SubtaskState`, `VerificationSubtask`, `TraceabilityEntry`
     - Implement `SubtaskState.LegalTransitions()` method
     - _Requirements: 01-REQ-1.3, 01-REQ-1.5_
 
-  - [ ] 2.4 Define discovery types
+  - [x] 2.4 Define discovery types
     - Create `discover.go` (type definitions only): `DiscoveryResult`, `SpecEntry`, `DependencyGraph`, `TopologicalOrder()` method
     - Create `bootstrap.go` (type definitions only): `Bootstrap` struct
     - _Requirements: 01-REQ-9.1, 01-REQ-8.1_
 
-  - [ ] 2.V Verify task group 2
-    - [ ] Spec tests TS-01-1 through TS-01-5 pass: `go test -count=1 -run 'TS01_0[1-5]' ./...`
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-1.1 through 01-REQ-1.6 acceptance criteria met
+  - [x] 2.V Verify task group 2
+    - [x] Spec tests TS-01-1 through TS-01-5 pass: `go test -count=1 -run 'TS01_0[1-5]' ./...`
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-1.1 through 01-REQ-1.6 acceptance criteria met
 
 - [ ] 3. Serialization and PRD parsing
   - [ ] 3.1 Implement deterministic JSON marshaling
