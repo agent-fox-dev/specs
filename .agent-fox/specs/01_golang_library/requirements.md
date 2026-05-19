@@ -29,6 +29,9 @@ This document specifies the requirements for the Go spec-format library (`afspec
 | `return_contract` | An optional field on EARS criteria describing what the function returns to callers. Null when no return value is relevant. |
 | subtask state machine | The six-state machine (pending, queued, in_progress, done, pending_reevaluation, dropped) for task execution tracking. |
 | intent normalization | The process of normalizing the Intent section body before hashing: LF line endings, collapse multiple blank lines, lower-case, trim whitespace. |
+| atomic write | A file write strategy using write-to-temporary-file-then-rename to prevent partial writes on failure. |
+| computed coverage | The `coverage` field in test_spec.json, which is populated automatically by the library on every save rather than authored manually. |
+| golden fixture | A complete spec folder with all four artifacts used as a shared test reference for verifying cross-library consistency between Go and Python implementations. |
 
 ## Requirements
 
@@ -86,7 +89,7 @@ This document specifies the requirements for the Go spec-format library (`afspec
 
 ### Requirement 3: Spec Saving
 
-**User Story:** As a library consumer, I want to write in-memory spec structures back to disk, so that modifications are persisted deterministically.
+**User Story:** As a library consumer, I want to write in-memory spec structures back to disk, so that modifications are persisted deterministically and automatic fields are computed correctly.
 
 #### Acceptance Criteria
 
@@ -96,7 +99,11 @@ This document specifies the requirements for the Go spec-format library (`afspec
 
 [01-REQ-3.3] THE library SHALL produce deterministic YAML frontmatter with a fixed field order: `spec_id`, `spec_name`, `title`, `status`, `created_at`, `updated_at`, `owner`, `source`, `supersedes`, `tags`, `intent_hash`, `schema_version`.
 
-[01-REQ-3.4] WHEN a spec is loaded from disk and saved without modification, THE library SHALL produce byte-identical files AND return identical in-memory structures on subsequent reload (idempotent round-trip).
+[01-REQ-3.4] WHEN a spec is loaded from disk and saved without modification, THE library SHALL produce byte-identical files (except for the `updated_at` field, which is always set to the current timestamp) AND return identical in-memory structures on subsequent reload (idempotent round-trip).
+
+[01-REQ-3.5] WHEN saving `prd.md`, THE library SHALL set the `updated_at` frontmatter field to the current UTC timestamp in ISO 8601 format before writing.
+
+[01-REQ-3.6] WHEN saving `test_spec.json`, THE library SHALL compute the `coverage` field by scanning test cases, property tests, edge case tests, and smoke tests against the spec's requirements AND populate `requirements_covered`, `properties_covered`, `paths_covered`, and `gaps` AND return the updated test spec structure with computed coverage to the caller.
 
 #### Edge Cases
 
@@ -172,7 +179,7 @@ This document specifies the requirements for the Go spec-format library (`afspec
 
 [01-REQ-6.E1] IF a required field for EARS rendering is an empty string, THEN THE library SHALL render a placeholder string (`<missing>`) in that field's position.
 
-[01-REQ-6.E2] IF the `return_contract` field on a criterion is null, THEN THE library SHALL omit the return contract clause from the rendered EARS sentence.
+[01-REQ-6.E2] IF the `return_contract` field on a criterion is null or an empty string, THEN THE library SHALL omit the return contract clause from the rendered EARS sentence.
 
 ---
 

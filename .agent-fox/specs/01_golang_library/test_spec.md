@@ -373,7 +373,7 @@ ASSERT field_order == ["spec_id", "spec_name", "title", "status", "created_at", 
 
 **Requirement:** 01-REQ-3.4
 **Type:** integration
-**Description:** Verify load → save → load produces identical files and structures.
+**Description:** Verify load → save → load produces identical files and structures (except `updated_at` which is auto-set on save).
 
 **Preconditions:**
 - `testdata/valid_spec/` with all four files.
@@ -382,8 +382,9 @@ ASSERT field_order == ["spec_id", "spec_name", "title", "status", "created_at", 
 - Load from testdata, save to tmpdir, load from tmpdir.
 
 **Expected:**
-- Files in tmpdir are byte-identical to testdata.
-- Second load produces deeply equal in-memory structures.
+- JSON files (requirements.json, test_spec.json, tasks.json) in tmpdir are byte-identical to testdata.
+- prd.md in tmpdir is identical to testdata except for the `updated_at` field.
+- Second load produces deeply equal in-memory structures (ignoring `updated_at`).
 
 **Assertion pseudocode:**
 ```
@@ -391,9 +392,14 @@ spec1 = LoadSpec("testdata/valid_spec")
 tmpdir = TempDir()
 SaveSpec(tmpdir, spec1)
 spec2 = LoadSpec(tmpdir)
-FOR file IN ["prd.md", "requirements.json", "test_spec.json", "tasks.json"]:
+FOR file IN ["requirements.json", "test_spec.json", "tasks.json"]:
     ASSERT ReadFile(tmpdir + "/" + file) == ReadFile("testdata/valid_spec/" + file)
-ASSERT DeepEqual(spec1, spec2) // ignoring Dir field
+// prd.md: compare with updated_at masked out
+prd1 = ReadFile("testdata/valid_spec/prd.md")
+prd2 = ReadFile(tmpdir + "/prd.md")
+ASSERT mask_updated_at(prd1) == mask_updated_at(prd2)
+// In-memory: compare ignoring Dir and updated_at
+ASSERT DeepEqual(spec1, spec2, ignoring Dir, ignoring Frontmatter.UpdatedAt)
 ```
 
 ---
@@ -1276,6 +1282,70 @@ ASSERT any(contains(err.Message, "positive") for err in errs)
 
 ---
 
+### TS-01-46: Auto-update updated_at on save
+
+**Requirement:** 01-REQ-3.5
+**Type:** integration
+**Description:** Verify SaveSpec sets the `updated_at` frontmatter field to the current UTC timestamp.
+
+**Preconditions:**
+- A valid in-memory `*Spec` with a known `updated_at` value (e.g., "2020-01-01T00:00:00Z").
+
+**Input:**
+- Save the spec to a temp directory.
+
+**Expected:**
+- The written prd.md has `updated_at` set to a timestamp close to `time.Now().UTC()` (within 5 seconds).
+- The original in-memory spec's `updated_at` is NOT modified (save returns/uses a copy).
+
+**Assertion pseudocode:**
+```
+spec = LoadSpec("testdata/valid_spec")
+old_updated_at = spec.PRD.Frontmatter.UpdatedAt
+before = time.Now().UTC()
+tmpdir = TempDir()
+SaveSpec(tmpdir, spec)
+after = time.Now().UTC()
+saved_spec = LoadSpec(tmpdir)
+new_updated_at = parseISO8601(saved_spec.PRD.Frontmatter.UpdatedAt)
+ASSERT new_updated_at >= before
+ASSERT new_updated_at <= after
+ASSERT new_updated_at != parseISO8601(old_updated_at) // unless test runs at exact same second
+```
+
+---
+
+### TS-01-47: Auto-compute coverage on save
+
+**Requirement:** 01-REQ-3.6
+**Type:** integration
+**Description:** Verify SaveSpec computes the `coverage` field in test_spec.json from requirements and test data.
+
+**Preconditions:**
+- A valid spec where requirements have IDs "01-REQ-1.1", "01-REQ-1.E1", and test_spec has test cases covering only "01-REQ-1.1" but not "01-REQ-1.E1".
+
+**Input:**
+- Save the spec to a temp directory.
+
+**Expected:**
+- The written test_spec.json has `coverage.requirements_covered` containing "01-REQ-1.1".
+- `coverage.gaps` contains "01-REQ-1.E1".
+- `coverage.requirements_covered` + `coverage.gaps` == all criterion/edge case IDs in requirements.
+
+**Assertion pseudocode:**
+```
+spec = make_spec_with_partial_coverage()
+tmpdir = TempDir()
+SaveSpec(tmpdir, spec)
+saved = LoadSpec(tmpdir)
+ASSERT "01-REQ-1.1" IN saved.TestSpec.Coverage.RequirementsCovered
+ASSERT "01-REQ-1.E1" IN saved.TestSpec.Coverage.Gaps
+all_ids = get_all_criterion_ids(spec.Requirements)
+ASSERT set(saved.TestSpec.Coverage.RequirementsCovered) | set(saved.TestSpec.Coverage.Gaps) == set(all_ids)
+```
+
+---
+
 ## Property Test Cases
 
 ### TS-01-P1: Round-trip idempotency
@@ -1283,10 +1353,10 @@ ASSERT any(contains(err.Message, "positive") for err in errs)
 **Property:** Property 1 from design.md
 **Validates:** 01-REQ-3.4
 **Type:** property
-**Description:** Loading a valid spec, saving, and reloading produces identical results.
+**Description:** Loading a valid spec, saving, and reloading produces identical results (except `updated_at` which is auto-set on every save).
 
 **For any:** valid spec fixture from testdata (iterate all golden files)
-**Invariant:** LoadSpec(dir) → SaveSpec(tmpdir) → LoadSpec(tmpdir) produces DeepEqual Spec and byte-identical files.
+**Invariant:** LoadSpec(dir) → SaveSpec(tmpdir) → LoadSpec(tmpdir) produces DeepEqual Spec (ignoring `updated_at`) and byte-identical JSON files. prd.md is identical except for `updated_at`.
 
 **Assertion pseudocode:**
 ```
@@ -1295,9 +1365,10 @@ FOR ANY fixture IN testdata/valid_specs:
     tmpdir = TempDir()
     SaveSpec(tmpdir, spec1)
     spec2 = LoadSpec(tmpdir)
-    ASSERT DeepEqual(spec1, spec2, ignoring Dir)
-    FOR file IN spec_files:
+    ASSERT DeepEqual(spec1, spec2, ignoring Dir, ignoring Frontmatter.UpdatedAt)
+    FOR file IN ["requirements.json", "test_spec.json", "tasks.json"]:
         ASSERT ReadFile(fixture/file) == ReadFile(tmpdir/file)
+    ASSERT mask_updated_at(ReadFile(fixture/"prd.md")) == mask_updated_at(ReadFile(tmpdir/"prd.md"))
 ```
 
 ---
@@ -1499,6 +1570,34 @@ FOR ANY rc IN [nil, ptr("value")]:
         ASSERT contains(json_bytes, "\"return_contract\": null")
     ELSE:
         ASSERT *c2.ReturnContract == *rc
+```
+
+---
+
+### TS-01-P11: Computed coverage accuracy
+
+**Property:** Property 11 from design.md
+**Validates:** 01-REQ-3.6
+**Type:** property
+**Description:** Coverage field accurately reflects test-to-requirement mapping.
+
+**For any:** spec with a random subset of requirements covered by test cases
+**Invariant:** After save, `requirements_covered` lists exactly the IDs with test cases, `gaps` lists exactly the IDs without, and their union equals all criterion/edge case IDs.
+
+**Assertion pseudocode:**
+```
+FOR ANY (requirements, test_cases) IN generate_coverage_scenarios():
+    spec = build_spec(requirements, test_cases)
+    tmpdir = TempDir()
+    SaveSpec(tmpdir, spec)
+    saved = LoadSpec(tmpdir)
+    covered = set(saved.TestSpec.Coverage.RequirementsCovered)
+    gaps = set(saved.TestSpec.Coverage.Gaps)
+    all_ids = set(get_all_criterion_ids(spec.Requirements))
+    ASSERT covered | gaps == all_ids
+    ASSERT covered & gaps == {} // no overlap
+    FOR tc IN test_cases:
+        ASSERT tc.RequirementID IN covered
 ```
 
 ---
@@ -1826,27 +1925,32 @@ ASSERT rendered == "THE the system SHALL <missing>"
 
 ---
 
-### TS-01-E14: EARS render with null return_contract
+### TS-01-E14: EARS render with null or empty return_contract
 
 **Requirement:** 01-REQ-6.E2
 **Type:** unit
-**Description:** Null return_contract omits the return clause.
+**Description:** Null or empty-string return_contract omits the return clause.
 
 **Preconditions:**
-- A criterion with `return_contract: null` and one with a value.
+- A criterion with `return_contract: null`, one with an empty string, and one with a value.
 
 **Input:**
 - Null: `Criterion{ReturnContract: nil, ...}`
+- Empty: `Criterion{ReturnContract: ptr(""), ...}`
 - Non-null: `Criterion{ReturnContract: ptr("list of items"), ...}`
 
 **Expected:**
 - Null: no "AND return" in output.
-- Non-null: ends with "AND return list of items".
+- Empty string: no "AND return" in output.
+- Non-null non-empty: ends with "AND return list of items".
 
 **Assertion pseudocode:**
 ```
 c_null = Criterion{EarsPattern: "ubiquitous", System: "s", Action: "a", ReturnContract: nil}
 ASSERT NOT contains(RenderEARS(c_null), "AND return")
+
+c_empty = Criterion{EarsPattern: "ubiquitous", System: "s", Action: "a", ReturnContract: ptr("")}
+ASSERT NOT contains(RenderEARS(c_empty), "AND return")
 
 c_val = Criterion{EarsPattern: "ubiquitous", System: "s", Action: "a", ReturnContract: ptr("list of items")}
 ASSERT contains(RenderEARS(c_val), "AND return list of items")
@@ -2370,6 +2474,8 @@ ASSERT indexOf(order, "01") < indexOf(order, "02")
 | 01-REQ-3.2 | TS-01-11 | unit |
 | 01-REQ-3.3 | TS-01-12 | unit |
 | 01-REQ-3.4 | TS-01-13 | integration |
+| 01-REQ-3.5 | TS-01-46 | integration |
+| 01-REQ-3.6 | TS-01-47 | integration |
 | 01-REQ-3.E1 | TS-01-E8 | unit |
 | 01-REQ-3.E2 | TS-01-E9 | integration |
 | 01-REQ-4.1 | TS-01-14 | unit |
@@ -2429,6 +2535,7 @@ ASSERT indexOf(order, "01") < indexOf(order, "02")
 | Property 8 | TS-01-P8 | property |
 | Property 9 | TS-01-P9 | property |
 | Property 10 | TS-01-P10 | property |
+| Property 11 | TS-01-P11 | property |
 | Path 1 | TS-01-SMOKE-1 | integration |
 | Path 2 | TS-01-SMOKE-2 | integration |
 | Path 3 | TS-01-SMOKE-3 | integration |

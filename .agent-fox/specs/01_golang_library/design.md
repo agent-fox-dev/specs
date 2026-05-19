@@ -110,14 +110,15 @@ sequenceDiagram
 ### Path 2: Save spec to disk
 
 1. `save.go: SaveSpec(dir, spec)` — validates dir exists, orchestrates save
-2. `internal/prd/serialize.go: SerializePRD(prd)` → `[]byte` — YAML frontmatter with fixed field order + body
-3. `internal/jsonutil/marshal.go: MarshalDeterministic(requirements)` → `[]byte` — sorted keys, 2-space indent
-4. `internal/jsonutil/marshal.go: MarshalDeterministic(testSpec)` → `[]byte`
-5. `internal/jsonutil/marshal.go: MarshalDeterministic(tasks)` → `[]byte`
-6. `internal/ioutil/write.go: WriteAtomic(prd.md, data)` — side effect: file written
-7. `internal/ioutil/write.go: WriteAtomic(requirements.json, data)` — side effect: file written
-8. `internal/ioutil/write.go: WriteAtomic(test_spec.json, data)` — side effect: file written
-9. `internal/ioutil/write.go: WriteAtomic(tasks.json, data)` — side effect: file written
+2. `save.go: computeFields(spec)` → `*Spec` — set `updated_at` to current UTC timestamp, compute `coverage` from test/requirement cross-references
+3. `internal/prd/serialize.go: SerializePRD(prd)` → `[]byte` — YAML frontmatter with fixed field order + body
+4. `internal/jsonutil/marshal.go: MarshalDeterministic(requirements)` → `[]byte` — sorted keys, 2-space indent
+5. `internal/jsonutil/marshal.go: MarshalDeterministic(testSpec)` → `[]byte`
+6. `internal/jsonutil/marshal.go: MarshalDeterministic(tasks)` → `[]byte`
+7. `internal/ioutil/write.go: WriteAtomic(prd.md, data)` — side effect: file written
+8. `internal/ioutil/write.go: WriteAtomic(requirements.json, data)` — side effect: file written
+9. `internal/ioutil/write.go: WriteAtomic(test_spec.json, data)` — side effect: file written
+10. `internal/ioutil/write.go: WriteAtomic(tasks.json, data)` — side effect: file written
 
 ### Path 3: Validate spec (full)
 
@@ -623,7 +624,7 @@ Output: lowercase hex-encoded hash string (64 characters)
 | `unwanted` | `IF {error_condition}, THEN THE {system} SHALL {action}` |
 | `optional` | `WHERE {feature}, THE {system} SHALL {action}` |
 
-When `return_contract` is non-null and non-empty, append ` AND return {return_contract}` to the rendered sentence.
+When `return_contract` is non-null AND non-empty, append ` AND return {return_contract}` to the rendered sentence. If `return_contract` is null or an empty string, omit the return contract clause entirely.
 
 ### Subtask State Transitions
 
@@ -721,6 +722,12 @@ No migration concerns for v1. Future schema versions will require a migration pa
 *For any* spec containing null-valued fields (e.g., `return_contract: null`, `intent_hash: null`), a round-trip (load → save → load) preserves the null representation: null in JSON is loaded as nil pointer and serialized back as JSON `null`, not omitted from output.
 
 **Validates: Requirements 01-REQ-1.E1, 01-REQ-3.4**
+
+### Property 11: Computed Coverage Accuracy
+
+*For any* spec saved via the library, the `coverage` field in test_spec.json SHALL accurately reflect the coverage state: `requirements_covered` SHALL list all requirement and edge case IDs that have a test case, `gaps` SHALL list all IDs that lack coverage, and the union of `requirements_covered` and `gaps` SHALL equal all requirement and edge case IDs in requirements.json.
+
+**Validates: Requirements 01-REQ-3.6**
 
 ## Error Handling
 

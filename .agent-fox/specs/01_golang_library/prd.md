@@ -15,7 +15,9 @@ Build an idiomatic Go library that provides data structures, validation, file I/
 - Support an explicit bootstrap mode for sequential file creation with deferred cross-file validation.
 - Bundle JSON Schema files as embedded resources via Go `embed`.
 - Create the four JSON Schema files (requirements.v1.json, test_spec.v1.json, tasks.v1.json, prd-frontmatter.v1.json) as part of this spec's implementation.
-- Guarantee idempotent round-trip: load followed by save followed by load produces identical in-memory state.
+- Guarantee idempotent round-trip: load followed by save followed by load produces identical in-memory state (excluding auto-computed fields).
+- Automatically compute and populate the `coverage` field in `test_spec.json` on every save.
+- Automatically update the `updated_at` timestamp in PRD frontmatter on every save.
 - Provide spec root discovery: scan a root directory to enumerate available specs and resolve cross-spec dependencies.
 - All exported types and functions must be safe for concurrent use from multiple goroutines.
 
@@ -100,6 +102,13 @@ Transition graph: draft→active, active→sealed, sealed→superseded, sealed�
 
 During creation, files come into existence sequentially. The library operates in bootstrap mode: cross-file validation is deferred until all four files are written. A partially-created spec is in an "incomplete" state, not invalid but not yet valid.
 
+### Automatic Behaviors on Save
+
+Two fields are automatically managed by the library on every save operation:
+
+- **`updated_at`**: Set to the current UTC timestamp (ISO 8601) on every save of `prd.md` frontmatter. The caller does not set this field.
+- **`coverage`**: The `coverage` field in `test_spec.json` is computed (not authored). On every save, the library scans test cases, property tests, edge case tests, and smoke tests against the requirements in the same spec to populate `requirements_covered`, `properties_covered`, `paths_covered`, and `gaps`. A non-empty `gaps` array is a validation warning, not a blocking error.
+
 ### Intent Hash Computation
 
 The intent hash is a SHA-256 hex digest of the `## Intent` section body after normalization:
@@ -152,6 +161,9 @@ This is required because specs can have cross-spec dependencies that must be res
 12. **Thread safety**: All exported types and functions must be safe for concurrent use. Use value types (structs) where possible; where shared mutable state is needed, protect with appropriate synchronization.
 13. **Spec root**: The library operates relative to a configurable spec root directory. If not provided, defaults to the current working directory. Discovery scans the spec root for valid spec folders, skipping `archive/`.
 14. **Intent hash normalization**: LF line endings, collapse multiple blank lines, lower-case, trim whitespace — then SHA-256.
+15. **Cross-library consistency**: The Go and Python libraries must produce byte-identical output for the same input. Verified via shared golden fixture files in `testdata/golden/` at the monorepo root. Each fixture is a complete spec folder with all four artifacts. Both libraries' test suites load the same fixtures, process them (round-trip, render), and compare output byte-for-byte. The golden fixtures are authored once and shared.
+16. **Computed fields on save**: The library automatically computes `coverage` in test_spec.json and sets `updated_at` in PRD frontmatter on every save. Callers do not set these fields manually.
+17. **Atomic saves**: Save operations use write-to-temporary-file-then-rename to prevent partial writes on failure. If any file in a multi-file save fails, previously written files in the same save are cleaned up.
 
 ## Source
 

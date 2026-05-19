@@ -29,10 +29,11 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Create `testdata/` directories for error cases: `incomplete_spec/`, `malformed_json/`, `bad_yaml/`, `no_intent/`, `crossfile_errors/`, `all_ears_patterns/`, `draft_spec/`
     - _Test Spec: TS-01-1 through TS-01-45_
 
-  - [ ] 1.2 Translate acceptance-criterion tests (TS-01-1 through TS-01-45)
+  - [ ] 1.2 Translate acceptance-criterion tests (TS-01-1 through TS-01-47)
     - Data model tests (TS-01-1 through TS-01-6) in `spec_test.go`
     - Load tests (TS-01-7 through TS-01-9) in `load_test.go`
     - Save tests (TS-01-10 through TS-01-13) in `save_test.go`
+    - Auto-computed field tests (TS-01-46, TS-01-47) in `save_test.go`
     - Schema validation tests (TS-01-14 through TS-01-17) in `validate_test.go`
     - Cross-file tests (TS-01-18 through TS-01-24) in `validate_test.go`
     - Render tests (TS-01-25 through TS-01-28) in `render_test.go`
@@ -40,7 +41,7 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Bootstrap tests (TS-01-34 through TS-01-37) in `bootstrap_test.go`
     - Discovery tests (TS-01-38 through TS-01-42) in `discover_test.go`
     - ID validation tests (TS-01-43 through TS-01-45) in `validate_test.go`
-    - _Test Spec: TS-01-1 through TS-01-45_
+    - _Test Spec: TS-01-1 through TS-01-47_
 
   - [ ] 1.3 Translate edge-case tests (TS-01-E1 through TS-01-E24)
     - Serialization edge cases (TS-01-E1, TS-01-E2)
@@ -55,7 +56,7 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - ID edge cases (TS-01-E23, TS-01-E24)
     - _Test Spec: TS-01-E1 through TS-01-E24_
 
-  - [ ] 1.4 Translate property tests (TS-01-P1 through TS-01-P10)
+  - [ ] 1.4 Translate property tests (TS-01-P1 through TS-01-P11)
     - Round-trip idempotency (TS-01-P1) in `save_test.go`
     - EARS determinism (TS-01-P2) in `render_test.go`
     - Lifecycle monotonicity (TS-01-P3) in `lifecycle_test.go`
@@ -66,7 +67,8 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Bootstrap deferred validation (TS-01-P8) in `bootstrap_test.go`
     - ID format consistency (TS-01-P9) in `validate_test.go`
     - Null preservation (TS-01-P10) in `spec_test.go`
-    - _Test Spec: TS-01-P1 through TS-01-P10_
+    - Computed coverage accuracy (TS-01-P11) in `save_test.go`
+    - _Test Spec: TS-01-P1 through TS-01-P11_
 
   - [ ] 1.5 Translate smoke tests (TS-01-SMOKE-1 through TS-01-SMOKE-8)
     - All smoke tests in `smoke_test.go`
@@ -142,11 +144,13 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Handle missing files, malformed JSON, malformed YAML, missing Intent
     - _Requirements: 01-REQ-2.1, 01-REQ-2.3_
 
-  - [ ] 4.2 Implement SaveSpec
-    - Create `save.go`: `SaveSpec(dir, spec)` — validate dir exists, serialize all four, write atomically
+  - [ ] 4.2 Implement SaveSpec with computed fields
+    - Create `save.go`: `SaveSpec(dir, spec)` — validate dir exists, compute fields, serialize all four, write atomically
+    - Compute `updated_at` to current UTC timestamp (ISO 8601) before writing prd.md
+    - Compute `coverage` field by cross-referencing test cases against requirements before writing test_spec.json
     - Create `internal/ioutil/write.go`: `WriteAtomic()` — write to temp file then rename
-    - Handle write failures without leaving partial files
-    - _Requirements: 01-REQ-3.1, 01-REQ-3.4_
+    - Handle write failures without leaving partial files; clean up temp files on error
+    - _Requirements: 01-REQ-3.1, 01-REQ-3.4, 01-REQ-3.5, 01-REQ-3.6_
 
   - [ ] 4.3 Create golden testdata fixtures
     - Populate `testdata/valid_spec/` with complete, internally consistent spec files
@@ -156,13 +160,13 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - _Test Spec: TS-01-7, TS-01-10, TS-01-13_
 
   - [ ] 4.V Verify task group 4
-    - [ ] Spec tests TS-01-7, TS-01-10, TS-01-13 pass (load, save, round-trip)
+    - [ ] Spec tests TS-01-7, TS-01-10, TS-01-13, TS-01-46, TS-01-47 pass (load, save, round-trip, computed fields)
     - [ ] Edge case tests TS-01-E3 through TS-01-E9 pass
-    - [ ] Property test TS-01-P1 (round-trip idempotency) passes
+    - [ ] Property tests TS-01-P1 (round-trip idempotency), TS-01-P11 (computed coverage) pass
     - [ ] Smoke tests TS-01-SMOKE-1, TS-01-SMOKE-2 pass
     - [ ] All existing tests still pass: `go test -count=1 ./...`
     - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-2.1 through 01-REQ-2.3, 01-REQ-3.1 through 01-REQ-3.4, all edge cases met
+    - [ ] Requirements 01-REQ-2.1 through 01-REQ-2.3, 01-REQ-3.1 through 01-REQ-3.6, all edge cases met
 
 - [ ] 5. Checkpoint — Data model + I/O complete
   - Ensure all model, serialization, and I/O tests pass.
@@ -428,6 +432,8 @@ Tasks are **required by default**. Mark optional tasks with `*` after checkbox: 
 | 01-REQ-3.2 | TS-01-11 | 3.1 | save_test.go::TestTS01_11 |
 | 01-REQ-3.3 | TS-01-12 | 3.2 | save_test.go::TestTS01_12 |
 | 01-REQ-3.4 | TS-01-13 | 4.2, 4.3 | save_test.go::TestTS01_13 |
+| 01-REQ-3.5 | TS-01-46 | 4.2 | save_test.go::TestTS01_46 |
+| 01-REQ-3.6 | TS-01-47 | 4.2 | save_test.go::TestTS01_47 |
 | 01-REQ-3.E1 | TS-01-E8 | 4.2 | save_test.go::TestTS01_E08 |
 | 01-REQ-3.E2 | TS-01-E9 | 4.2 | save_test.go::TestTS01_E09 |
 | 01-REQ-4.1 | TS-01-14 | 6.3 | validate_test.go::TestTS01_14 |
@@ -487,6 +493,7 @@ Tasks are **required by default**. Mark optional tasks with `*` after checkbox: 
 | Property 8 | TS-01-P8 | 10.1 | bootstrap_test.go::TestPropertyP8 |
 | Property 9 | TS-01-P9 | 7.3 | validate_test.go::TestPropertyP9 |
 | Property 10 | TS-01-P10 | 3.1 | spec_test.go::TestPropertyP10 |
+| Property 11 | TS-01-P11 | 4.2 | save_test.go::TestPropertyP11 |
 | Path 1 | TS-01-SMOKE-1 | 4.1 | smoke_test.go::TestSmoke1 |
 | Path 2 | TS-01-SMOKE-2 | 4.2 | smoke_test.go::TestSmoke2 |
 | Path 3 | TS-01-SMOKE-3 | 7.4 | smoke_test.go::TestSmoke3 |

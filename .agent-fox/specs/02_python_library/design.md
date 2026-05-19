@@ -277,6 +277,7 @@ class IncompleteSpecError(AfspecError):
 class ValidationError:
     file: str
     path: str
+    rule: str      # e.g., "schema", "integrity-1", "id-format"
     message: str
     severity: str  # "error" | "warning"
 ```
@@ -347,6 +348,8 @@ schema_version: 1
 | state_driven | WHILE {state}, THE {system} SHALL {action} |
 | unwanted | IF {error_condition}, THEN THE {system} SHALL {action} |
 | optional | WHERE {feature}, THE {system} SHALL {action} |
+
+When `return_contract` is non-None AND non-empty, append ` AND return {return_contract}` to the rendered sentence. If `return_contract` is None or an empty string, omit the return contract clause entirely.
 
 ### Subtask State Transition Table
 
