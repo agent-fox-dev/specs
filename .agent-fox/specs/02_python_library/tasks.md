@@ -344,43 +344,43 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 13. Wiring verification
+- [x] 13. Wiring verification
 
-  - [ ] 13.1 Trace every execution path from design.md end-to-end
+  - [x] 13.1 Trace every execution path from design.md end-to-end
     - For each of the 7 execution paths, verify the entry point in `afspec/__init__.py` actually calls the next function in the chain (read the calling code, do not assume)
     - Confirm no function in the chain is a stub (`return []`, `return None`, `pass`, `raise NotImplementedError`) that was never replaced
     - Every path must be live in production code — errata or deferrals do not satisfy this check
     - _Requirements: all_
 
-  - [ ] 13.2 Verify return values propagate correctly
+  - [x] 13.2 Verify return values propagate correctly
     - For every function that returns data consumed by a caller, confirm the caller receives and uses the return value
     - Key chains: `_load_prd` → `load_spec`, `_compute_coverage` → `save_spec`, `_compute_intent_hash` → `transition`, `_scan_folders` → `discover`
     - Grep for callers of each function; confirm none discards the return
     - _Requirements: all_
 
-  - [ ] 13.3 Run the integration smoke tests
+  - [x] 13.3 Run the integration smoke tests
     - All `TS-02-SMOKE-*` tests pass using real components (no stub bypass)
     - _Test Spec: TS-02-SMOKE-1 through TS-02-SMOKE-7_
 
-  - [ ] 13.4 Stub / dead-code audit
+  - [x] 13.4 Stub / dead-code audit
     - Search all files in `afspec/` for: `return []`, `return None` on non-Optional returns, `pass` in non-abstract methods, `# TODO`, `# stub`, `NotImplementedError`
     - Each hit must be either: (a) justified with a comment explaining why it is intentional, or (b) replaced with a real implementation
-    - Document any intentional stubs here with rationale
+    - Intentional `return []` occurrences: (1) `topological_sort` on empty graph — correct empty-sort result; (2) `_load_tasks_dependencies` exception handler — safe default on parse failure; (3) `validate_dict_against_schema` no-schema case — no errors to report. No unjustified stubs found.
 
-  - [ ] 13.5 Cross-spec entry point verification
+  - [x] 13.5 Cross-spec entry point verification
     - For each execution path whose entry point is a public API function in `afspec/__init__.py`, confirm the function is importable and callable from external code
     - Verify `BootstrapSpec` is usable as a context manager from consumer code
     - Since this is a library (no upstream callers within this repo), verify via the smoke tests that all entry points are exercised
     - _Requirements: all_
 
-  - [ ] 13.V Verify wiring group
-    - [ ] All smoke tests pass: `uv run pytest -q afspec/tests/test_smoke.py`
-    - [ ] No unjustified stubs remain in `afspec/`
-    - [ ] All execution paths from design.md are live (traceable in code)
-    - [ ] All public API functions are importable and callable
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] Type check clean: `uv run mypy afspec/`
-    - [ ] Linter clean: `uv run ruff check`
+  - [x] 13.V Verify wiring group
+    - [x] All smoke tests pass: `uv run pytest -q afspec/tests/test_smoke.py`
+    - [x] No unjustified stubs remain in `afspec/`
+    - [x] All execution paths from design.md are live (traceable in code)
+    - [x] All public API functions are importable and callable
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] Type check clean: `uv run mypy afspec/`
+    - [x] Linter clean: `uv run ruff check`
 
 ### Checkbox States
 
