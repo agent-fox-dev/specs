@@ -1,0 +1,12 @@
+{
+  "$schema": "",
+  "correctness_properties": [],
+  "error_handling": [],
+  "execution_paths": [],
+  "glossary": {},
+  "introduction": "No intent spec for testing.",
+  "requirements": [],
+  "schema_version": 1,
+  "spec_id": "99",
+  "spec_name": "no_intent"
+}

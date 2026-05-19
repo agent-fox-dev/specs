@@ -14,6 +14,18 @@ import (
 func WriteAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 
+	// If the target file already exists, verify it is writable before
+	// attempting the write. On most Unix systems os.Rename succeeds even
+	// for read-only targets (it replaces the directory entry), so we must
+	// check explicitly to surface permission errors early.
+	if _, err := os.Stat(path); err == nil {
+		f, err := os.OpenFile(path, os.O_WRONLY, 0)
+		if err != nil {
+			return fmt.Errorf("target %s is not writable: %w", path, err)
+		}
+		f.Close() //nolint:errcheck
+	}
+
 	// Create a temporary file in the same directory as the target.
 	tmp, err := os.CreateTemp(dir, ".tmp-")
 	if err != nil {

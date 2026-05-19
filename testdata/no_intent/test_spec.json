@@ -1,0 +1,16 @@
+{
+  "$schema": "",
+  "coverage": {
+    "gaps": [],
+    "paths_covered": [],
+    "properties_covered": [],
+    "requirements_covered": []
+  },
+  "edge_case_tests": [],
+  "property_tests": [],
+  "schema_version": 1,
+  "smoke_tests": [],
+  "spec_id": "99",
+  "spec_name": "no_intent",
+  "test_cases": []
+}

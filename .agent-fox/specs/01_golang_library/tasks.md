@@ -138,36 +138,39 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-2.2, 01-REQ-3.2, 01-REQ-3.3, 01-REQ-1.E1, 01-REQ-1.E2 met
 
-- [ ] 4. File I/O (Load and Save)
-  - [ ] 4.1 Implement LoadSpec
+- [x] 4. File I/O (Load and Save)
+  - [x] 4.1 Implement LoadSpec
     - Create `load.go`: `LoadSpec(dir)` — validate dir, read all four files, parse each, return `*Spec`
     - Create `internal/ioutil/read.go`: file reading helpers
     - Handle missing files, malformed JSON, malformed YAML, missing Intent
     - _Requirements: 01-REQ-2.1, 01-REQ-2.3_
 
-  - [ ] 4.2 Implement SaveSpec with computed fields
+  - [x] 4.2 Implement SaveSpec with computed fields
     - Create `save.go`: `SaveSpec(dir, spec)` — validate dir exists, compute fields, serialize all four, write atomically
-    - Compute `updated_at` to current UTC timestamp (ISO 8601) before writing prd.md
+    - Compute `updated_at` to current UTC timestamp (ISO 8601/RFC3339Nano) before writing prd.md
     - Compute `coverage` field by cross-referencing test cases against requirements before writing test_spec.json
     - Create `internal/ioutil/write.go`: `WriteAtomic()` — write to temp file then rename
     - Handle write failures without leaving partial files; clean up temp files on error
+    - Fixed: serialize.go now always double-quotes YAML string values for deterministic round-trips
+    - Fixed: WriteAtomic detects read-only targets early (pre-flight check before rename)
     - _Requirements: 01-REQ-3.1, 01-REQ-3.4, 01-REQ-3.5, 01-REQ-3.6_
 
-  - [ ] 4.3 Create golden testdata fixtures
-    - Populate `testdata/valid_spec/` with complete, internally consistent spec files
-    - Ensure JSON is deterministically formatted (sorted keys, 2-space indent)
-    - Ensure YAML frontmatter has correct field order
-    - Verify `LoadSpec("testdata/valid_spec")` → `SaveSpec(tmpdir)` produces byte-identical files
+  - [x] 4.3 Create golden testdata fixtures
+    - Populated `testdata/valid_spec/` with complete, internally consistent spec files
+    - JSON is deterministically formatted (sorted keys, 2-space indent)
+    - YAML frontmatter has correct field order with all strings double-quoted
+    - `LoadSpec("testdata/valid_spec")` → `SaveSpec(tmpdir)` produces byte-identical JSON files; prd.md identical except updated_at
+    - Added missing `requirements.json`, `test_spec.json`, `tasks.json` to `testdata/no_intent/`
     - _Test Spec: TS-01-7, TS-01-10, TS-01-13_
 
-  - [ ] 4.V Verify task group 4
-    - [ ] Spec tests TS-01-7, TS-01-10, TS-01-13, TS-01-46, TS-01-47 pass (load, save, round-trip, computed fields)
-    - [ ] Edge case tests TS-01-E3 through TS-01-E9 pass
-    - [ ] Property tests TS-01-P1 (round-trip idempotency), TS-01-P11 (computed coverage) pass
-    - [ ] Smoke tests TS-01-SMOKE-1, TS-01-SMOKE-2 pass
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-2.1 through 01-REQ-2.3, 01-REQ-3.1 through 01-REQ-3.6, all edge cases met
+  - [x] 4.V Verify task group 4
+    - [x] Spec tests TS-01-7, TS-01-10, TS-01-13, TS-01-46, TS-01-47 pass (load, save, round-trip, computed fields)
+    - [x] Edge case tests TS-01-E3 through TS-01-E9 pass
+    - [x] Property tests TS-01-P1 (round-trip idempotency), TS-01-P11 (computed coverage) pass
+    - [x] Smoke tests TS-01-SMOKE-1, TS-01-SMOKE-2 pass
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-2.1 through 01-REQ-2.3, 01-REQ-3.1 through 01-REQ-3.6, all edge cases met
 
 - [ ] 5. Checkpoint — Data model + I/O complete
   - Ensure all model, serialization, and I/O tests pass.

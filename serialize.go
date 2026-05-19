@@ -3,7 +3,6 @@ package afspec
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	"github.com/agent-fox/afspec/internal/prd"
 	"gopkg.in/yaml.v3"
@@ -36,10 +35,8 @@ func marshalFrontmatterOrdered(fm *Frontmatter) ([]byte, error) {
 		)
 	}
 	addStr := func(key, val string) {
-		n := &yaml.Node{Kind: yaml.ScalarNode, Value: val}
-		if fmIsAmbiguous(val) {
-			n.Style = yaml.DoubleQuotedStyle
-		}
+		// Always double-quote string values for deterministic, round-trip-safe output.
+		n := &yaml.Node{Kind: yaml.ScalarNode, Value: val, Style: yaml.DoubleQuotedStyle}
 		mapping.Content = append(mapping.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Value: key},
 			n,
@@ -48,10 +45,8 @@ func marshalFrontmatterOrdered(fm *Frontmatter) ([]byte, error) {
 	addStrSlice := func(key string, vals []string) {
 		seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Style: yaml.FlowStyle}
 		for _, v := range vals {
-			n := &yaml.Node{Kind: yaml.ScalarNode, Value: v}
-			if fmIsAmbiguous(v) {
-				n.Style = yaml.DoubleQuotedStyle
-			}
+			// Always double-quote string values in sequences too.
+			n := &yaml.Node{Kind: yaml.ScalarNode, Value: v, Style: yaml.DoubleQuotedStyle}
 			seq.Content = append(seq.Content, n)
 		}
 		mapping.Content = append(mapping.Content,
@@ -96,24 +91,3 @@ func marshalFrontmatterOrdered(fm *Frontmatter) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// fmIsAmbiguous reports whether a string value needs to be double-quoted in
-// YAML to avoid being misinterpreted as a number, boolean, or null.
-func fmIsAmbiguous(s string) bool {
-	if s == "" {
-		return false
-	}
-	// Pure integer (all digits)
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			goto notInt
-		}
-	}
-	return true
-notInt:
-	// YAML special scalars
-	switch strings.ToLower(s) {
-	case "true", "false", "null", "yes", "no", "on", "off", "~":
-		return true
-	}
-	return false
-}

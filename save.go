@@ -36,8 +36,12 @@ func SaveSpec(dir string, spec *Spec) error {
 	prdCopy := *spec.PRD
 	fmCopy := spec.PRD.Frontmatter
 
-	// Set updated_at to the current UTC timestamp.
-	fmCopy.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	// Set updated_at to the current UTC timestamp with nanosecond precision.
+	// RFC3339Nano ensures the saved value is always >= the time captured just
+	// before SaveSpec was called (unlike RFC3339 which truncates to seconds).
+	// Go's time.Parse(time.RFC3339, ...) accepts fractional seconds, so callers
+	// that parse with RFC3339 still work correctly.
+	fmCopy.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	prdCopy.Frontmatter = fmCopy
 	updatedSpec.PRD = &prdCopy
 
