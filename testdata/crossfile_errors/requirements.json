@@ -1,0 +1,32 @@
+{
+  "$schema": "",
+  "correctness_properties": [],
+  "error_handling": [],
+  "execution_paths": [],
+  "glossary": {},
+  "introduction": "Spec with cross-file validation errors.",
+  "requirements": [
+    {
+      "acceptance_criteria": [
+        {
+          "action": "do something",
+          "ears_pattern": "ubiquitous",
+          "id": "99-REQ-1.1",
+          "return_contract": null,
+          "system": "the system"
+        }
+      ],
+      "edge_cases": [],
+      "id": "99-REQ-1",
+      "title": "Test Requirement",
+      "user_story": {
+        "benefit": "test benefit",
+        "goal": "test goal",
+        "role": "tester"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "spec_id": "99",
+  "spec_name": "crossfile_errors"
+}

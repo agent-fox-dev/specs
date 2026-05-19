@@ -1,0 +1,84 @@
+{
+  "$schema": "",
+  "coverage": {
+    "gaps": [],
+    "paths_covered": [],
+    "properties_covered": [],
+    "requirements_covered": [
+      "99-REQ-1.1",
+      "99-REQ-1.2",
+      "99-REQ-1.3",
+      "99-REQ-1.4",
+      "99-REQ-1.5",
+      "99-REQ-1.6"
+    ]
+  },
+  "edge_case_tests": [],
+  "property_tests": [],
+  "schema_version": 1,
+  "smoke_tests": [],
+  "spec_id": "99",
+  "spec_name": "all_ears_patterns",
+  "test_cases": [
+    {
+      "assertion_pseudocode": "ASSERT rendered == \"THE the system SHALL do X\"",
+      "description": "ubiquitous pattern renders correctly",
+      "expected": "THE the system SHALL do X",
+      "id": "TS-99-1",
+      "input": {"ears_pattern": "ubiquitous"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.1"
+    },
+    {
+      "assertion_pseudocode": "ASSERT rendered == \"WHEN user clicks, THE the system SHALL respond\"",
+      "description": "event_driven pattern renders correctly",
+      "expected": "WHEN user clicks, THE the system SHALL respond",
+      "id": "TS-99-2",
+      "input": {"ears_pattern": "event_driven"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.2"
+    },
+    {
+      "assertion_pseudocode": "ASSERT rendered contains WHEN and AND",
+      "description": "complex_event pattern renders correctly",
+      "expected": "WHEN t AND c, THE s SHALL a",
+      "id": "TS-99-3",
+      "input": {"ears_pattern": "complex_event"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.3"
+    },
+    {
+      "assertion_pseudocode": "ASSERT rendered starts with WHILE",
+      "description": "state_driven pattern renders correctly",
+      "expected": "WHILE active, THE s SHALL a",
+      "id": "TS-99-4",
+      "input": {"ears_pattern": "state_driven"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.4"
+    },
+    {
+      "assertion_pseudocode": "ASSERT rendered starts with IF",
+      "description": "unwanted pattern renders correctly",
+      "expected": "IF disk full, THEN THE s SHALL alert",
+      "id": "TS-99-5",
+      "input": {"ears_pattern": "unwanted"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.5"
+    },
+    {
+      "assertion_pseudocode": "ASSERT rendered starts with WHERE",
+      "description": "optional pattern renders correctly",
+      "expected": "WHERE debug mode, THE s SHALL log",
+      "id": "TS-99-6",
+      "input": {"ears_pattern": "optional"},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-1.6"
+    }
+  ]
+}

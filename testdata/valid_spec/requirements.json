@@ -1,0 +1,73 @@
+{
+  "$schema": "",
+  "correctness_properties": [
+    {
+      "for_any": "any valid spec directory",
+      "id": "99-PROP-1",
+      "invariant": "load then save produces identical files",
+      "title": "Round-trip idempotency",
+      "validates": [
+        "99-REQ-1.1"
+      ]
+    }
+  ],
+  "error_handling": [
+    {
+      "behavior": "return error listing missing files",
+      "condition": "spec folder missing files",
+      "id": "99-ERR-1",
+      "requirement_id": "99-REQ-1.E1"
+    }
+  ],
+  "execution_paths": [
+    {
+      "id": "99-PATH-1",
+      "steps": [
+        {
+          "action": "call LoadSpec with directory path",
+          "actor": "consumer"
+        },
+        {
+          "action": "read and parse all four files",
+          "actor": "library"
+        }
+      ],
+      "title": "Load spec from disk"
+    }
+  ],
+  "glossary": {},
+  "introduction": "This is a golden fixture spec for testing the afspec library.",
+  "requirements": [
+    {
+      "acceptance_criteria": [
+        {
+          "action": "load the spec and return a populated Spec struct",
+          "ears_pattern": "ubiquitous",
+          "id": "99-REQ-1.1",
+          "return_contract": null,
+          "system": "the library"
+        }
+      ],
+      "edge_cases": [
+        {
+          "action": "return an error listing the missing files",
+          "ears_pattern": "unwanted",
+          "error_condition": "one or more required files are absent",
+          "id": "99-REQ-1.E1",
+          "return_contract": null,
+          "system": "the library"
+        }
+      ],
+      "id": "99-REQ-1",
+      "title": "Spec Loading",
+      "user_story": {
+        "benefit": "inspect and operate on spec data programmatically",
+        "goal": "load a spec folder from disk into memory",
+        "role": "library consumer"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "spec_id": "99",
+  "spec_name": "golden"
+}

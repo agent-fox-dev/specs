@@ -22,14 +22,14 @@ The implementation follows a test-first approach: group 1 writes all failing tes
 
 ## Tasks
 
-- [ ] 1. Write failing spec tests
-  - [ ] 1.1 Set up test file structure and testdata fixtures
+- [x] 1. Write failing spec tests
+  - [x] 1.1 Set up test file structure and testdata fixtures
     - Create test files: `spec_test.go`, `load_test.go`, `save_test.go`, `validate_test.go`, `render_test.go`, `lifecycle_test.go`, `bootstrap_test.go`, `discover_test.go`
     - Create `testdata/valid_spec/` with all four golden files (prd.md, requirements.json, test_spec.json, tasks.json)
     - Create `testdata/` directories for error cases: `incomplete_spec/`, `malformed_json/`, `bad_yaml/`, `no_intent/`, `crossfile_errors/`, `all_ears_patterns/`, `draft_spec/`
     - _Test Spec: TS-01-1 through TS-01-45_
 
-  - [ ] 1.2 Translate acceptance-criterion tests (TS-01-1 through TS-01-47)
+  - [x] 1.2 Translate acceptance-criterion tests (TS-01-1 through TS-01-47)
     - Data model tests (TS-01-1 through TS-01-6) in `spec_test.go`
     - Load tests (TS-01-7 through TS-01-9) in `load_test.go`
     - Save tests (TS-01-10 through TS-01-13) in `save_test.go`
@@ -43,7 +43,7 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - ID validation tests (TS-01-43 through TS-01-45) in `validate_test.go`
     - _Test Spec: TS-01-1 through TS-01-47_
 
-  - [ ] 1.3 Translate edge-case tests (TS-01-E1 through TS-01-E24)
+  - [x] 1.3 Translate edge-case tests (TS-01-E1 through TS-01-E24)
     - Serialization edge cases (TS-01-E1, TS-01-E2)
     - Load edge cases (TS-01-E3 through TS-01-E7)
     - Save edge cases (TS-01-E8, TS-01-E9)
@@ -56,7 +56,7 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - ID edge cases (TS-01-E23, TS-01-E24)
     - _Test Spec: TS-01-E1 through TS-01-E24_
 
-  - [ ] 1.4 Translate property tests (TS-01-P1 through TS-01-P11)
+  - [x] 1.4 Translate property tests (TS-01-P1 through TS-01-P11)
     - Round-trip idempotency (TS-01-P1) in `save_test.go`
     - EARS determinism (TS-01-P2) in `render_test.go`
     - Lifecycle monotonicity (TS-01-P3) in `lifecycle_test.go`
@@ -70,14 +70,14 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Computed coverage accuracy (TS-01-P11) in `save_test.go`
     - _Test Spec: TS-01-P1 through TS-01-P11_
 
-  - [ ] 1.5 Translate smoke tests (TS-01-SMOKE-1 through TS-01-SMOKE-8)
+  - [x] 1.5 Translate smoke tests (TS-01-SMOKE-1 through TS-01-SMOKE-8)
     - All smoke tests in `smoke_test.go`
     - _Test Spec: TS-01-SMOKE-1 through TS-01-SMOKE-8_
 
-  - [ ] 1.V Verify task group 1
-    - [ ] All spec tests exist and are syntactically valid: `go build ./...`
-    - [ ] All spec tests FAIL (red) — no implementation yet: `go test -count=1 ./...` shows failures
-    - [ ] No linter warnings introduced: `go vet ./...`
+  - [x] 1.V Verify task group 1
+    - [x] All spec tests exist and are syntactically valid: `go build ./...`
+    - [x] All spec tests FAIL (red) — no implementation yet: `go test -count=1 ./...` shows failures
+    - [x] No linter warnings introduced: `go vet ./...`
 
 - [ ] 2. Core data model types
   - [ ] 2.1 Define core types and status enum

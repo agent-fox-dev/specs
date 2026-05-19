@@ -1,0 +1,35 @@
+{
+  "$schema": "",
+  "dependencies": [],
+  "schema_version": 1,
+  "spec_id": "99",
+  "spec_name": "all_ears_patterns",
+  "task_groups": [
+    {
+      "id": 1,
+      "kind": "tests",
+      "subtasks": [],
+      "title": "Tests",
+      "verification": {
+        "checks": [],
+        "id": "1.V"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "wiring_verification",
+      "subtasks": [],
+      "title": "Wiring",
+      "verification": {
+        "checks": [],
+        "id": "2.V"
+      }
+    }
+  ],
+  "test_commands": {
+    "all_tests": "go test ./...",
+    "linter": "go vet ./...",
+    "spec_tests": "go test ./..."
+  },
+  "traceability": []
+}

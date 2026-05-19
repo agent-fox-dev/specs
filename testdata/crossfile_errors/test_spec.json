@@ -1,0 +1,27 @@
+{
+  "$schema": "",
+  "coverage": {
+    "gaps": [],
+    "paths_covered": [],
+    "properties_covered": [],
+    "requirements_covered": []
+  },
+  "edge_case_tests": [],
+  "property_tests": [],
+  "schema_version": 1,
+  "smoke_tests": [],
+  "spec_id": "99",
+  "spec_name": "crossfile_errors",
+  "test_cases": [
+    {
+      "assertion_pseudocode": "ASSERT err != nil",
+      "description": "references a nonexistent requirement",
+      "expected": {},
+      "id": "TS-99-1",
+      "input": {},
+      "kind": "unit",
+      "preconditions": [],
+      "requirement_id": "99-REQ-99.1"
+    }
+  ]
+}

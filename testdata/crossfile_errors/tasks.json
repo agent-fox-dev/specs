@@ -1,0 +1,42 @@
+{
+  "$schema": "",
+  "dependencies": [],
+  "schema_version": 1,
+  "spec_id": "99",
+  "spec_name": "crossfile_errors",
+  "task_groups": [
+    {
+      "id": 1,
+      "kind": "tests",
+      "subtasks": [],
+      "title": "Tests",
+      "verification": {
+        "checks": [],
+        "id": "1.V"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "wiring_verification",
+      "subtasks": [],
+      "title": "Wiring",
+      "verification": {
+        "checks": [],
+        "id": "2.V"
+      }
+    }
+  ],
+  "test_commands": {
+    "all_tests": "go test ./...",
+    "linter": "go vet ./...",
+    "spec_tests": "go test ./..."
+  },
+  "traceability": [
+    {
+      "requirement_id": "99-REQ-1.1",
+      "task_id": "1.1",
+      "test_path": null,
+      "test_spec_id": "TS-99-99"
+    }
+  ]
+}
