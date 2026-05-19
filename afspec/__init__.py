@@ -81,35 +81,31 @@ def validate(spec: Spec) -> list[ValidationError]:
 
 
 def render_requirements(requirements: Requirements) -> str:
-    """Render requirements.json artifact to markdown.
+    """Render requirements.json artifact to markdown."""
+    from afspec.renderer import render_requirements as _render_requirements
 
-    STUB: implemented in task group 9.
-    """
-    raise NotImplementedError("render_requirements not yet implemented (task group 9)")
+    return _render_requirements(requirements)
 
 
 def render_test_spec(test_spec: TestSpec) -> str:
-    """Render test_spec.json artifact to markdown.
+    """Render test_spec.json artifact to markdown."""
+    from afspec.renderer import render_test_spec as _render_test_spec
 
-    STUB: implemented in task group 9.
-    """
-    raise NotImplementedError("render_test_spec not yet implemented (task group 9)")
+    return _render_test_spec(test_spec)
 
 
 def render_tasks(tasks: Tasks) -> str:
-    """Render tasks.json artifact to markdown.
+    """Render tasks.json artifact to markdown."""
+    from afspec.renderer import render_tasks as _render_tasks
 
-    STUB: implemented in task group 9.
-    """
-    raise NotImplementedError("render_tasks not yet implemented (task group 9)")
+    return _render_tasks(tasks)
 
 
 def render_combined(spec: Spec) -> str:
-    """Render all four spec artifacts into one combined markdown document.
+    """Render all four spec artifacts into one combined markdown document."""
+    from afspec.renderer import render_combined as _render_combined
 
-    STUB: implemented in task group 9.
-    """
-    raise NotImplementedError("render_combined not yet implemented (task group 9)")
+    return _render_combined(spec)
 
 
 def transition(spec: Spec, target_status: str) -> Spec:

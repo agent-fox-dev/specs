@@ -248,30 +248,30 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 9. Implement markdown rendering
-  - [ ] 9.1 Implement EARS sentence rendering
+- [x] 9. Implement markdown rendering
+  - [x] 9.1 Implement EARS sentence rendering
     - Create `afspec/renderer.py`
     - `render_ears(criterion)` → `str`: dispatch on `ears_pattern`, apply template, handle empty fields (`<missing>`), omit null or empty-string `return_contract`
     - _Requirements: 02-REQ-6.2, 02-REQ-6.E1, 02-REQ-6.E2_
 
-  - [ ] 9.2 Implement per-file rendering
+  - [x] 9.2 Implement per-file rendering
     - `render_requirements(requirements)` → `str`: requirements with EARS sentences, glossary, properties, paths, error handling
     - `render_test_spec(test_spec)` → `str`: test cases, property tests, edge cases, smoke tests, coverage
     - `render_tasks(tasks)` → `str`: task groups with subtasks, traceability
     - All output deterministic
     - _Requirements: 02-REQ-6.1, 02-REQ-6.3_
 
-  - [ ] 9.3 Implement combined rendering
+  - [x] 9.3 Implement combined rendering
     - `render_combined(spec)` → `str`: PRD body verbatim, then requirements, test_spec, tasks each under a `#` headline
     - _Requirements: 02-REQ-6.4_
 
-  - [ ] 9.V Verify task group 9
-    - [ ] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_renderer.py`
-    - [ ] Edge case tests TS-02-E21, TS-02-E22 pass
-    - [ ] Property test TS-02-P8 passes
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check`
-    - [ ] Requirements 02-REQ-6.1 through 02-REQ-6.4, 02-REQ-6.E1, 02-REQ-6.E2 acceptance criteria met
+  - [x] 9.V Verify task group 9
+    - [x] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_renderer.py`
+    - [x] Edge case tests TS-02-E21, TS-02-E22 pass
+    - [x] Property test TS-02-P8 passes
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check`
+    - [x] Requirements 02-REQ-6.1 through 02-REQ-6.4, 02-REQ-6.E1, 02-REQ-6.E2 acceptance criteria met
 
 ---
 
