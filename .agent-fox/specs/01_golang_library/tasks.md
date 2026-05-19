@@ -332,34 +332,34 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-8.1 through 01-REQ-8.4, 01-REQ-8.E1 through 01-REQ-8.E3 met
 
-- [ ] 11. Spec discovery
-  - [ ] 11.1 Implement spec root scanning
+- [x] 11. Spec discovery
+  - [x] 11.1 Implement spec root scanning
     - Create `internal/discovery/scan.go`: `ScanRoot(root)` — find dirs matching `{NN}_{snake_case}`, skip `archive/`
     - Handle empty root (default to cwd)
     - _Requirements: 01-REQ-9.1, 01-REQ-9.2, 01-REQ-9.5_
 
-  - [ ] 11.2 Implement metadata loading
+  - [x] 11.2 Implement metadata loading
     - Create `internal/discovery/metadata.go`: `LoadMetadata(dir)` — read PRD frontmatter only (no full load)
     - Mark incomplete specs (missing files) with `Complete: false`
     - _Requirements: 01-REQ-9.3_
 
-  - [ ] 11.3 Implement dependency graph construction
+  - [x] 11.3 Implement dependency graph construction
     - Create `internal/discovery/graph.go`: `BuildGraph(entries, root)` — read tasks.json dependencies, build adjacency list
     - Implement `TopologicalOrder()` with cycle detection (Kahn's algorithm)
     - _Requirements: 01-REQ-9.4_
 
-  - [ ] 11.4 Wire up public DiscoverSpecs API
+  - [x] 11.4 Wire up public DiscoverSpecs API
     - In `discover.go`: `DiscoverSpecs(root)` — scan, load metadata, build graph, return `*DiscoveryResult`
     - _Requirements: 01-REQ-9.1_
 
-  - [ ] 11.V Verify task group 11
-    - [ ] Spec tests TS-01-38 through TS-01-42 pass
-    - [ ] Edge case tests TS-01-E20 through TS-01-E22 pass
-    - [ ] Property test TS-01-P7 (discovery completeness) passes
-    - [ ] Smoke test TS-01-SMOKE-8 passes
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-9.1 through 01-REQ-9.5, 01-REQ-9.E1 through 01-REQ-9.E3 met
+  - [x] 11.V Verify task group 11
+    - [x] Spec tests TS-01-38 through TS-01-42 pass
+    - [x] Edge case tests TS-01-E20 through TS-01-E22 pass
+    - [x] Property test TS-01-P7 (discovery completeness) passes
+    - [x] Smoke test TS-01-SMOKE-8 passes
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-9.1 through 01-REQ-9.5, 01-REQ-9.E1 through 01-REQ-9.E3 met
 
 - [ ] 12. Wiring verification
 
