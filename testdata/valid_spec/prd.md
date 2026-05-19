@@ -9,7 +9,7 @@ owner: "test"
 source: "test"
 supersedes: []
 tags: []
-intent_hash: "a81b8d7135f2b4a3d18aa9f2163edda5ceecf03c795e9cf757e069b8ea2b3222"
+intent_hash: "72150a0a8bdcd159bb78b4471224e40c4c639c9901b0833f2be22e37ffae4a7a"
 schema_version: 1
 ---
 # Golden Fixture Spec

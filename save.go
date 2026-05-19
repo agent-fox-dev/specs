@@ -9,6 +9,8 @@ import (
 
 	"github.com/agent-fox/afspec/internal/ioutil"
 	"github.com/agent-fox/afspec/internal/jsonutil"
+	"github.com/agent-fox/afspec/internal/lifecycle"
+	prdpkg "github.com/agent-fox/afspec/internal/prd"
 )
 
 // SaveSpec writes all four spec files to dir deterministically.
@@ -29,6 +31,15 @@ func SaveSpec(dir string, spec *Spec) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%q is not a directory", dir)
+	}
+
+	// Lifecycle guard: for active specs, verify the intent hash has not changed
+	// since the draft→active transition. This detects unauthorized mutations to
+	// the Intent section body (01-REQ-7.3, 01-REQ-7.E2).
+	if spec.PRD != nil && spec.PRD.Frontmatter.Status == StatusActive {
+		if err := checkActiveSpecIntegrity(spec); err != nil {
+			return err
+		}
 	}
 
 	// Make a shallow copy to avoid mutating the caller's struct.
@@ -205,4 +216,31 @@ func computeCoverage(reqs *Requirements, ts *TestSpecDoc) Coverage {
 		PathsCovered:        pathsCovered,
 		Gaps:                gaps,
 	}
+}
+
+// checkActiveSpecIntegrity verifies that the Intent section in the PRD body
+// has not been altered since the draft→active transition. It compares the
+// recomputed hash against the stored IntentHash in the frontmatter.
+//
+// Returns a descriptive error if the hash does not match (tamper detected) or
+// nil if the spec is intact.
+func checkActiveSpecIntegrity(spec *Spec) error {
+	fm := &spec.PRD.Frontmatter
+	if fm.IntentHash == nil {
+		// No hash stored yet — draft state or pre-hash spec, skip check.
+		return nil
+	}
+
+	// Extract the Intent section body from the full PRD body.
+	intentBody, err := prdpkg.ExtractIntent(spec.PRD.Body)
+	if err != nil {
+		return fmt.Errorf(
+			"intent section check failed: cannot extract ## Intent from PRD body: %w", err)
+	}
+
+	// Recompute and compare.
+	if err := lifecycle.CheckIntentHash(fm.IntentHash, intentBody); err != nil {
+		return fmt.Errorf("intent hash mismatch — Intent section modified on active spec: %w", err)
+	}
+	return nil
 }

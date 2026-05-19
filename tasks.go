@@ -2,6 +2,7 @@ package afspec
 
 // Tasks represents the top-level container for tasks.json.
 type Tasks struct {
+	Comment      string             `json:"$comment,omitempty"` // deprecation banner (superseded specs)
 	Schema       string             `json:"$schema"`
 	SpecID       string             `json:"spec_id"`
 	SpecName     string             `json:"spec_name"`
