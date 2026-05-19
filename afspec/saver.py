@@ -13,6 +13,7 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
+from afspec.lifecycle import check_save_permitted
 from afspec.models import (
     PRD,
     CorrectnessProperty,
@@ -516,14 +517,29 @@ def save_spec(spec: Spec, path: pathlib.Path) -> None:
     if not path.is_dir():
         raise NotADirectoryError(f"Target path is not a directory: {path}")
 
+    # Enforce lifecycle guards BEFORE updating computed fields so that the
+    # pre-update spec state is used for tamper/mutation detection.
+    check_save_permitted(spec)
+
     # Update computed fields (updated_at, coverage)
     updated_spec = _update_computed_fields(spec)
 
     # Serialize each artifact to a string
     prd_content = _serialize_prd(updated_spec.prd)
-    req_content = _serialize_json(_requirements_to_dict(updated_spec.requirements))
-    ts_content = _serialize_json(_test_spec_to_dict(updated_spec.test_spec))
-    tasks_content = _serialize_json(_tasks_to_dict(updated_spec.tasks))
+    req_dict = _requirements_to_dict(updated_spec.requirements)
+    ts_dict = _test_spec_to_dict(updated_spec.test_spec)
+    tasks_dict = _tasks_to_dict(updated_spec.tasks)
+
+    # For superseded specs, embed the deprecation comment in all JSON artifacts
+    if updated_spec.prd.frontmatter.status == "superseded":
+        _comment = "SUPERSEDED: This spec has been superseded."
+        req_dict["$comment"] = _comment
+        ts_dict["$comment"] = _comment
+        tasks_dict["$comment"] = _comment
+
+    req_content = _serialize_json(req_dict)
+    ts_content = _serialize_json(ts_dict)
+    tasks_content = _serialize_json(tasks_dict)
 
     # Write atomically; _atomic_write cleans up temp files on failure
     _atomic_write(path / "prd.md", prd_content)

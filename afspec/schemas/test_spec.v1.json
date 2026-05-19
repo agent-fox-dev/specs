@@ -30,22 +30,33 @@
     },
     "test_cases": {
       "type": "array",
-      "items": {"$ref": "#/$defs/TestCase"}
+      "items": {
+        "$ref": "#/$defs/TestCase"
+      }
     },
     "property_tests": {
       "type": "array",
-      "items": {"$ref": "#/$defs/PropertyTest"}
+      "items": {
+        "$ref": "#/$defs/PropertyTest"
+      }
     },
     "edge_case_tests": {
       "type": "array",
-      "items": {"$ref": "#/$defs/EdgeCaseTest"}
+      "items": {
+        "$ref": "#/$defs/EdgeCaseTest"
+      }
     },
     "smoke_tests": {
       "type": "array",
-      "items": {"$ref": "#/$defs/SmokeTest"}
+      "items": {
+        "$ref": "#/$defs/SmokeTest"
+      }
     },
     "coverage": {
       "$ref": "#/$defs/Coverage"
+    },
+    "$comment": {
+      "type": "string"
     }
   },
   "$defs": {
@@ -63,17 +74,33 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
-        "requirement_id": {"type": "string"},
-        "kind": {"type": "string"},
-        "description": {"type": "string"},
+        "id": {
+          "type": "string"
+        },
+        "requirement_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "preconditions": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
-        "input": {"type": "object"},
-        "expected": {"type": "object"},
-        "assertion_pseudocode": {"type": "string"}
+        "input": {
+          "type": "object"
+        },
+        "expected": {
+          "type": "object"
+        },
+        "assertion_pseudocode": {
+          "type": "string"
+        }
       }
     },
     "PropertyTest": {
@@ -88,15 +115,27 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
-        "property_id": {"type": "string"},
+        "id": {
+          "type": "string"
+        },
+        "property_id": {
+          "type": "string"
+        },
         "validates": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
-        "description": {"type": "string"},
-        "for_any_strategy": {"type": "string"},
-        "invariant_check": {"type": "string"}
+        "description": {
+          "type": "string"
+        },
+        "for_any_strategy": {
+          "type": "string"
+        },
+        "invariant_check": {
+          "type": "string"
+        }
       }
     },
     "EdgeCaseTest": {
@@ -113,17 +152,33 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
-        "requirement_id": {"type": "string"},
-        "kind": {"type": "string"},
-        "description": {"type": "string"},
+        "id": {
+          "type": "string"
+        },
+        "requirement_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "preconditions": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
-        "input": {"type": "object"},
-        "expected": {"type": "object"},
-        "assertion_pseudocode": {"type": "string"}
+        "input": {
+          "type": "object"
+        },
+        "expected": {
+          "type": "object"
+        },
+        "assertion_pseudocode": {
+          "type": "string"
+        }
       }
     },
     "SmokeTest": {
@@ -139,21 +194,35 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string"},
-        "execution_path_id": {"type": "string"},
-        "description": {"type": "string"},
-        "trigger": {"type": "string"},
+        "id": {
+          "type": "string"
+        },
+        "execution_path_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string"
+        },
         "real_components": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
         "mockable": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
         "expected_effects": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -169,19 +238,27 @@
       "properties": {
         "requirements_covered": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
         "properties_covered": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
         "paths_covered": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
         "gaps": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

@@ -275,30 +275,30 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 10. Implement lifecycle management
-  - [ ] 10.1 Implement lifecycle state machine
+- [x] 10. Implement lifecycle management
+  - [x] 10.1 Implement lifecycle state machine
     - Create `afspec/lifecycle.py`
     - Legal transition graph: draft→active, active→sealed, sealed→superseded, sealed→archived, draft→archived
     - `_check_transition(current, target)`: validate or raise `LifecycleError`
     - _Requirements: 02-REQ-7.1, 02-REQ-7.E1_
 
-  - [ ] 10.2 Implement intent hash computation
+  - [x] 10.2 Implement intent hash computation
     - `_compute_intent_hash(body)` → `str`: extract `## Intent` section, normalize (LF, collapse blanks, lowercase, trim), SHA-256
     - `_verify_intent_hash(spec)`: compare stored hash vs recomputed, raise on mismatch
     - _Requirements: 02-REQ-7.2, 02-REQ-7.E2_
 
-  - [ ] 10.3 Implement transition and mutation guards
+  - [x] 10.3 Implement transition and mutation guards
     - `transition(spec, target_status)` → `Spec`: check transition, compute intent hash on draft→active, apply deprecation banner on superseded, return new Spec
     - Mutation guards: reject Intent/immutable field changes in active, reject all changes in sealed/superseded/archived
     - _Requirements: 02-REQ-7.3, 02-REQ-7.4, 02-REQ-7.5_
 
-  - [ ] 10.V Verify task group 10
-    - [ ] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_lifecycle.py`
-    - [ ] Edge case tests TS-02-E16, TS-02-E17 pass
-    - [ ] Property tests TS-02-P4, TS-02-P5 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check`
-    - [ ] Requirements 02-REQ-7.1 through 02-REQ-7.5, 02-REQ-7.E1, 02-REQ-7.E2 acceptance criteria met
+  - [x] 10.V Verify task group 10
+    - [x] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_lifecycle.py`
+    - [x] Edge case tests TS-02-E16, TS-02-E17 pass
+    - [x] Property tests TS-02-P4, TS-02-P5 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check`
+    - [x] Requirements 02-REQ-7.1 through 02-REQ-7.5, 02-REQ-7.E1, 02-REQ-7.E2 acceptance criteria met
 
 ---
 

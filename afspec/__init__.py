@@ -109,11 +109,10 @@ def render_combined(spec: Spec) -> str:
 
 
 def transition(spec: Spec, target_status: str) -> Spec:
-    """Apply a lifecycle transition to a spec.
+    """Apply a lifecycle transition to a spec."""
+    from afspec.lifecycle import transition as _transition
 
-    STUB: implemented in task group 10.
-    """
-    raise NotImplementedError("transition not yet implemented (task group 10)")
+    return _transition(spec, target_status)
 
 
 def discover(spec_root: pathlib.Path | None = None) -> Any:
