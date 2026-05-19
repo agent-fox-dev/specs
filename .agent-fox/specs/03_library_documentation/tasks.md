@@ -94,34 +94,34 @@ The implementation produces markdown documentation files and tests that verify t
     - [x] No linter warnings introduced: `uv run ruff check`
     - [x] Requirements 03-REQ-1.1 through 03-REQ-1.5, 03-REQ-1.E1, 03-REQ-6.1, 03-REQ-6.3 met
 
-- [ ] 3. Write Python API reference
-  - [ ] 3.1 Create Python API reference skeleton
+- [x] 3. Write Python API reference
+  - [x] 3.1 Create Python API reference skeleton
     - Create `docs/api/python.md` with title and category headings
     - _Requirements: 03-REQ-2.4, 03-REQ-2.5_
 
-  - [ ] 3.2 Document Python functions: Loading, Saving, Validation, Rendering
+  - [x] 3.2 Document Python functions: Loading, Saving, Validation, Rendering
     - load_spec, save_spec, validate
     - render_requirements, render_test_spec, render_tasks, render_combined
     - All signatures taken from spec 02 design.md
     - _Requirements: 03-REQ-2.1, 03-REQ-2.2, 03-REQ-6.2_
 
-  - [ ] 3.3 Document Python functions: Lifecycle, Bootstrap, Discovery
+  - [x] 3.3 Document Python functions: Lifecycle, Bootstrap, Discovery
     - transition, BootstrapSpec (context manager), discover, schema_version
     - _Requirements: 03-REQ-2.1, 03-REQ-2.2, 03-REQ-6.2_
 
-  - [ ] 3.4 Document Python types
+  - [x] 3.4 Document Python types
     - All public types from spec 02 design.md with field tables
     - Exception hierarchy: AfspecError, SpecValidationError, LifecycleError, IncompleteSpecError
     - _Requirements: 03-REQ-2.3, 03-REQ-6.3_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Spec tests TS-03-6 through TS-03-10, TS-03-24 pass
-    - [ ] Edge case test TS-03-E2 passes
-    - [ ] Property test TS-03-P2 passes
-    - [ ] Smoke test TS-03-SMOKE-3 passes
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check`
-    - [ ] Requirements 03-REQ-2.1 through 03-REQ-2.5, 03-REQ-2.E1, 03-REQ-6.2, 03-REQ-6.3 met
+  - [x] 3.V Verify task group 3
+    - [x] Spec tests TS-03-6 through TS-03-10, TS-03-24 pass
+    - [x] Edge case test TS-03-E2 passes
+    - [x] Property test TS-03-P2 passes
+    - [x] Smoke test TS-03-SMOKE-3 passes
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check`
+    - [x] Requirements 03-REQ-2.1 through 03-REQ-2.5, 03-REQ-2.E1, 03-REQ-6.2, 03-REQ-6.3 met
 
 - [ ] 4. Checkpoint — API references complete
   - Ensure Go and Python API references both pass all content tests.
