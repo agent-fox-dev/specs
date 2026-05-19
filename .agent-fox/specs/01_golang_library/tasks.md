@@ -306,31 +306,31 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-7.1, 01-REQ-7.2, 01-REQ-7.3, 01-REQ-7.5, 01-REQ-7.E1, 01-REQ-7.E2 met; 01-REQ-7.4 partially met (errata)
 
-- [ ] 10. Bootstrap mode
-  - [ ] 10.1 Implement NewBootstrap and file writers
+- [x] 10. Bootstrap mode
+  - [x] 10.1 Implement NewBootstrap and file writers
     - In `bootstrap.go`: `NewBootstrap(dir, specID, specName)` — create directory, initialize tracker
     - Implement `WritePRD()`, `WriteRequirements()`, `WriteTestSpec()`, `WriteTasks()` — per-file schema validation, write to disk
     - Use `sync.Mutex` for thread safety
     - _Requirements: 01-REQ-8.1, 01-REQ-8.4_
 
-  - [ ] 10.2 Implement Finalize
+  - [x] 10.2 Implement Finalize
     - In `bootstrap.go`: `Finalize()` — check completeness, run full validation, return `*Spec`
     - Handle: missing files → `IncompleteSpecError`, validation failures → `[]ValidationError`
     - _Requirements: 01-REQ-8.2, 01-REQ-8.3_
 
-  - [ ] 10.3 Handle bootstrap edge cases
+  - [x] 10.3 Handle bootstrap edge cases
     - Overwrite on duplicate write (no error)
     - Error on existing folder
     - _Requirements: 01-REQ-8.E2, 01-REQ-8.E3_
 
-  - [ ] 10.V Verify task group 10
-    - [ ] Spec tests TS-01-34 through TS-01-37 pass
-    - [ ] Edge case tests TS-01-E17 through TS-01-E19 pass
-    - [ ] Property test TS-01-P8 (bootstrap deferred validation) passes
-    - [ ] Smoke test TS-01-SMOKE-7 passes
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-8.1 through 01-REQ-8.4, 01-REQ-8.E1 through 01-REQ-8.E3 met
+  - [x] 10.V Verify task group 10
+    - [x] Spec tests TS-01-34 through TS-01-37 pass
+    - [x] Edge case tests TS-01-E17 through TS-01-E19 pass
+    - [x] Property test TS-01-P8 (bootstrap deferred validation) passes
+    - [x] Smoke test TS-01-SMOKE-7 passes
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-8.1 through 01-REQ-8.4, 01-REQ-8.E1 through 01-REQ-8.E3 met
 
 - [ ] 11. Spec discovery
   - [ ] 11.1 Implement spec root scanning
