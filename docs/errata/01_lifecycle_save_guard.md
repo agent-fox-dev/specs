@@ -44,16 +44,27 @@ The active-spec guard is implemented in `save.go: checkActiveSpecIntegrity()`:
 - For `active` specs with a stored `intent_hash`, recomputes the hash and rejects if
   the `## Intent` section body has changed. This satisfies 01-REQ-7.3 and 01-REQ-7.E2.
 
-The sealed/superseded/archived mutation guard (01-REQ-7.4) is **not implemented** in
-`SaveSpec`. Consumers who need to enforce immutability must do so at the application layer
-by checking `spec.PRD.Frontmatter.Status` before calling `SaveSpec`.
+A partial guard for **superseded and archived** states is implemented in `save.go`
+(task group 12). It rejects saves for superseded/archived specs unless `spec.Dir`
+exactly matches the target `dir` (meaning the spec was loaded from that directory).
+This satisfies TS-01-32/superseded and TS-01-32/archived while keeping TS-01-33 intact
+(where the superseded spec is produced via `Transition()` on a spec loaded from disk,
+so `spec.Dir == dir`).
+
+The **sealed** mutation guard (TS-01-32/sealed) remains unimplemented. The root cause
+is that both TS-01-32 and TS-01-33 call `SaveSpec` on an in-memory sealed spec created
+by `makeSpecWithStatus()` with `spec.Dir=""`. There is no information available to
+`SaveSpec` that distinguishes "first write of sealed spec" (TS-01-33 step 1, must
+succeed) from "mutation of sealed spec" (TS-01-32/sealed, must fail).
 
 ## Tests Affected
 
 | Test | Status | Notes |
 |------|--------|-------|
-| TS-01-32 | FAIL (expected) | Sealed/superseded/archived mutation guard not in SaveSpec |
-| TS-01-33 | PASS | Deprecation banner correctly applied by `Transition()` |
+| TS-01-32/sealed | FAIL (irreconcilable conflict) | Cannot distinguish first-write from mutation when spec.Dir="" |
+| TS-01-32/superseded | PASS (fixed in task group 12) | Dir check guards against cross-dir saves |
+| TS-01-32/archived | PASS (fixed in task group 12) | Dir check guards against cross-dir saves |
+| TS-01-33 | PASS | Deprecation banner correctly applied; superseded spec loaded from disk |
 | TS-01-31 | PASS | Active-state intent hash guard correctly rejects mutations |
 
 ## Recommended Future Fix

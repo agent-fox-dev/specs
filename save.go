@@ -42,6 +42,34 @@ func SaveSpec(dir string, spec *Spec) error {
 		}
 	}
 
+	// Lifecycle guard: for superseded and archived specs, reject saves unless
+	// the spec was loaded from a directory that matches the target (spec.Dir == dir).
+	// This prevents unauthorized mutations to terminal-state specs while still
+	// allowing legitimate in-place saves (e.g., after Transition sealed→superseded
+	// on a spec that was already loaded from disk, where spec.Dir == dir).
+	//
+	// Sealed is intentionally excluded here because TS-01-33 requires saving a
+	// freshly-created sealed spec to disk for setup; see errata
+	// docs/errata/01_lifecycle_save_guard.md for the full conflict analysis.
+	// The sealed guard limitation (TS-01-32/sealed) is a known spec conflict.
+	//
+	// Requirement: 01-REQ-7.4
+	if spec.PRD != nil &&
+		(spec.PRD.Frontmatter.Status == StatusSuperseded ||
+			spec.PRD.Frontmatter.Status == StatusArchived) {
+		absDir, absErr := filepath.Abs(dir)
+		if absErr != nil {
+			return fmt.Errorf("resolving save directory: %w", absErr)
+		}
+		if spec.Dir != absDir {
+			return fmt.Errorf(
+				"cannot save spec in %q state: only in-place saves to the "+
+					"original load location are permitted "+
+					"(spec.Dir=%q, target=%q)",
+				spec.PRD.Frontmatter.Status, spec.Dir, absDir)
+		}
+	}
+
 	// Make a shallow copy to avoid mutating the caller's struct.
 	updatedSpec := *spec
 	prdCopy := *spec.PRD
