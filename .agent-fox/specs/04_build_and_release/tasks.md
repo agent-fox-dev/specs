@@ -23,15 +23,15 @@ The implementation follows a test-first approach. Task group 1 writes all failin
 
 ## Tasks
 
-- [ ] 1. Write failing spec tests
-  - [ ] 1.1 Set up test file structure and dependencies
+- [x] 1. Write failing spec tests
+  - [x] 1.1 Set up test file structure and dependencies
     - Create `internal/ci/ci_test.go` with package declaration and imports
     - Add `gopkg.in/yaml.v3` dependency: `go get gopkg.in/yaml.v3`
     - Create helper function `repoRoot(t)` that finds the repo root from `runtime.Caller(0)` by navigating up two directories
     - Create helper function `parseWorkflow(t, path)` that reads and parses a YAML file into `map[string]interface{}`
     - _Test Spec: all_
 
-  - [ ] 1.2 Translate workflow YAML tests (TS-04-1 through TS-04-9, TS-04-22)
+  - [x] 1.2 Translate workflow YAML tests (TS-04-1 through TS-04-9, TS-04-22)
     - CI trigger tests (TS-04-1, TS-04-2): parse ci.yml, check `on.push.branches` and `on.pull_request.branches`
     - CI job step tests (TS-04-3, TS-04-4, TS-04-5): verify Go and Python job structure, steps, matrix, runners
     - Release workflow tests (TS-04-6 through TS-04-9): verify release.yml job structure, conditions, steps
@@ -39,7 +39,7 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - Tests MUST fail (workflow files don't exist yet for some, or Makefile structure differs)
     - _Test Spec: TS-04-1 through TS-04-9, TS-04-22_
 
-  - [ ] 1.3 Translate Makefile, version, and config tests (TS-04-10 through TS-04-21)
+  - [x] 1.3 Translate Makefile, version, and config tests (TS-04-10 through TS-04-21)
     - Tag format regex tests (TS-04-10, TS-04-11): validate Go and Python tag patterns
     - Version source tests (TS-04-12, TS-04-13): verify version constants/fields exist
     - Makefile target tests (TS-04-14 through TS-04-19): verify targets exist and behave correctly
@@ -47,7 +47,7 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - Tests MUST fail (Makefile targets don't exist yet, config file doesn't exist)
     - _Test Spec: TS-04-10 through TS-04-21_
 
-  - [ ] 1.4 Translate edge case tests (TS-04-E1 through TS-04-E7)
+  - [x] 1.4 Translate edge case tests (TS-04-E1 through TS-04-E7)
     - CI edge cases (TS-04-E1, TS-04-E2): Python job skip condition, no continue-on-error
     - Release edge cases (TS-04-E3, TS-04-E4): version mismatch, build failure order
     - Tag format edge case (TS-04-E5): invalid tag rejection
@@ -56,7 +56,7 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - Tests MUST fail
     - _Test Spec: TS-04-E1 through TS-04-E7_
 
-  - [ ] 1.5 Translate property and smoke tests (TS-04-P1 through TS-04-P4, TS-04-SMOKE-1 through TS-04-SMOKE-4)
+  - [x] 1.5 Translate property and smoke tests (TS-04-P1 through TS-04-P4, TS-04-SMOKE-1 through TS-04-SMOKE-4)
     - Property tests using `testing/quick` or table-driven exhaustive tests
     - TS-04-P1: tag pattern exclusivity across generated semver strings
     - TS-04-P2: version extraction correctness with temp files
@@ -66,10 +66,10 @@ The implementation follows a test-first approach. Task group 1 writes all failin
     - Tests MUST fail
     - _Test Spec: TS-04-P1 through TS-04-P4, TS-04-SMOKE-1 through TS-04-SMOKE-4_
 
-  - [ ] 1.V Verify task group 1
-    - [ ] All spec tests exist and are syntactically valid: `go build ./internal/ci/...` (if ci_test.go has build tag or compiles)
-    - [ ] All spec tests FAIL (red) — no implementation yet: `go test -count=1 -timeout 300s ./internal/ci/` shows failures
-    - [ ] No linter warnings introduced: `go vet ./...`
+  - [x] 1.V Verify task group 1
+    - [x] All spec tests exist and are syntactically valid: `go build ./internal/ci/...` (if ci_test.go has build tag or compiles)
+    - [x] All spec tests FAIL (red) — no implementation yet: `go test -count=1 -timeout 300s ./internal/ci/` shows failures
+    - [x] No linter warnings introduced: `go vet ./...`
 
 - [ ] 2. Makefile targets and golangci-lint configuration
   - [ ] 2.1 Update Makefile with language-specific and combined targets
