@@ -97,7 +97,7 @@ This document specifies the requirements for the Python spec-format library (`af
 
 [02-REQ-3.3] THE library SHALL produce deterministic YAML frontmatter with a fixed field order: `spec_id`, `spec_name`, `title`, `status`, `created_at`, `updated_at`, `owner`, `source`, `supersedes`, `tags`, `intent_hash`, `schema_version`.
 
-[02-REQ-3.4] WHEN a spec is loaded from disk and saved without modification, THE library SHALL produce byte-identical files AND return identical in-memory structures on subsequent reload (idempotent round-trip).
+[02-REQ-3.4] WHEN a spec is loaded from disk and saved without modification, THE library SHALL produce byte-identical files (except for the `updated_at` field, which is always set to the current timestamp) AND return identical in-memory structures on subsequent reload (idempotent round-trip).
 
 [02-REQ-3.5] WHEN saving `prd.md`, THE library SHALL set the `updated_at` frontmatter field to the current UTC timestamp in ISO 8601 format before writing.
 
@@ -177,7 +177,7 @@ This document specifies the requirements for the Python spec-format library (`af
 
 [02-REQ-6.E1] IF a required field for EARS rendering is an empty string, THEN THE library SHALL render a placeholder string (`<missing>`) in that field's position.
 
-[02-REQ-6.E2] IF the `return_contract` field on a criterion is None, THEN THE library SHALL omit the return contract clause from the rendered EARS sentence.
+[02-REQ-6.E2] IF the `return_contract` field on a criterion is None or an empty string, THEN THE library SHALL omit the return contract clause from the rendered EARS sentence.
 
 ---
 

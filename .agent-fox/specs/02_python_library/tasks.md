@@ -251,7 +251,7 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 - [ ] 9. Implement markdown rendering
   - [ ] 9.1 Implement EARS sentence rendering
     - Create `afspec/renderer.py`
-    - `render_ears(criterion)` → `str`: dispatch on `ears_pattern`, apply template, handle empty fields (`<missing>`), omit null `return_contract`
+    - `render_ears(criterion)` → `str`: dispatch on `ears_pattern`, apply template, handle empty fields (`<missing>`), omit null or empty-string `return_contract`
     - _Requirements: 02-REQ-6.2, 02-REQ-6.E1, 02-REQ-6.E2_
 
   - [ ] 9.2 Implement per-file rendering
