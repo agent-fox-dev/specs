@@ -74,11 +74,10 @@ def save_spec(spec: Spec, path: pathlib.Path) -> None:
 
 
 def validate(spec: Spec) -> list[ValidationError]:
-    """Validate a spec (schema + ID format + cross-file integrity).
+    """Validate a spec (schema + ID format + cross-file integrity)."""
+    from afspec.validator import validate as _validate
 
-    STUB: implemented in task group 7.
-    """
-    raise NotImplementedError("validate not yet implemented (task group 7)")
+    return _validate(spec)
 
 
 def render_requirements(requirements: Requirements) -> str:

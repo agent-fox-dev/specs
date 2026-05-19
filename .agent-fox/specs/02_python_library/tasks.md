@@ -207,15 +207,15 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 7. Implement validation
-  - [ ] 7.1 Implement schema validation
+- [x] 7. Implement validation
+  - [x] 7.1 Implement schema validation
     - Create `afspec/validator.py`
     - `_validate_schemas(spec)` → `list[ValidationError]`: validate each file against bundled schema
     - PRD frontmatter: parse YAML to dict, validate against prd-frontmatter.v1.json
     - Collect all errors with file name, JSON path, description
     - _Requirements: 02-REQ-4.1, 02-REQ-4.2, 02-REQ-4.4_
 
-  - [ ] 7.2 Implement cross-file integrity validation
+  - [x] 7.2 Implement cross-file integrity validation
     - `_validate_cross_file(spec)` → `list[ValidationError]`: all seven rules
     - Rule 1: requirement_id existence check
     - Rule 2: criterion/edge case coverage check
@@ -226,18 +226,18 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
     - Rule 7: spec_id/spec_name consistency
     - _Requirements: 02-REQ-5.1 through 02-REQ-5.7_
 
-  - [ ] 7.3 Implement validate entry point
+  - [x] 7.3 Implement validate entry point
     - `validate(spec)` → `list[ValidationError]`: run schema validation, then ID validation, then cross-file
     - Aggregate all errors from all layers
     - _Requirements: 02-REQ-5.1, 02-REQ-4.1_
 
-  - [ ] 7.V Verify task group 7
-    - [ ] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_validator.py`
-    - [ ] Edge case tests TS-02-E10, TS-02-E11, TS-02-E15 pass
-    - [ ] Property tests TS-02-P6, TS-02-P9 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check`
-    - [ ] Requirements 02-REQ-4.1 through 02-REQ-4.4, 02-REQ-4.E1, 02-REQ-4.E2, 02-REQ-5.1 through 02-REQ-5.7, 02-REQ-5.E1 acceptance criteria met
+  - [x] 7.V Verify task group 7
+    - [x] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_validator.py`
+    - [x] Edge case tests TS-02-E10, TS-02-E11 pass; TS-02-E15 deferred to task group 11 (requires BootstrapSpec)
+    - [x] Property tests TS-02-P6, TS-02-P9 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check`
+    - [x] Requirements 02-REQ-4.1 through 02-REQ-4.4, 02-REQ-4.E1, 02-REQ-4.E2, 02-REQ-5.1 through 02-REQ-5.7, 02-REQ-5.E1 acceptance criteria met
 
 ---
 

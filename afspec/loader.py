@@ -464,17 +464,48 @@ def load_spec(path: pathlib.Path) -> Spec:
             missing_files=missing,
         )
 
-    # Load each artifact
+    # Load each artifact (also capture raw JSON dicts for schema validation)
     prd = _load_prd(path / "prd.md")
     requirements = _load_json(path / "requirements.json", Requirements)
     test_spec = _load_json(path / "test_spec.json", TestSpec)
     tasks = _load_json(path / "tasks.json", Tasks)
+
+    # Read raw JSON dicts to preserve fields that deserialization strips
+    # (e.g., extra properties in EARS criteria that are silently dropped).
+    # Best-effort: failure is non-fatal; None falls back to re-serialization.
+    def _try_load_raw_json(filepath: pathlib.Path) -> "dict[str, Any] | None":
+        try:
+            return json.loads(filepath.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+        except Exception:
+            return None
+
+    def _try_load_raw_frontmatter(filepath: pathlib.Path) -> "dict[str, Any] | None":
+        """Re-parse only the YAML frontmatter of prd.md as a plain dict."""
+        try:
+            content = filepath.read_text(encoding="utf-8")
+            if not content.startswith("---"):
+                return None
+            after_open = content[3:]
+            if after_open.startswith("\n"):
+                after_open = after_open[1:]
+            close_match = re.search(r"^---\s*$", after_open, re.MULTILINE)
+            if close_match is None:
+                return None
+            yaml_text = after_open[: close_match.start()]
+            raw = yaml.safe_load(yaml_text)
+            return raw if isinstance(raw, dict) else None
+        except Exception:
+            return None
 
     return Spec(
         prd=prd,
         requirements=requirements,
         test_spec=test_spec,
         tasks=tasks,
+        _raw_requirements=_try_load_raw_json(path / "requirements.json"),
+        _raw_test_spec=_try_load_raw_json(path / "test_spec.json"),
+        _raw_tasks=_try_load_raw_json(path / "tasks.json"),
+        _raw_frontmatter=_try_load_raw_frontmatter(path / "prd.md"),
     )
 
 

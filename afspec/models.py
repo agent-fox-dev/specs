@@ -441,3 +441,19 @@ class Spec:
     requirements: Requirements
     test_spec: TestSpec
     tasks: Tasks
+    # Raw JSON dicts preserved from disk loading for schema validation.
+    # These preserve fields that may be stripped during deserialization
+    # (e.g., additional properties in EARS criteria that the loader ignores).
+    # Excluded from equality, hashing, and repr to keep them invisible to consumers.
+    _raw_requirements: "dict[str, Any] | None" = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
+    _raw_test_spec: "dict[str, Any] | None" = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
+    _raw_tasks: "dict[str, Any] | None" = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
+    _raw_frontmatter: "dict[str, Any] | None" = dataclasses.field(
+        default=None, compare=False, repr=False
+    )

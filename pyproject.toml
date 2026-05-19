@@ -41,3 +41,11 @@ ignore = ["E501"]
 python_version = "3.10"
 strict = true
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.152.8",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.13",
+]

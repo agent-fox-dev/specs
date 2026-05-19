@@ -30,10 +30,12 @@
       "const": 1
     },
     "introduction": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "glossary": {
       "type": "object",
+      "minProperties": 1,
       "additionalProperties": {
         "type": "string"
       }
