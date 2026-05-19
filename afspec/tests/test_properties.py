@@ -79,7 +79,11 @@ STATUSES = ["draft", "active", "sealed", "superseded", "archived"]
 def ears_criterion_dict(draw: st.DrawFn) -> dict:  # type: ignore[type-arg]
     """Strategy: random valid EARS criterion dict for any pattern."""
     pattern = draw(st.sampled_from(EARS_PATTERNS))
-    text = st.text(min_size=1, max_size=50, alphabet=st.characters(whitelist_categories=("L",)))
+    text = st.text(
+        min_size=1,
+        max_size=50,
+        alphabet=st.characters(whitelist_categories=("L",)),  # type: ignore[arg-type]
+    )
     base = {
         "id": "05-REQ-1.1",
         "ears_pattern": pattern,

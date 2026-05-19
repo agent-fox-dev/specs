@@ -320,7 +320,7 @@ def test_ears_factory_dispatch() -> None:
         }
     )
     assert isinstance(sd, StateDrivenCriterion)
-    assert sd.state == "active"  # type: ignore[union-attr]
+    assert sd.state == "active"
 
     # unwanted
     uw = EARSCriterion.from_dict(
@@ -334,7 +334,7 @@ def test_ears_factory_dispatch() -> None:
         }
     )
     assert isinstance(uw, UnwantedCriterion)
-    assert uw.error_condition == "timeout"  # type: ignore[union-attr]
+    assert uw.error_condition == "timeout"
 
     # optional
     op = EARSCriterion.from_dict(
@@ -348,7 +348,7 @@ def test_ears_factory_dispatch() -> None:
         }
     )
     assert isinstance(op, OptionalCriterion)
-    assert op.feature == "dark mode"  # type: ignore[union-attr]
+    assert op.feature == "dark mode"
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,9 @@ testpaths = ["afspec/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::pytest.PytestCollectionWarning",
+]
 
 [tool.ruff]
 target-version = "py310"

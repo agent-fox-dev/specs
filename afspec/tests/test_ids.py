@@ -148,7 +148,7 @@ class TestNonSequentialWarning:
 
         from afspec import load_spec, validate
 
-        spec = load_spec(pathlib.Path(str(tmp_spec_dir)))  # type: ignore[arg-type]
+        spec = load_spec(pathlib.Path(str(tmp_spec_dir)))
         errors = validate(spec)
         # Non-sequential gaps produce warnings (severity="warning"), not errors
         # This test validates the mechanism exists; actual gap detection tested via full spec

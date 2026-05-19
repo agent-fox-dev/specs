@@ -229,6 +229,6 @@ def test_ears_various_empty_fields(
         "return_contract": None,
     }
     kwargs[field] = value
-    criterion = UbiquitousCriterion(**kwargs)
+    criterion = UbiquitousCriterion(**kwargs)  # type: ignore[arg-type]
     result = render_ears(criterion)
     assert result == expected_placeholder
