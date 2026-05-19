@@ -67,11 +67,10 @@ def load_spec(path: pathlib.Path) -> Spec:
 
 
 def save_spec(spec: Spec, path: pathlib.Path) -> None:
-    """Write in-memory spec structures back to disk with atomic writes.
+    """Write in-memory spec structures back to disk with atomic writes."""
+    from afspec.saver import save_spec as _save_spec
 
-    STUB: implemented in task group 6.
-    """
-    raise NotImplementedError("save_spec not yet implemented (task group 6)")
+    _save_spec(spec, path)
 
 
 def validate(spec: Spec) -> list[ValidationError]:

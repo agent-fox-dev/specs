@@ -178,32 +178,32 @@ The dependency order is: models → exceptions → IDs → schemas → loader �
 
 ---
 
-- [ ] 6. Implement spec saving
-  - [ ] 6.1 Implement deterministic serialization
+- [x] 6. Implement spec saving
+  - [x] 6.1 Implement deterministic serialization
     - Create `afspec/saver.py`
     - `_serialize_json(data)` → `str`: `json.dumps` with `sort_keys=True, indent=2`, trailing newline
     - `_serialize_prd(prd)` → `str`: YAML frontmatter in fixed field order + body
     - _Requirements: 02-REQ-3.2, 02-REQ-3.3_
 
-  - [ ] 6.2 Implement atomic file writes
+  - [x] 6.2 Implement atomic file writes
     - `_atomic_write(path, content)`: write to tempfile in same directory, then `os.replace`
     - Clean up temp files on failure
     - _Requirements: 02-REQ-3.1, 02-REQ-3.E2_
 
-  - [ ] 6.3 Implement computed fields and save_spec entry point
+  - [x] 6.3 Implement computed fields and save_spec entry point
     - `_update_computed_fields(spec)` → `Spec`: set `updated_at` to UTC now, compute `coverage`
     - `_compute_coverage(requirements, test_spec)` → `Coverage`: scan test cases against requirements
     - `save_spec(spec, path)` → `None`: compute fields, validate directory exists, write all four files atomically
     - _Requirements: 02-REQ-3.1, 02-REQ-3.4, 02-REQ-3.5, 02-REQ-3.6, 02-REQ-3.E1_
 
-  - [ ] 6.V Verify task group 6
-    - [ ] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_saver.py`
-    - [ ] Edge case tests TS-02-E8, TS-02-E9 pass
-    - [ ] Property tests TS-02-P1, TS-02-P10, TS-02-P11 pass
-    - [ ] Round-trip test TS-02-11 passes
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check`
-    - [ ] Requirements 02-REQ-3.1 through 02-REQ-3.6, 02-REQ-3.E1, 02-REQ-3.E2 acceptance criteria met
+  - [x] 6.V Verify task group 6
+    - [x] Spec tests for this group pass: `uv run pytest -q afspec/tests/test_saver.py`
+    - [x] Edge case tests TS-02-E8, TS-02-E9 pass
+    - [x] Property tests TS-02-P1, TS-02-P10, TS-02-P11 pass
+    - [x] Round-trip test TS-02-11 passes
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check`
+    - [x] Requirements 02-REQ-3.1 through 02-REQ-3.6, 02-REQ-3.E1, 02-REQ-3.E2 acceptance criteria met
 
 ---
 
