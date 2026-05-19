@@ -60,39 +60,39 @@ The implementation produces markdown documentation files and tests that verify t
     - [x] All spec tests FAIL (red) — no documentation files yet
     - [x] No linter warnings introduced: `uv run ruff check`
 
-- [ ] 2. Write Go API reference
-  - [ ] 2.1 Create docs/api/ directory and Go API reference skeleton
+- [x] 2. Write Go API reference
+  - [x] 2.1 Create docs/api/ directory and Go API reference skeleton
     - Create `docs/api/go.md` with title and category headings (Loading, Saving, Validation, Rendering, Lifecycle, Bootstrap, Discovery, Types)
     - _Requirements: 03-REQ-1.4, 03-REQ-1.5_
 
-  - [ ] 2.2 Document Go functions: Loading, Saving, Validation
+  - [x] 2.2 Document Go functions: Loading, Saving, Validation
     - LoadSpec: signature, description, parameters, returns, errors, example
     - SaveSpec: signature, description, parameters, returns, errors, example
     - Validate, ValidateSchema, ValidateCrossFile: each with full documentation
     - All signatures taken from spec 01 design.md Components and Interfaces
     - _Requirements: 03-REQ-1.1, 03-REQ-1.2, 03-REQ-6.1_
 
-  - [ ] 2.3 Document Go functions: Rendering, Lifecycle, Bootstrap, Discovery
+  - [x] 2.3 Document Go functions: Rendering, Lifecycle, Bootstrap, Discovery
     - RenderRequirements, RenderTestSpec, RenderTasks, RenderCombined
     - Transition
     - NewBootstrap, Bootstrap.WritePRD/WriteRequirements/WriteTestSpec/WriteTasks, Bootstrap.Finalize
     - DiscoverSpecs
     - _Requirements: 03-REQ-1.1, 03-REQ-1.2, 03-REQ-6.1_
 
-  - [ ] 2.4 Document Go types
+  - [x] 2.4 Document Go types
     - All public types from spec 01 design.md with field tables
     - Spec, PRD, Frontmatter, Status, Requirements, Criterion, TestSpecDoc, Tasks
     - ValidationError, LifecycleError, IncompleteSpecError, DiscoveryResult, SpecEntry, DependencyGraph, Bootstrap, SubtaskState
     - _Requirements: 03-REQ-1.3, 03-REQ-6.3_
 
-  - [ ] 2.V Verify task group 2
-    - [ ] Spec tests TS-03-1 through TS-03-5, TS-03-23 pass
-    - [ ] Edge case test TS-03-E1 passes
-    - [ ] Property test TS-03-P1 passes
-    - [ ] Smoke test TS-03-SMOKE-2 passes
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check`
-    - [ ] Requirements 03-REQ-1.1 through 03-REQ-1.5, 03-REQ-1.E1, 03-REQ-6.1, 03-REQ-6.3 met
+  - [x] 2.V Verify task group 2
+    - [x] Spec tests TS-03-1 through TS-03-5, TS-03-23 pass
+    - [x] Edge case test TS-03-E1 passes
+    - [x] Property test TS-03-P1 passes
+    - [x] Smoke test TS-03-SMOKE-2 passes
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check`
+    - [x] Requirements 03-REQ-1.1 through 03-REQ-1.5, 03-REQ-1.E1, 03-REQ-6.1, 03-REQ-6.3 met
 
 - [ ] 3. Write Python API reference
   - [ ] 3.1 Create Python API reference skeleton
