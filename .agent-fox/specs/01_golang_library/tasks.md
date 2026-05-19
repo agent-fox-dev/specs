@@ -207,8 +207,8 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - [x] No linter warnings introduced: `go vet ./...`
     - [x] Requirements 01-REQ-4.1 through 01-REQ-4.4, 01-REQ-4.E1, 01-REQ-4.E2 met
 
-- [ ] 7. Cross-file integrity and ID validation
-  - [ ] 7.1 Implement cross-file integrity checks
+- [x] 7. Cross-file integrity and ID validation
+  - [x] 7.1 Implement cross-file integrity checks
     - Create `internal/validate/crossfile.go`: `CrossFileIntegrity(spec)` — all 7 rules
     - Rule 1: requirement_id references resolve
     - Rule 2: requirement/edge case test coverage
@@ -216,33 +216,34 @@ The implementation follows a test-first approach: group 1 writes all failing tes
     - Rule 4: execution path smoke test coverage
     - Rule 5: test_spec_id references in tasks resolve
     - Rule 7: spec_id/spec_name consistency across files
+    - Note: implemented in root `validate.go` (crossFileRule1–7) to avoid import cycles; `internal/validate/helpers.go` provides pure utility functions (regex patterns, extractBacktickTerms, checkSequentiality)
     - _Requirements: 01-REQ-5.1 through 01-REQ-5.5, 01-REQ-5.7_
 
-  - [ ] 7.2 Implement glossary cross-check (rule 6)
-    - In `internal/validate/crossfile.go`: extract backtick-wrapped terms from checked fields, verify glossary entries
+  - [x] 7.2 Implement glossary cross-check (rule 6)
+    - In root `validate.go` (crossFileRule6): extract backtick-wrapped terms from checked fields, verify glossary entries
+    - `internal/validate/helpers.go` provides `ExtractBacktickTerms()` helper
     - Checked fields: action, trigger, condition, error_condition, state, feature, for_any, invariant
     - _Requirements: 01-REQ-5.6_
 
-  - [ ] 7.3 Implement ID format validation
-    - Create `internal/validate/ids.go`: `ValidateIDs(spec)` — validate all ID patterns from Appendix A
-    - Verify spec_id component matches file's spec_id
-    - Verify numeric components are positive integers
-    - Non-sequential IDs produce warnings (not errors)
+  - [x] 7.3 Implement ID format validation
+    - `internal/validate/helpers.go`: ID regex patterns for all Appendix A formats
+    - Root `validate.go`: `ValidateIDs(spec)` validates all ID patterns, spec_id matching, positive integers
+    - Non-sequential IDs produce SeverityWarning (not error)
     - _Requirements: 01-REQ-10.1, 01-REQ-10.2, 01-REQ-10.3_
 
-  - [ ] 7.4 Wire up public Validate API
-    - Update `validate.go`: `Validate(spec)` calls ValidateSchema + CrossFileIntegrity + ValidateIDs
-    - Update `validate.go`: `ValidateCrossFile(spec)` public API
+  - [x] 7.4 Wire up public Validate API
+    - Root `validate.go`: `Validate(spec)` calls ValidateSchema + ValidateCrossFile + ValidateIDs
+    - Root `validate.go`: `ValidateCrossFile(spec)` public API delegates to crossFileRule1–7
     - _Requirements: 01-REQ-5.1_
 
-  - [ ] 7.V Verify task group 7
-    - [ ] Spec tests TS-01-18 through TS-01-24, TS-01-43 through TS-01-45 pass
-    - [ ] Edge case tests TS-01-E12, TS-01-E23, TS-01-E24 pass
-    - [ ] Property tests TS-01-P4, TS-01-P9 pass
-    - [ ] Smoke test TS-01-SMOKE-3 passes
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-5.1 through 01-REQ-5.7, 01-REQ-10.1 through 01-REQ-10.3, all edge cases met
+  - [x] 7.V Verify task group 7
+    - [x] Spec tests TS-01-18 through TS-01-24, TS-01-43 through TS-01-45 pass
+    - [x] Edge case tests TS-01-E12, TS-01-E23, TS-01-E24 pass
+    - [x] Property tests TS-01-P4, TS-01-P9 pass
+    - [x] Smoke test TS-01-SMOKE-3 passes
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-5.1 through 01-REQ-5.7, 01-REQ-10.1 through 01-REQ-10.3, all edge cases met
 
 - [ ] 8. Markdown rendering
   - [ ] 8.1 Implement EARS sentence rendering

@@ -3,11 +3,11 @@ package afspec
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/agent-fox/afspec/internal/schema"
+	intvalidate "github.com/agent-fox/afspec/internal/validate"
 )
 
 // GetEmbeddedSchemas returns a map of schema file name → raw JSON bytes for
@@ -596,19 +596,9 @@ func crossFileRule5(spec *Spec) []ValidationError {
 	return errs
 }
 
-// backtickTermRe matches backtick-wrapped terms in a string.
-var backtickTermRe = regexp.MustCompile("`([^`]+)`")
-
-// extractBacktickTerms returns all terms wrapped in backticks within s.
+// extractBacktickTerms delegates to the internal/validate helper.
 func extractBacktickTerms(s string) []string {
-	matches := backtickTermRe.FindAllStringSubmatch(s, -1)
-	var terms []string
-	for _, m := range matches {
-		if len(m) > 1 {
-			terms = append(terms, m[1])
-		}
-	}
-	return terms
+	return intvalidate.ExtractBacktickTerms(s)
 }
 
 // Rule 6: every backtick-wrapped term in checked fields has a glossary entry.
@@ -706,31 +696,21 @@ func crossFileRule7(spec *Spec) []ValidationError {
 // ID format validation
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Alias the compiled regexes from the internal/validate helpers package.
+// The root package uses these to build error messages with rich context.
 var (
-	// {spec_id}-REQ-{N}
-	reqIDRe = regexp.MustCompile(`^(\w+)-REQ-(\d+)$`)
-	// {spec_id}-REQ-{N}.{C} (acceptance criteria)
-	criterionIDRe = regexp.MustCompile(`^(\w+)-REQ-(\d+)\.(\d+)$`)
-	// {spec_id}-REQ-{N}.E{C} (edge cases)
-	edgeCaseIDRe = regexp.MustCompile(`^(\w+)-REQ-(\d+)\.E(\d+)$`)
-	// {spec_id}-PROP-{N}
-	propIDRe = regexp.MustCompile(`^(\w+)-PROP-(\d+)$`)
-	// {spec_id}-PATH-{N}
-	pathIDRe = regexp.MustCompile(`^(\w+)-PATH-(\d+)$`)
-	// {spec_id}-ERR-{N}
-	errIDRe = regexp.MustCompile(`^(\w+)-ERR-(\d+)$`)
-	// TS-{spec_id}-{N}
-	testCaseIDRe = regexp.MustCompile(`^TS-(\w+)-(\d+)$`)
-	// TS-{spec_id}-P{N}
-	propTestIDRe = regexp.MustCompile(`^TS-(\w+)-P(\d+)$`)
-	// TS-{spec_id}-E{N}
-	edgeCaseTestIDRe = regexp.MustCompile(`^TS-(\w+)-E(\d+)$`)
-	// TS-{spec_id}-SMOKE-{N}
-	smokeTestIDRe = regexp.MustCompile(`^TS-(\w+)-SMOKE-(\d+)$`)
-	// {group}.{N}
-	subtaskIDRe = regexp.MustCompile(`^(\d+)\.(\d+)$`)
-	// {group}.V
-	verificationIDRe = regexp.MustCompile(`^(\d+)\.V$`)
+	reqIDRe          = intvalidate.RequirementIDRe
+	criterionIDRe    = intvalidate.CriterionIDRe
+	edgeCaseIDRe     = intvalidate.EdgeCaseIDRe
+	propIDRe         = intvalidate.PropIDRe
+	pathIDRe         = intvalidate.PathIDRe
+	errIDRe          = intvalidate.ErrIDRe
+	testCaseIDRe     = intvalidate.TestCaseIDRe
+	propTestIDRe     = intvalidate.PropTestIDRe
+	edgeCaseTestIDRe = intvalidate.EdgeCaseTestIDRe
+	smokeTestIDRe    = intvalidate.SmokeTestIDRe
+	subtaskIDRe      = intvalidate.SubtaskIDRe
+	verificationIDRe = intvalidate.VerificationIDRe
 )
 
 // checkIDFormat validates an ID against a regex pattern and checks that the
@@ -860,27 +840,17 @@ func validateRequirementIDs(req *Requirements, specID string) []ValidationError 
 	return errs
 }
 
-// checkSequentiality emits a warning if there are gaps in a slice of positive integers.
+// checkSequentiality emits a warning if there are gaps in a slice of positive
+// integers. Delegates gap detection to the internal/validate helper.
 func checkSequentiality(file, path string, nums []int, entityType string) []ValidationError {
-	if len(nums) < 2 {
-		return nil
-	}
-	sort.Ints(nums)
-	var gaps []string
-	for i := 1; i < len(nums); i++ {
-		if nums[i] != nums[i-1]+1 {
-			for g := nums[i-1] + 1; g < nums[i]; g++ {
-				gaps = append(gaps, strconv.Itoa(g))
-			}
-		}
-	}
+	gaps := intvalidate.CheckSequentiality(nums)
 	if len(gaps) == 0 {
 		return nil
 	}
 	return []ValidationError{{
-		File:     file,
-		Path:     path,
-		Rule:     "id-sequence",
+		File:  file,
+		Path:  path,
+		Rule:  "id-sequence",
 		Message: fmt.Sprintf(
 			"%s IDs are not sequential; missing positions: %s",
 			entityType, strings.Join(gaps, ", "),
