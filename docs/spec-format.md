@@ -4,7 +4,7 @@ Version 1.0 — Draft
 
 ## 1. Scope
 
-This document defines the on-disk format for an agent-fox specification
+This document defines the on-disk format for a specification
 package. A specification package (hereafter "spec") is the durable artifact
 that captures design intent, acceptance criteria, verification contracts, and
 implementation plans for one cohesive feature or concern.
@@ -922,8 +922,7 @@ Rendering is deterministic: same JSON in, same markdown out, byte-for-byte.
 | Target | Description |
 |---|---|
 | Per-file | Markdown rendering of one JSON file |
-| Combined | All four artifacts rendered into a single document (prd → requirements → test_spec → tasks) |
-| Diff | Before/after rendering of a single patch event |
+| Combined | PRD markdown (as-is) followed by rendered JSON artifacts in order: requirements → test_spec → tasks |
 
 ### 11.2 EARS rendering
 
