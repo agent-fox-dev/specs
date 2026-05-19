@@ -107,12 +107,31 @@ def ears_criterion_dict(draw: st.DrawFn) -> dict:  # type: ignore[type-arg]
 
 
 @settings(max_examples=20)
-@given(st.data())
-def test_p1_idempotent_roundtrip(data: st.DataObject, tmp_path: pathlib.Path) -> None:
-    """TS-02-P1: loading and saving any valid spec produces byte-identical JSON files."""
-    # Use the golden fixture spec as the base for round-trip
+@given(
+    st.text(
+        min_size=1,
+        max_size=80,
+        alphabet=st.characters(whitelist_categories=("L", "Zs")),
+    )
+)
+def test_p1_idempotent_roundtrip(new_title: str, tmp_path: pathlib.Path) -> None:
+    """TS-02-P1: loading and saving any valid spec produces byte-identical JSON files.
+
+    The golden fixture is mutated with a randomly generated title so that the
+    round-trip invariant is verified against a distribution of different spec
+    states, not just the one fixed fixture.
+    """
+    import dataclasses
+
     golden = pathlib.Path(__file__).parent.parent.parent / "testdata" / "golden" / "05_example_feature"
     spec = load_spec(golden)
+
+    # Apply the random variation: swap the PRD title so every Hypothesis example
+    # exercises a different in-memory Spec.
+    new_fm = dataclasses.replace(spec.prd.frontmatter, title=new_title.strip() or "T")
+    new_prd = dataclasses.replace(spec.prd, frontmatter=new_fm)
+    spec = dataclasses.replace(spec, prd=new_prd)
+
     dir_a = tmp_path / "a"
     dir_a.mkdir()
     dir_b = tmp_path / "b"
@@ -235,18 +254,57 @@ def test_p8_deterministic_rendering(
 
 
 @settings(max_examples=5)
-@given(st.data())
+@given(
+    st.sampled_from(
+        [
+            ("requirements.json", "introduction"),
+            ("test_spec.json", "test_cases"),
+            ("tasks.json", "task_groups"),
+        ]
+    )
+)
 def test_p9_schema_catches_structural_violations(
-    data: st.DataObject, tmp_spec_dir: pathlib.Path
+    artifact_and_field: tuple[str, str], tmp_spec_dir: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """TS-02-P9: removing any required field triggers a schema validation error."""
-    from afspec.validator import _validate_schemas
+    """TS-02-P9: removing any required field from an artifact triggers a schema validation error.
 
-    # Load and validate a spec — valid spec should have no schema errors
-    spec = load_spec(tmp_spec_dir)
-    errors = _validate_schemas(spec)
-    # Valid spec should pass schema validation
-    assert all(e.severity != "error" for e in errors) or True  # permissive for now
+    For each JSON artifact, one required top-level field is deleted.  The
+    library's schema validation layer MUST surface at least one error that
+    references the removed field (via e.path or e.message).
+    """
+    import copy
+    import json
+    import shutil
+
+    from afspec.validator import validate_dict_against_schema
+
+    fname, required_field = artifact_and_field
+
+    # Copy spec to a scratch directory so we can safely corrupt one file
+    corrupted_dir = tmp_path / "corrupted"
+    shutil.copytree(str(tmp_spec_dir), str(corrupted_dir))
+
+    artifact_path = corrupted_dir / fname
+    artifact_dict = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    # Remove the required field and write the corrupted JSON back
+    corrupted = copy.deepcopy(artifact_dict)
+    del corrupted[required_field]
+    artifact_path.write_text(json.dumps(corrupted, indent=2) + "\n", encoding="utf-8")
+
+    # Validate the corrupted dict directly against the bundled schema
+    errors = validate_dict_against_schema(fname, corrupted)
+    assert len(errors) >= 1, (
+        f"Expected at least one schema error after removing '{required_field}' from {fname}; "
+        f"got {errors!r}"
+    )
+    assert any(
+        required_field in (e.path or "") or required_field in e.message
+        for e in errors
+    ), (
+        f"At least one error must reference the removed field '{required_field}'; "
+        f"got: {[e.message for e in errors]!r}"
+    )
 
 
 @settings(max_examples=5)
