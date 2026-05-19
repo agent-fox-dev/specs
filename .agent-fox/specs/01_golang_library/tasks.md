@@ -177,33 +177,35 @@ The implementation follows a test-first approach: group 1 writes all failing tes
   - Verify round-trip idempotency on golden fixtures.
   - Create or update documentation in README.md if needed.
 
-- [ ] 6. JSON Schema authoring and schema validation
-  - [ ] 6.1 Author JSON Schema files
+- [x] 6. JSON Schema authoring and schema validation
+  - [x] 6.1 Author JSON Schema files
     - Create `schemas/prd-frontmatter.v1.json`: validates 12 frontmatter fields, status enum, types
     - Create `schemas/requirements.v1.json`: validates requirements structure, discriminated `oneOf` for EARS patterns, ID format patterns
     - Create `schemas/test_spec.v1.json`: validates test spec structure, kind enum, ID formats
     - Create `schemas/tasks.v1.json`: validates tasks structure, kind enum, state enum, subtask ID format
+    - Note: schema files placed in `internal/schema/` (required by go:embed); pure-Go validation used instead of external jsonschema library (not in go.mod)
     - _Requirements: 01-REQ-4.3_
 
-  - [ ] 6.2 Embed schemas and implement schema loading
+  - [x] 6.2 Embed schemas and implement schema loading
     - Create `internal/schema/embed.go`: `//go:embed` for all four schema files
-    - Create `internal/schema/schemas.go`: compile embedded schemas into validators at init time
-    - Add `github.com/santhosh-tekuri/jsonschema/v6` dependency
+    - Expose via `Schemas()` map[string][]byte function
+    - No external jsonschema library added (pure-Go validation in root validate.go instead)
     - _Requirements: 01-REQ-4.3_
 
-  - [ ] 6.3 Implement schema validation
-    - Create `internal/schema/validate.go`: `ValidateAgainstSchema(name, data)` — validate JSON/YAML data against named schema
+  - [x] 6.3 Implement schema validation
+    - Implemented `ValidateSchema(spec)`, `ValidateCrossFile(spec)`, `ValidateIDs(spec)`, `Validate(spec)`, `GetEmbeddedSchemas()` in root `validate.go`
+    - All seven cross-file integrity rules implemented (integrity-1 through integrity-7)
+    - All ID format patterns validated with regex; non-sequential IDs emit SeverityWarning
     - Return all errors (not just first) with file name, JSON path, description
-    - Create `validate.go`: `ValidateSchema(spec)` public API — runs schema validation on all four artifacts
-    - _Requirements: 01-REQ-4.1, 01-REQ-4.2, 01-REQ-4.4_
+    - _Requirements: 01-REQ-4.1, 01-REQ-4.2, 01-REQ-4.4, 01-REQ-5.1–5.7, 01-REQ-10.1–10.3_
 
-  - [ ] 6.V Verify task group 6
-    - [ ] Spec tests TS-01-14 through TS-01-17 pass
-    - [ ] Edge case tests TS-01-E10, TS-01-E11 pass
-    - [ ] Property test TS-01-P6 (schema soundness) passes
-    - [ ] All existing tests still pass: `go test -count=1 ./...`
-    - [ ] No linter warnings introduced: `go vet ./...`
-    - [ ] Requirements 01-REQ-4.1 through 01-REQ-4.4, 01-REQ-4.E1, 01-REQ-4.E2 met
+  - [x] 6.V Verify task group 6
+    - [x] Spec tests TS-01-14 through TS-01-17 pass
+    - [x] Edge case tests TS-01-E10, TS-01-E11 pass
+    - [x] Property test TS-01-P6 (schema soundness) passes
+    - [x] All existing tests still pass: `go test -count=1 ./...`
+    - [x] No linter warnings introduced: `go vet ./...`
+    - [x] Requirements 01-REQ-4.1 through 01-REQ-4.4, 01-REQ-4.E1, 01-REQ-4.E2 met
 
 - [ ] 7. Cross-file integrity and ID validation
   - [ ] 7.1 Implement cross-file integrity checks

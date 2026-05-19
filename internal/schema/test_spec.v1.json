@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-fox.io/schemas/test_spec.v1.json",
+  "title": "Test Specification v1",
+  "description": "Validates test_spec.json.",
+  "type": "object",
+  "required": [
+    "spec_id",
+    "spec_name",
+    "schema_version",
+    "test_cases",
+    "property_tests",
+    "edge_case_tests",
+    "smoke_tests",
+    "coverage"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "spec_id": { "type": "string", "minLength": 1 },
+    "spec_name": { "type": "string", "minLength": 1 },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "test_cases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/test_case" }
+    },
+    "property_tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/property_test" }
+    },
+    "edge_case_tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge_case_test" }
+    },
+    "smoke_tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/smoke_test" }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" }
+  },
+  "$defs": {
+    "test_case": {
+      "type": "object",
+      "required": ["id", "requirement_id", "kind", "description", "preconditions", "assertion_pseudocode"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^TS-\\w+-\\d+$" },
+        "requirement_id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["unit", "integration"] },
+        "description": { "type": "string" },
+        "preconditions": { "type": "array", "items": { "type": "string" } },
+        "input": {},
+        "expected": {},
+        "assertion_pseudocode": { "type": "string" }
+      }
+    },
+    "property_test": {
+      "type": "object",
+      "required": ["id", "property_id", "validates", "description", "for_any_strategy", "invariant_check"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^TS-\\w+-P\\d+$" },
+        "property_id": { "type": "string" },
+        "validates": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "for_any_strategy": { "type": "string" },
+        "invariant_check": { "type": "string" }
+      }
+    },
+    "edge_case_test": {
+      "type": "object",
+      "required": ["id", "requirement_id", "kind", "description", "preconditions", "assertion_pseudocode"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^TS-\\w+-E\\d+$" },
+        "requirement_id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["unit", "integration"] },
+        "description": { "type": "string" },
+        "preconditions": { "type": "array", "items": { "type": "string" } },
+        "input": {},
+        "expected": {},
+        "assertion_pseudocode": { "type": "string" }
+      }
+    },
+    "smoke_test": {
+      "type": "object",
+      "required": ["id", "execution_path_id", "description", "trigger", "real_components", "mockable", "expected_effects"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^TS-\\w+-SMOKE-\\d+$" },
+        "execution_path_id": { "type": "string" },
+        "description": { "type": "string" },
+        "trigger": { "type": "string" },
+        "real_components": { "type": "array", "items": { "type": "string" } },
+        "mockable": { "type": "array", "items": { "type": "string" } },
+        "expected_effects": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["requirements_covered", "properties_covered", "paths_covered", "gaps"],
+      "additionalProperties": false,
+      "properties": {
+        "requirements_covered": { "type": "array", "items": { "type": "string" } },
+        "properties_covered": { "type": "array", "items": { "type": "string" } },
+        "paths_covered": { "type": "array", "items": { "type": "string" } },
+        "gaps": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
