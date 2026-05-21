@@ -9,7 +9,7 @@ EXPECTED_FILES := prd.md requirements.json tasks.json test_spec.json
 
 .PHONY: all clean setup setup-go setup-python build run-go run-python test
 
-all: test
+all: check
 
 # ── Setup ───────────────────────────────────────────────────────────
 
@@ -38,6 +38,8 @@ run-python: setup-python
 	uv run python programmatic_audit_hub.py
 
 # ── Test ────────────────────────────────────────────────────────────
+
+check: clean setup build test
 
 test: test-go test-python
 	@echo "all examples passed"
