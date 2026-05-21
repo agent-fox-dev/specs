@@ -7,7 +7,7 @@ PY_OUT   := $(CURDIR)/01_audit_hub_python
 
 EXPECTED_FILES := prd.md requirements.json tasks.json test_spec.json
 
-.PHONY: all clean setup setup-go setup-python build run-go run-python test
+.PHONY: all clean setup setup-go setup-python build run-go run-python test compare
 
 all: check
 
@@ -65,6 +65,15 @@ test-python: setup-python
 	done
 	@echo "ok   [python] — $(PY_OUT)"
 	@rm -rf $(PY_OUT)
+
+# ── Compare ────────────────────────────────────────────────────────
+
+compare: build setup-python
+	@rm -rf $(GO_OUT) $(PY_OUT)
+	@cd $(ROOT_DIR) && $(GO_BIN) 2>/dev/null
+	@uv run python main.py >/dev/null
+	@uv run python compare.py
+	@rm -rf $(GO_OUT) $(PY_OUT)
 
 # ── Clean ───────────────────────────────────────────────────────────
 
