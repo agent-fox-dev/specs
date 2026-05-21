@@ -57,7 +57,7 @@ test-go: build
 
 test-python: setup-python
 	@rm -rf $(PY_OUT)
-	@uv run python programmatic_audit_hub.py >/dev/null
+	@uv run python main.py >/dev/null
 	@for f in $(EXPECTED_FILES); do \
 		if [ ! -f "$(PY_OUT)/$$f" ]; then \
 			echo "FAIL [python]: missing $$f"; exit 1; \

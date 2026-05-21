@@ -36,6 +36,7 @@ from afspec import (
     UserStory,
     VerificationSubtask,
     create_spec,
+    complex_event_criterion,
     event_driven_criterion,
     render_combined,
     save,
@@ -157,6 +158,26 @@ All runtime configuration is read from a local TOML file. Configurable fields:
 - Batch event ingestion
 - Event forwarding or streaming
 
+## Clarifications
+
+1. **API endpoint path**: `POST /api/v1/audit`
+2. **Single vs. batch**: Single event per request
+3. **Payload validation**: Validate incoming events against the envelope schema
+4. **Authentication**: Bearer token, hardcoded in config for v0.0.1
+5. **Response format**: HTTP status codes only (no response body)
+6. **Port**: Configurable, 8080 default
+7. **K8s endpoints**: Standard `/healthz` and `/readyz`
+8. **SQLite location**: Default `./data/audit.db`, configurable
+9. **DB schema**: Envelope metadata as columns, payload as JSON text
+10. **Retention**: Configurable, 30-day default based on event timestamp
+11. **Config fields**: Server, database, auth, and logging settings in TOML
+12. **Logging**: JSON structured logging via logrus
+13. **Graceful shutdown**: Handle SIGTERM/SIGINT, drain requests, close DB
+14. **Query API**: Write-only in v0.0.1
+15. **Concurrency**: WAL mode for concurrent writes
+16. **Deployment**: Single-instance
+17. **Event ordering**: Timestamp-based ordering in the database
+
 ## Source
 
 Source: .agent-fox/specs/prd.md
@@ -178,11 +199,11 @@ def _build_req1() -> Requirement:
     )
     r = add_criterion(
         r,
-        event_driven_criterion(
+        complex_event_criterion(
             "01-REQ-1.1",
-            "an HTTP POST request is received at `/api/v1/audit` with a "
-            "valid Bearer token and a JSON body conforming to the envelope schema",
-            "service",
+            "an HTTP POST request is received at `/api/v1/audit`",
+            "a valid Bearer token and a JSON body conforming to the envelope schema",
+            "THE service",
             "store the event in the SQLite database AND return HTTP 201 "
             "Created with no response body",
         ),
@@ -192,7 +213,7 @@ def _build_req1() -> Requirement:
         event_driven_criterion(
             "01-REQ-1.2",
             "an HTTP POST request is received at `/api/v1/audit`",
-            "service",
+            "THE service",
             "accept only the `application/json` content type AND return "
             "HTTP 415 Unsupported Media Type for any other content type",
         ),
@@ -201,7 +222,7 @@ def _build_req1() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-1.3",
-            "service",
+            "THE service",
             "listen for HTTP requests on the port specified in the "
             "configuration file, defaulting to 8080 if not configured",
         ),
@@ -210,7 +231,7 @@ def _build_req1() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-1.4",
-            "service",
+            "THE service",
             "bind to the network address specified in the configuration "
             "file, defaulting to `0.0.0.0` if not configured",
         ),
@@ -220,7 +241,7 @@ def _build_req1() -> Requirement:
         unwanted_criterion(
             "01-REQ-1.E1",
             "the request body is empty",
-            "service",
+            "THE service",
             "return HTTP 400 Bad Request",
         ),
     )
@@ -229,7 +250,7 @@ def _build_req1() -> Requirement:
         unwanted_criterion(
             "01-REQ-1.E2",
             "the request body exceeds 1 MB",
-            "service",
+            "THE service",
             "return HTTP 413 Payload Too Large without reading the full body",
         ),
     )
@@ -238,7 +259,7 @@ def _build_req1() -> Requirement:
         unwanted_criterion(
             "01-REQ-1.E3",
             "the request body is not valid JSON",
-            "service",
+            "THE service",
             "return HTTP 400 Bad Request",
         ),
     )
@@ -251,7 +272,7 @@ def _build_req2() -> Requirement:
         title="Event Validation",
         user_story=UserStory(
             role="a service operator",
-            goal="have incoming events validated against the envelope schema",
+            goal="incoming events to be validated against the envelope schema",
             benefit="only well-formed events are stored",
         ),
     )
@@ -260,7 +281,7 @@ def _build_req2() -> Requirement:
         event_driven_criterion(
             "01-REQ-2.1",
             "an event is received",
-            "service",
+            "THE service",
             "validate that all required envelope fields are present: "
             "`id`, `timestamp`, `run_id`, `event_type`, `severity`, and `payload`",
         ),
@@ -270,7 +291,7 @@ def _build_req2() -> Requirement:
         event_driven_criterion(
             "01-REQ-2.2",
             "an event is received",
-            "service",
+            "THE service",
             "validate that `id` is a non-empty string, `timestamp` is a valid "
             "ISO 8601 datetime string, `run_id` is a non-empty string, "
             "`event_type` is a non-empty string containing at least one dot "
@@ -283,7 +304,7 @@ def _build_req2() -> Requirement:
         event_driven_criterion(
             "01-REQ-2.3",
             "an event is received",
-            "service",
+            "THE service",
             "accept optional envelope fields `node_id`, `session_id`, and "
             "`archetype` as strings, defaulting to empty string if absent",
         ),
@@ -293,7 +314,7 @@ def _build_req2() -> Requirement:
         unwanted_criterion(
             "01-REQ-2.4",
             "any required field is missing or fails validation",
-            "service",
+            "THE service",
             "return HTTP 422 Unprocessable Entity",
         ),
     )
@@ -303,7 +324,7 @@ def _build_req2() -> Requirement:
             "01-REQ-2.E1",
             "the `timestamp` field contains a valid ISO 8601 date but "
             "without timezone information",
-            "service",
+            "THE service",
             "reject the event with HTTP 422 Unprocessable Entity",
         ),
     )
@@ -312,7 +333,7 @@ def _build_req2() -> Requirement:
         unwanted_criterion(
             "01-REQ-2.E2",
             "the `payload` field is `null` instead of an object",
-            "service",
+            "THE service",
             "reject the event with HTTP 422 Unprocessable Entity",
         ),
     )
@@ -322,7 +343,7 @@ def _build_req2() -> Requirement:
             "01-REQ-2.E3",
             'the `event_type` field contains no dot separator (e.g., '
             '`"start"` instead of `"run.start"`)',
-            "service",
+            "THE service",
             "reject the event with HTTP 422 Unprocessable Entity",
         ),
     )
@@ -335,7 +356,7 @@ def _build_req3() -> Requirement:
         title="SQLite Storage",
         user_story=UserStory(
             role="a service operator",
-            goal="have events stored in an embedded SQLite database with metadata columns",
+            goal="events stored in an embedded SQLite database with metadata columns",
             benefit="events can be queried efficiently without external dependencies",
         ),
     )
@@ -343,7 +364,7 @@ def _build_req3() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-3.1",
-            "service",
+            "THE service",
             "store each validated event in a SQLite table with dedicated "
             "columns for envelope metadata: `id` (TEXT PRIMARY KEY), "
             "`timestamp` (TEXT), `run_id` (TEXT), `event_type` (TEXT), "
@@ -357,7 +378,7 @@ def _build_req3() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-3.2",
-            "service",
+            "THE service",
             "enable SQLite WAL mode on database initialization to support "
             "concurrent write access",
         ),
@@ -366,7 +387,7 @@ def _build_req3() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-3.3",
-            "service",
+            "THE service",
             "create the database file and the events table automatically on "
             "first startup if they do not exist, AND return the database path "
             "to the caller for logging purposes",
@@ -376,7 +397,7 @@ def _build_req3() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-3.4",
-            "service",
+            "THE service",
             "use the database path from the configuration file, defaulting to "
             "`./data/audit.db` if not configured, AND create parent directories "
             "if they do not exist",
@@ -387,7 +408,7 @@ def _build_req3() -> Requirement:
         unwanted_criterion(
             "01-REQ-3.E1",
             "a received event has an `id` that already exists in the database",
-            "service",
+            "THE service",
             "reject the event with HTTP 409 Conflict",
         ),
     )
@@ -396,7 +417,7 @@ def _build_req3() -> Requirement:
         unwanted_criterion(
             "01-REQ-3.E2",
             "the database file cannot be opened or created (e.g., permission denied)",
-            "service",
+            "THE service",
             "log the error and exit with a non-zero exit code",
         ),
     )
@@ -418,7 +439,7 @@ def _build_req4() -> Requirement:
         event_driven_criterion(
             "01-REQ-4.1",
             "an HTTP request is received at `/api/v1/audit`",
-            "service",
+            "THE service",
             "extract the Bearer token from the `Authorization` header and "
             "compare it against the configured token value",
         ),
@@ -428,7 +449,7 @@ def _build_req4() -> Requirement:
         unwanted_criterion(
             "01-REQ-4.2",
             "the `Authorization` header is missing or does not start with `Bearer `",
-            "service",
+            "THE service",
             "return HTTP 401 Unauthorized",
         ),
     )
@@ -437,7 +458,7 @@ def _build_req4() -> Requirement:
         unwanted_criterion(
             "01-REQ-4.3",
             "the Bearer token does not match the configured token",
-            "service",
+            "THE service",
             "return HTTP 401 Unauthorized",
         ),
     )
@@ -445,7 +466,7 @@ def _build_req4() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-4.4",
-            "service",
+            "THE service",
             "read the expected Bearer token from the `auth.bearer_token` field "
             "in the TOML configuration file",
         ),
@@ -455,7 +476,7 @@ def _build_req4() -> Requirement:
         unwanted_criterion(
             "01-REQ-4.5",
             "the `auth.bearer_token` field is missing or empty in the configuration file",
-            "service",
+            "THE service",
             "log an error and exit with a non-zero exit code at startup",
         ),
     )
@@ -465,7 +486,7 @@ def _build_req4() -> Requirement:
             "01-REQ-4.E1",
             "the `Authorization` header contains extra whitespace between "
             "`Bearer` and the token value",
-            "service",
+            "THE service",
             "trim the whitespace and validate the token normally",
         ),
     )
@@ -478,7 +499,7 @@ def _build_req5() -> Requirement:
         title="Kubernetes Health Endpoints",
         user_story=UserStory(
             role="a Kubernetes operator",
-            goal="have standard health and readiness endpoints",
+            goal="standard health and readiness endpoints",
             benefit="the cluster can monitor the service's availability",
         ),
     )
@@ -487,7 +508,7 @@ def _build_req5() -> Requirement:
         event_driven_criterion(
             "01-REQ-5.1",
             "an HTTP GET request is received at `/healthz`",
-            "service",
+            "THE service",
             "return HTTP 200 OK without requiring authentication",
         ),
     )
@@ -496,7 +517,7 @@ def _build_req5() -> Requirement:
         event_driven_criterion(
             "01-REQ-5.2",
             "an HTTP GET request is received at `/readyz`",
-            "service",
+            "THE service",
             "verify that the SQLite database is accessible by executing a "
             "lightweight query (e.g., `SELECT 1`) AND return HTTP 200 OK if "
             "successful or HTTP 503 Service Unavailable if the check fails",
@@ -506,7 +527,7 @@ def _build_req5() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-5.3",
-            "service",
+            "THE service",
             "NOT require a Bearer token for `/healthz` or `/readyz` requests",
         ),
     )
@@ -515,7 +536,7 @@ def _build_req5() -> Requirement:
         unwanted_criterion(
             "01-REQ-5.E1",
             "the database connection is lost after startup",
-            "service",
+            "THE service",
             "return HTTP 503 on `/readyz` while continuing to return HTTP 200 "
             "on `/healthz`",
         ),
@@ -530,7 +551,7 @@ def _build_req6() -> Requirement:
         user_story=UserStory(
             role="a service operator",
             goal="configure the service via a TOML file",
-            benefit="runtime settings can be adjusted without recompilation",
+            benefit="I can adjust runtime settings without recompilation",
         ),
     )
     r = add_criterion(
@@ -538,7 +559,7 @@ def _build_req6() -> Requirement:
         event_driven_criterion(
             "01-REQ-6.1",
             "the service starts",
-            "service",
+            "THE service",
             "read the configuration from a TOML file at the path specified by "
             "the `--config` command-line flag, defaulting to `config.toml` in "
             "the current working directory",
@@ -548,7 +569,7 @@ def _build_req6() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-6.2",
-            "service",
+            "THE service",
             "support the following configuration sections and fields with "
             'defaults: `server.port` (8080), `server.bind_address` (`"0.0.0.0"`), '
             '`database.path` (`"./data/audit.db"`), `database.retention_days` (30), '
@@ -561,7 +582,7 @@ def _build_req6() -> Requirement:
         unwanted_criterion(
             "01-REQ-6.3",
             "the configuration file does not exist at the specified path",
-            "service",
+            "THE service",
             "log an error and exit with a non-zero exit code",
         ),
     )
@@ -570,7 +591,7 @@ def _build_req6() -> Requirement:
         unwanted_criterion(
             "01-REQ-6.4",
             "the configuration file contains invalid TOML syntax",
-            "service",
+            "THE service",
             "log a descriptive parse error and exit with a non-zero exit code",
         ),
     )
@@ -579,7 +600,7 @@ def _build_req6() -> Requirement:
         unwanted_criterion(
             "01-REQ-6.E1",
             "`database.retention_days` is set to zero or a negative value",
-            "service",
+            "THE service",
             "log a warning and use the default value of 30 days",
         ),
     )
@@ -588,7 +609,7 @@ def _build_req6() -> Requirement:
         unwanted_criterion(
             "01-REQ-6.E2",
             "`server.port` is outside the range 1–65535",
-            "service",
+            "THE service",
             "log an error and exit with a non-zero exit code",
         ),
     )
@@ -601,7 +622,7 @@ def _build_req7() -> Requirement:
         title="Data Retention",
         user_story=UserStory(
             role="a service operator",
-            goal="have events older than a configurable period automatically purged",
+            goal="events older than a configurable period to be automatically purged",
             benefit="the database does not grow unboundedly",
         ),
     )
@@ -609,7 +630,7 @@ def _build_req7() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-7.1",
-            "service",
+            "THE service",
             "run a background retention process that periodically deletes "
             "events whose `timestamp` is older than the configured retention period",
         ),
@@ -618,7 +639,7 @@ def _build_req7() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-7.2",
-            "service",
+            "THE service",
             "execute the retention purge once every hour",
         ),
     )
@@ -627,7 +648,7 @@ def _build_req7() -> Requirement:
         event_driven_criterion(
             "01-REQ-7.3",
             "the retention process runs",
-            "service",
+            "THE service",
             "delete all events where `timestamp` is older than "
             "`now() - retention_days` AND log the number of deleted events "
             "AND return the count of deleted rows to the caller",
@@ -637,7 +658,7 @@ def _build_req7() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-7.4",
-            "service",
+            "THE service",
             "default the retention period to 30 days if "
             "`database.retention_days` is not configured",
         ),
@@ -647,7 +668,7 @@ def _build_req7() -> Requirement:
         unwanted_criterion(
             "01-REQ-7.E1",
             "the retention process encounters a database error during deletion",
-            "service",
+            "THE service",
             "log the error and retry on the next scheduled cycle without crashing",
         ),
     )
@@ -660,7 +681,7 @@ def _build_req8() -> Requirement:
         title="Graceful Shutdown",
         user_story=UserStory(
             role="a Kubernetes operator",
-            goal="have the service shut down gracefully on SIGTERM",
+            goal="the service to shut down gracefully on SIGTERM",
             benefit="in-flight requests complete and the database is closed cleanly",
         ),
     )
@@ -669,7 +690,7 @@ def _build_req8() -> Requirement:
         event_driven_criterion(
             "01-REQ-8.1",
             "the service receives a SIGTERM or SIGINT signal",
-            "service",
+            "THE service",
             "stop accepting new connections, wait for in-flight requests to "
             "complete (up to a 15-second timeout), stop the retention "
             "background process, close the database connection, and then "
@@ -681,7 +702,7 @@ def _build_req8() -> Requirement:
         unwanted_criterion(
             "01-REQ-8.2",
             "in-flight requests do not complete within 15 seconds",
-            "service",
+            "THE service",
             "force-close remaining connections and exit with code 0",
         ),
     )
@@ -691,7 +712,7 @@ def _build_req8() -> Requirement:
             "01-REQ-8.E1",
             "a second SIGTERM or SIGINT is received during the graceful "
             "shutdown window",
-            "service",
+            "THE service",
             "exit immediately with code 1",
         ),
     )
@@ -704,7 +725,7 @@ def _build_req9() -> Requirement:
         title="Structured JSON Logging",
         user_story=UserStory(
             role="a service operator",
-            goal="have structured JSON logs",
+            goal="structured JSON logs",
             benefit="logs can be ingested by centralized logging systems in Kubernetes",
         ),
     )
@@ -712,7 +733,7 @@ def _build_req9() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-9.1",
-            "service",
+            "THE service",
             "emit all log messages as JSON objects using the logrus library "
             "with JSON formatter",
         ),
@@ -721,7 +742,7 @@ def _build_req9() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-9.2",
-            "service",
+            "THE service",
             "set the log level to the value specified in `logging.level` "
             "configuration, defaulting to `info`",
         ),
@@ -731,7 +752,7 @@ def _build_req9() -> Requirement:
         event_driven_criterion(
             "01-REQ-9.3",
             "the service starts",
-            "service",
+            "THE service",
             "log a startup message including the configured port, database "
             "path, and log level",
         ),
@@ -741,7 +762,7 @@ def _build_req9() -> Requirement:
         event_driven_criterion(
             "01-REQ-9.4",
             "an HTTP request is processed",
-            "service",
+            "THE service",
             "log the request method, path, status code, and duration",
         ),
     )
@@ -750,7 +771,7 @@ def _build_req9() -> Requirement:
         unwanted_criterion(
             "01-REQ-9.E1",
             "the `logging.level` field contains an unrecognized value",
-            "service",
+            "THE service",
             "log a warning and default to `info`",
         ),
     )
@@ -763,7 +784,7 @@ def _build_req10() -> Requirement:
         title="Concurrent Write Safety",
         user_story=UserStory(
             role="a service operator",
-            goal="have the service safely handle concurrent audit event submissions",
+            goal="the service to safely handle concurrent audit event submissions",
             benefit="no events are lost under load",
         ),
     )
@@ -771,7 +792,7 @@ def _build_req10() -> Requirement:
         r,
         ubiquitous_criterion(
             "01-REQ-10.1",
-            "service",
+            "THE service",
             "enable SQLite WAL mode and configure connection pooling so that "
             "concurrent HTTP requests can write to the database without "
             "`SQLITE_BUSY` errors under normal load",
@@ -782,7 +803,7 @@ def _build_req10() -> Requirement:
         unwanted_criterion(
             "01-REQ-10.2",
             "a database write encounters a transient lock contention error",
-            "service",
+            "THE service",
             "retry the write up to 3 times with a busy timeout of 5 seconds "
             "before returning HTTP 503 Service Unavailable",
         ),
@@ -792,7 +813,7 @@ def _build_req10() -> Requirement:
         unwanted_criterion(
             "01-REQ-10.E1",
             "the SQLite busy timeout is exhausted after all retries",
-            "service",
+            "THE service",
             "return HTTP 503 Service Unavailable and log the contention event "
             "at `warning` level",
         ),
@@ -974,6 +995,7 @@ def _execution_paths() -> list[ExecutionPath]:
                 PathStep(actor="internal/handler/audit.go", action="AuditHandler.Ingest(c) → error — reads and binds request body"),
                 PathStep(actor="internal/validator/validator.go", action="Validate(event) → error — validates envelope fields"),
                 PathStep(actor="internal/store/store.go", action="Store.InsertEvent(ctx, event) → error — inserts row into SQLite"),
+                PathStep(actor="Side effect", action="event persisted in SQLite, HTTP 201 returned to caller"),
             ],
         ),
         ExecutionPath(
@@ -984,6 +1006,7 @@ def _execution_paths() -> list[ExecutionPath]:
                 PathStep(actor="internal/server/server.go", action="New(cfg, store) → *Server — registers health routes (no auth middleware)"),
                 PathStep(actor="internal/health/health.go", action="HealthHandler.Readyz(c) → error — handles GET /readyz"),
                 PathStep(actor="internal/store/store.go", action="Store.Ping(ctx) → error — executes `SELECT 1` against SQLite"),
+                PathStep(actor="Side effect", action="HTTP 200 or 503 returned to caller"),
             ],
         ),
         ExecutionPath(
@@ -993,6 +1016,7 @@ def _execution_paths() -> list[ExecutionPath]:
                 PathStep(actor="cmd/audit-hub/main.go", action="main() — starts retention ticker"),
                 PathStep(actor="internal/retention/retention.go", action="StartRetention(ctx, store, interval, retentionDays) — launches goroutine with hourly ticker"),
                 PathStep(actor="internal/store/store.go", action="Store.PurgeOlderThan(ctx, cutoff) → (int64, error) — deletes expired rows, returns count"),
+                PathStep(actor="Side effect", action="expired rows deleted from SQLite, count logged"),
             ],
         ),
         ExecutionPath(
@@ -1005,6 +1029,7 @@ def _execution_paths() -> list[ExecutionPath]:
                 PathStep(actor="internal/server/server.go", action="Server.Shutdown(ctx) → error — drains in-flight requests with 15s timeout"),
                 PathStep(actor="internal/retention/retention.go", action="StopRetention() — stops ticker goroutine via context cancellation"),
                 PathStep(actor="internal/store/store.go", action="Store.Close() → error — closes SQLite connection"),
+                PathStep(actor="Side effect", action="process exits with code 0"),
             ],
         ),
         ExecutionPath(
@@ -1013,6 +1038,7 @@ def _execution_paths() -> list[ExecutionPath]:
             steps=[
                 PathStep(actor="cmd/audit-hub/main.go", action="main() — reads --config flag"),
                 PathStep(actor="internal/config/config.go", action="Load(path) → (*Config, error) — reads TOML file, applies defaults, validates"),
+                PathStep(actor="Side effect", action="Config struct returned to main for dependency wiring; exits with non-zero code on validation error"),
             ],
         ),
     ]
@@ -1068,9 +1094,11 @@ def _test_cases() -> list[TestCase]:
             assertion_pseudocode=(
                 'resp = POST("/api/v1/audit", valid_event, auth="test-token")\n'
                 "ASSERT resp.status == 201\n"
-                "ASSERT resp.body == \"\"\n"
+                'ASSERT resp.body == ""\n'
                 'row = store.query("SELECT * FROM events WHERE id = ?", event.id)\n'
-                "ASSERT row.id == event.id"
+                "ASSERT row.id == event.id\n"
+                'ASSERT row.event_type == "run.start"\n'
+                'ASSERT row.severity == "info"'
             ),
         ),
         TestCase(
@@ -1113,7 +1141,11 @@ def _test_cases() -> list[TestCase]:
                 "    event = valid_event()\n"
                 "    event[field] = value\n"
                 "    err = validator.Validate(event)\n"
-                "    ASSERT err != nil"
+                "    ASSERT err != nil\n"
+                "event_null_payload = valid_event()\n"
+                "event_null_payload.payload = nil\n"
+                "err = validator.Validate(event_null_payload)\n"
+                "ASSERT err != nil"
             ),
         ),
         TestCase(
@@ -1127,8 +1159,10 @@ def _test_cases() -> list[TestCase]:
                 "event = valid_event_without_optionals()\n"
                 'resp = POST("/api/v1/audit", event, auth="test-token")\n'
                 "ASSERT resp.status == 201\n"
-                "row = store.query(...)\n"
-                'ASSERT row.node_id == ""'
+                'row = store.query("SELECT node_id, session_id, archetype FROM events WHERE id = ?", event.id)\n'
+                'ASSERT row.node_id == ""\n'
+                'ASSERT row.session_id == ""\n'
+                'ASSERT row.archetype == ""'
             ),
         ),
         TestCase(
@@ -1141,6 +1175,9 @@ def _test_cases() -> list[TestCase]:
             assertion_pseudocode=(
                 's, err = store.New(tmpdir + "/test.db")\n'
                 "ASSERT err == nil\n"
+                'ASSERT file_exists(tmpdir + "/test.db")\n'
+                "rows = s.db.Query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='events'\")\n"
+                "ASSERT rows.count == 1\n"
                 'mode = s.db.QueryRow("PRAGMA journal_mode").Scan()\n'
                 'ASSERT mode == "wal"'
             ),
@@ -1235,6 +1272,7 @@ def _test_cases() -> list[TestCase]:
                 'ASSERT cfg.Server.BindAddress == "0.0.0.0"\n'
                 'ASSERT cfg.Database.Path == "./data/audit.db"\n'
                 "ASSERT cfg.Database.RetentionDays == 30\n"
+                'ASSERT cfg.Auth.BearerToken == "my-token"\n'
                 'ASSERT cfg.Logging.Level == "info"'
             ),
         ),
@@ -1263,6 +1301,9 @@ def _test_cases() -> list[TestCase]:
             preconditions=["Store with 3 events: one from 60 days ago, one from 15 days ago, one from today"],
             expected="Returns count = 1 (the 60-day-old event), 2 events remain",
             assertion_pseudocode=(
+                "store.InsertEvent(ctx, event_60_days_old)\n"
+                "store.InsertEvent(ctx, event_15_days_old)\n"
+                "store.InsertEvent(ctx, event_today)\n"
                 "count, err = store.PurgeOlderThan(ctx, now() - 30*day)\n"
                 "ASSERT err == nil\n"
                 "ASSERT count == 1\n"
@@ -1283,7 +1324,9 @@ def _test_cases() -> list[TestCase]:
                 'resp = POST("/api/v1/audit", valid_event, auth="test-token")\n'
                 "entry = hook.LastEntry()\n"
                 'ASSERT entry.Data["method"] == "POST"\n'
-                'ASSERT entry.Data["status"] == 201'
+                'ASSERT entry.Data["path"] == "/api/v1/audit"\n'
+                'ASSERT entry.Data["status"] == 201\n'
+                'ASSERT entry.Data["duration"] != nil'
             ),
         ),
         TestCase(
@@ -1295,8 +1338,13 @@ def _test_cases() -> list[TestCase]:
             expected="All 20 inserts succeed, 20 events in database",
             assertion_pseudocode=(
                 "wg = WaitGroup()\n"
+                "errors = []\n"
                 "FOR i IN 1..20:\n"
-                "    GO func(): store.InsertEvent(ctx, unique_event(i))\n"
+                "    wg.Add(1)\n"
+                "    GO func():\n"
+                "        err = store.InsertEvent(ctx, unique_event(i))\n"
+                "        IF err != nil: errors.append(err)\n"
+                "        wg.Done()\n"
                 "wg.Wait()\n"
                 "ASSERT len(errors) == 0\n"
                 'count = store.query("SELECT COUNT(*) FROM events")\n'
@@ -1345,7 +1393,7 @@ def _edge_case_tests() -> list[EdgeCaseTest]:
             description="ISO 8601 timestamp without timezone offset is rejected.",
             preconditions=["Validator function available"],
             expected="Validation error",
-            assertion_pseudocode='event.timestamp = "2026-04-27T10:00:00"\nerr = validator.Validate(event)\nASSERT err != nil',
+            assertion_pseudocode='event = valid_event()\nevent.timestamp = "2026-04-27T10:00:00"\nerr = validator.Validate(event)\nASSERT err != nil',
         ),
         EdgeCaseTest(
             id="TS-01-E5",
@@ -1354,7 +1402,7 @@ def _edge_case_tests() -> list[EdgeCaseTest]:
             description="Event with null payload is rejected.",
             preconditions=["Validator function available"],
             expected="Validation error",
-            assertion_pseudocode="event.payload = null\nerr = validator.Validate(event)\nASSERT err != nil",
+            assertion_pseudocode="event = valid_event()\nevent.payload = null\nerr = validator.Validate(event)\nASSERT err != nil",
         ),
         EdgeCaseTest(
             id="TS-01-E6",
@@ -1363,7 +1411,7 @@ def _edge_case_tests() -> list[EdgeCaseTest]:
             description="Event type missing dot separator is rejected.",
             preconditions=["Validator function available"],
             expected="Validation error",
-            assertion_pseudocode='event.event_type = "start"\nerr = validator.Validate(event)\nASSERT err != nil',
+            assertion_pseudocode='event = valid_event()\nevent.event_type = "start"\nerr = validator.Validate(event)\nASSERT err != nil',
         ),
         EdgeCaseTest(
             id="TS-01-E7",
@@ -1372,7 +1420,7 @@ def _edge_case_tests() -> list[EdgeCaseTest]:
             description="Inserting an event with a duplicate ID returns conflict.",
             preconditions=["Store with one event already inserted"],
             expected="InsertEvent returns error; HTTP handler returns 409 Conflict",
-            assertion_pseudocode="store.InsertEvent(ctx, event)\nerr = store.InsertEvent(ctx, event_same_id)\nASSERT err != nil",
+            assertion_pseudocode='store.InsertEvent(ctx, event)\nerr = store.InsertEvent(ctx, event_same_id)\nASSERT err != nil\nresp = POST("/api/v1/audit", event_same_id_json, auth="test-token")\nASSERT resp.status == 409',
         ),
         EdgeCaseTest(
             id="TS-01-E8",
@@ -1488,10 +1536,10 @@ def _property_tests() -> list[PropertyTest]:
             description="Validation accepts iff all required fields are present and well-formed.",
             for_any_strategy="Randomly generated AuditEvent structs with fields individually fuzzed",
             invariant_check=(
-                "Validate(event) returns nil iff id is non-empty, timestamp is "
-                "valid ISO 8601 with timezone, run_id is non-empty, event_type "
-                "contains a dot, severity is in {info, warning, error, critical}, "
-                "and payload is a non-null JSON object"
+                "`Validate(event)` returns nil iff `id` is non-empty, `timestamp` is valid "
+                "ISO 8601 with timezone, `run_id` is non-empty, `event_type` contains a dot, "
+                "`severity` is in {info, warning, error, critical}, and `payload` is a "
+                "non-null JSON object."
             ),
         ),
         PropertyTest(
@@ -1499,10 +1547,10 @@ def _property_tests() -> list[PropertyTest]:
             property_id="01-PROP-2",
             validates=["01-REQ-1.1", "01-REQ-3.1"],
             description="Every stored event is retrievable with identical field values.",
-            for_any_strategy="Valid AuditEvent structs with randomized field values",
+            for_any_strategy="Valid AuditEvent structs with randomized field values (valid formats)",
             invariant_check=(
-                "After InsertEvent(event), querying by id yields a row whose "
-                "envelope metadata fields and payload match the original exactly"
+                "After `InsertEvent(event)`, querying by `id` yields a row whose "
+                "envelope metadata fields and payload match the original event exactly."
             ),
         ),
         PropertyTest(
@@ -1513,7 +1561,7 @@ def _property_tests() -> list[PropertyTest]:
             for_any_strategy="Random strings as token values",
             invariant_check=(
                 "The auth middleware returns 401 for any token that does not "
-                "match the configured token, and passes through for exact matches"
+                "match the configured token, and passes through for exact matches."
             ),
         ),
         PropertyTest(
@@ -1521,8 +1569,8 @@ def _property_tests() -> list[PropertyTest]:
             property_id="01-PROP-4",
             validates=["01-REQ-3.E1"],
             description="Duplicate IDs are always rejected without modifying existing data.",
-            for_any_strategy="Valid event pairs where the second has the same id but different payload",
-            invariant_check="Second insert fails. Original event's payload is unchanged",
+            for_any_strategy="Valid event pairs where the second has the same `id` but different payload",
+            invariant_check="Second insert fails. Original event's payload is unchanged.",
         ),
         PropertyTest(
             id="TS-01-P5",
@@ -1531,8 +1579,8 @@ def _property_tests() -> list[PropertyTest]:
             description="After purge, only events within the retention window survive.",
             for_any_strategy="Set of events with timestamps uniformly distributed across a 90-day range",
             invariant_check=(
-                "After PurgeOlderThan(cutoff), all remaining events have "
-                "timestamp >= cutoff and no event with timestamp < cutoff remains"
+                "After `PurgeOlderThan(cutoff)`, all remaining events have "
+                "`timestamp >= cutoff` and no event with `timestamp < cutoff` remains."
             ),
         ),
         PropertyTest(
@@ -1541,7 +1589,7 @@ def _property_tests() -> list[PropertyTest]:
             validates=["01-REQ-5.1", "01-REQ-5.2", "01-REQ-5.3"],
             description="Health probes never return 401, regardless of auth header state.",
             for_any_strategy="Random Authorization header values (including missing, empty, malformed, valid, invalid)",
-            invariant_check="/healthz returns 200 and /readyz returns 200 (when DB is up) regardless of auth",
+            invariant_check="`/healthz` returns 200 and `/readyz` returns 200 (when DB is up) regardless of auth.",
         ),
         PropertyTest(
             id="TS-01-P7",
@@ -1553,8 +1601,8 @@ def _property_tests() -> list[PropertyTest]:
             description="Config loading succeeds iff TOML is valid and required fields are present.",
             for_any_strategy="Randomly generated TOML content (some valid, some with missing token, some with invalid syntax, some with bad port ranges)",
             invariant_check=(
-                "Load(path) returns nil error iff the file is valid TOML with "
-                "non-empty auth.bearer_token and port in 1–65535 (or absent, defaulting to 8080)"
+                "`Load(path)` returns nil error iff the file is valid TOML with "
+                "non-empty `auth.bearer_token` and port in 1–65535 (or absent, defaulting to 8080)."
             ),
         ),
         PropertyTest(
@@ -1563,17 +1611,17 @@ def _property_tests() -> list[PropertyTest]:
             validates=["01-REQ-10.1", "01-REQ-10.2"],
             description="N concurrent inserts with unique IDs all succeed.",
             for_any_strategy="N in [2, 50], each event has a unique ID",
-            invariant_check="All N inserts succeed. Database contains exactly N rows",
+            invariant_check="All N inserts succeed. Database contains exactly N rows.",
         ),
         PropertyTest(
             id="TS-01-P9",
             property_id="01-PROP-9",
             validates=["01-REQ-8.1", "01-REQ-8.2"],
             description="In-flight requests complete before shutdown, and the database is closed.",
-            for_any_strategy="Deterministic scenario test (not generated)",
+            for_any_strategy="This is a deterministic scenario test rather than a generated property test",
             invariant_check=(
                 "After SIGTERM, pending requests either complete or are terminated "
-                "within 15s. The database connection is closed"
+                "within 15s. The database connection is closed."
             ),
         ),
     ]
@@ -1588,8 +1636,8 @@ def _smoke_tests() -> list[SmokeTest]:
             id="TS-01-SMOKE-1",
             execution_path_id="01-PATH-1",
             description="A valid event sent via HTTP POST is stored in the database and retrievable.",
-            trigger="HTTP POST to `/api/v1/audit` with valid event and correct Bearer token",
-            real_components=["Store", "Echo server", "Auth middleware", "Validator", "Handler"],
+            trigger="HTTP POST to `/api/v1/audit` with valid event and correct Bearer token.",
+            real_components=["Store", "Echo server (httptest)", "Auth middleware", "Validator", "Handler"],
             mockable=[],
             expected_effects=[
                 "HTTP 201 response",
@@ -1601,8 +1649,8 @@ def _smoke_tests() -> list[SmokeTest]:
             id="TS-01-SMOKE-2",
             execution_path_id="01-PATH-2",
             description="Readiness probe successfully queries the database.",
-            trigger="HTTP GET to `/readyz`",
-            real_components=["Store", "Echo server", "Health handler"],
+            trigger="HTTP GET to `/readyz`.",
+            real_components=["Store", "Echo server (httptest)", "Health handler"],
             mockable=[],
             expected_effects=["HTTP 200 response"],
         ),
@@ -1610,7 +1658,7 @@ def _smoke_tests() -> list[SmokeTest]:
             id="TS-01-SMOKE-3",
             execution_path_id="01-PATH-3",
             description="Retention process deletes expired events and preserves recent ones.",
-            trigger="Start retention goroutine, wait for one cycle",
+            trigger="Start retention goroutine, wait for one cycle.",
             real_components=["Store", "Retention process"],
             mockable=[],
             expected_effects=[
@@ -1622,12 +1670,12 @@ def _smoke_tests() -> list[SmokeTest]:
             id="TS-01-SMOKE-4",
             execution_path_id="01-PATH-5",
             description="Configuration file is loaded and used to wire a functional server.",
-            trigger="Load config, create store, create server, send health check",
-            real_components=["Config loader", "Store", "Echo server"],
+            trigger="Load config, create store, create server, send health check.",
+            real_components=["Config loader", "Store", "Echo server (httptest)"],
             mockable=[],
             expected_effects=[
                 "Server starts without error",
-                "/healthz returns 200",
+                "`/healthz` returns 200",
             ],
         ),
     ]
@@ -1657,23 +1705,36 @@ def _task_groups() -> list[TaskGroup]:
             "Create directory structure for all internal packages",
             "Add initial dependencies: echo/v4, modernc.org/sqlite, BurntSushi/toml, logrus, rapid",
         ]),
-        Subtask(id="1.2", title="Write config tests", test_spec_refs=[
+        Subtask(id="1.2", title="Write config tests", details=[
+            "internal/config/config_test.go",
+        ], test_spec_refs=[
             "TS-01-13", "TS-01-14", "TS-01-E10", "TS-01-E12", "TS-01-E13",
             "TS-01-E14", "TS-01-E15", "TS-01-E17", "TS-01-P7",
         ]),
-        Subtask(id="1.3", title="Write validator tests", test_spec_refs=[
+        Subtask(id="1.3", title="Write validator tests", details=[
+            "internal/validator/validator_test.go",
+        ], test_spec_refs=[
             "TS-01-3", "TS-01-4", "TS-01-E4", "TS-01-E5", "TS-01-E6", "TS-01-P1",
         ]),
-        Subtask(id="1.4", title="Write store tests", test_spec_refs=[
+        Subtask(id="1.4", title="Write store tests", details=[
+            "internal/store/store_test.go",
+        ], test_spec_refs=[
             "TS-01-6", "TS-01-7", "TS-01-15", "TS-01-17", "TS-01-E7", "TS-01-E8",
             "TS-01-E16", "TS-01-E18", "TS-01-P2", "TS-01-P4", "TS-01-P5", "TS-01-P8",
         ]),
-        Subtask(id="1.5", title="Write middleware, handler, health, and server tests", test_spec_refs=[
+        Subtask(id="1.5", title="Write middleware, handler, health, and server tests", details=[
+            "internal/middleware/auth_test.go",
+            "internal/handler/audit_test.go",
+            "internal/health/health_test.go",
+            "internal/server/server_test.go",
+        ], test_spec_refs=[
             "TS-01-1", "TS-01-2", "TS-01-5", "TS-01-8", "TS-01-9", "TS-01-10",
             "TS-01-11", "TS-01-12", "TS-01-16", "TS-01-E1", "TS-01-E2", "TS-01-E3",
             "TS-01-E9", "TS-01-E11", "TS-01-P3", "TS-01-P6",
         ]),
-        Subtask(id="1.6", title="Write integration smoke tests", test_spec_refs=[
+        Subtask(id="1.6", title="Write integration smoke tests", details=[
+            "internal/integration_test.go",
+        ], test_spec_refs=[
             "TS-01-SMOKE-1", "TS-01-SMOKE-2", "TS-01-SMOKE-3", "TS-01-SMOKE-4", "TS-01-P9",
         ]),
     ]:
@@ -1703,9 +1764,9 @@ def _task_groups() -> list[TaskGroup]:
             "01-REQ-6.1", "01-REQ-6.2", "01-REQ-6.3", "01-REQ-6.4",
             "01-REQ-4.5", "01-REQ-6.E1", "01-REQ-6.E2", "01-REQ-9.E1",
         ], details=[
-            "Create config structs: Config, ServerConfig, DatabaseConfig, AuthConfig, LoggingConfig",
-            "Load(path) reads TOML, applies defaults, validates required fields",
-            "Validate: bearer_token non-empty, port 1-65535, retention > 0 (warn and default)",
+            "Create `internal/config/config.go`",
+            "Load(path string) (*Config, error)",
+            "Apply defaults and validate",
         ]),
     ]:
         g2 = add_subtask(g2, sub)
@@ -1727,12 +1788,24 @@ def _task_groups() -> list[TaskGroup]:
     for sub in [
         Subtask(id="3.1", title="Implement store initialization", requirement_refs=[
             "01-REQ-3.1", "01-REQ-3.2", "01-REQ-3.3", "01-REQ-3.4",
+        ], details=[
+            "Create `internal/store/store.go`",
+            "New(dbPath string) (*Store, error)",
+            "WAL mode, table creation, indexes",
         ]),
         Subtask(id="3.2", title="Implement event insertion", requirement_refs=[
             "01-REQ-1.1", "01-REQ-3.E1", "01-REQ-10.1", "01-REQ-10.2",
+        ], details=[
+            "InsertEvent(ctx, event) error",
+            "Handle UNIQUE constraint violation",
+            "Configure busy timeout",
         ]),
         Subtask(id="3.3", title="Implement health ping and retention purge", requirement_refs=[
             "01-REQ-5.2", "01-REQ-7.1", "01-REQ-7.3",
+        ], details=[
+            "Ping(ctx) error",
+            "PurgeOlderThan(ctx, cutoff) (int64, error)",
+            "Close() error",
         ]),
     ]:
         g3 = add_subtask(g3, sub)
@@ -1756,9 +1829,15 @@ def _task_groups() -> list[TaskGroup]:
         Subtask(id="4.1", title="Implement event validator", requirement_refs=[
             "01-REQ-2.1", "01-REQ-2.2", "01-REQ-2.3", "01-REQ-2.4",
             "01-REQ-2.E1", "01-REQ-2.E2", "01-REQ-2.E3",
+        ], details=[
+            "Create `internal/validator/validator.go`",
+            "Validate(event model.AuditEvent) error",
         ]),
         Subtask(id="4.2", title="Implement Bearer auth middleware", requirement_refs=[
             "01-REQ-4.1", "01-REQ-4.2", "01-REQ-4.3", "01-REQ-4.E1",
+        ], details=[
+            "Create `internal/middleware/auth.go`",
+            "BearerAuth(token string) echo.MiddlewareFunc",
         ]),
     ]:
         g4 = add_subtask(g4, sub)
@@ -1782,12 +1861,23 @@ def _task_groups() -> list[TaskGroup]:
     for sub in [
         Subtask(id="5.1", title="Implement audit ingest handler", requirement_refs=[
             "01-REQ-1.1", "01-REQ-1.2", "01-REQ-1.E1", "01-REQ-1.E2", "01-REQ-1.E3",
+        ], details=[
+            "Create `internal/handler/audit.go`",
+            "AuditHandler.Ingest(c echo.Context) error",
         ]),
         Subtask(id="5.2", title="Implement health handlers", requirement_refs=[
             "01-REQ-5.1", "01-REQ-5.2", "01-REQ-5.E1",
+        ], details=[
+            "Create `internal/health/health.go`",
+            "Healthz(c) error",
+            "Readyz(c) error",
         ]),
         Subtask(id="5.3", title="Implement server and route registration", requirement_refs=[
             "01-REQ-1.3", "01-REQ-1.4", "01-REQ-5.3", "01-REQ-9.4",
+        ], details=[
+            "Create `internal/server/server.go`",
+            "New(cfg, store) *Server",
+            "Start() error, Shutdown(ctx) error",
         ]),
     ]:
         g5 = add_subtask(g5, sub)
@@ -1810,12 +1900,20 @@ def _task_groups() -> list[TaskGroup]:
     for sub in [
         Subtask(id="6.1", title="Implement retention background process", requirement_refs=[
             "01-REQ-7.1", "01-REQ-7.2", "01-REQ-7.3", "01-REQ-7.4", "01-REQ-7.E1",
+        ], details=[
+            "Create `internal/retention/retention.go`",
+            "StartRetention(ctx, store, interval, retentionDays)",
         ]),
         Subtask(id="6.2", title="Implement main entry point", requirement_refs=[
             "01-REQ-8.1", "01-REQ-8.2", "01-REQ-8.E1",
             "01-REQ-9.1", "01-REQ-9.2", "01-REQ-9.3",
+        ], details=[
+            "Create `cmd/audit-hub/main.go`",
+            "Parse --config flag, load config, wire dependencies, handle signals",
         ]),
-        Subtask(id="6.3", title="Create example configuration file"),
+        Subtask(id="6.3", title="Create example configuration file", details=[
+            "Create `config.example.toml` with all fields documented",
+        ]),
     ]:
         g6 = add_subtask(g6, sub)
 
@@ -1851,13 +1949,23 @@ def _task_groups() -> list[TaskGroup]:
         ),
     )
     for sub in [
-        Subtask(id="8.1", title="Trace every execution path from design.md end-to-end"),
-        Subtask(id="8.2", title="Verify return values propagate correctly"),
-        Subtask(id="8.3", title="Run the integration smoke tests", test_spec_refs=[
+        Subtask(id="8.1", title="Trace every execution path from design.md end-to-end", details=[
+            "For each of the 5 execution paths, verify the entry point actually calls the next function in the chain",
+        ]),
+        Subtask(id="8.2", title="Verify return values propagate correctly", details=[
+            "For every function that returns data consumed by a caller, confirm the caller receives and uses the return value",
+        ]),
+        Subtask(id="8.3", title="Run the integration smoke tests", details=[
+            "`go test -v -run Smoke ./internal/...`",
+        ], test_spec_refs=[
             "TS-01-SMOKE-1", "TS-01-SMOKE-2", "TS-01-SMOKE-3", "TS-01-SMOKE-4",
         ]),
-        Subtask(id="8.4", title="Stub / dead-code audit"),
-        Subtask(id="8.5", title="Cross-spec entry point verification"),
+        Subtask(id="8.4", title="Stub / dead-code audit", details=[
+            "Search for return nil, TODO, stub, NotImplementedError, empty function bodies",
+        ]),
+        Subtask(id="8.5", title="Cross-spec entry point verification", details=[
+            "Verify `cmd/audit-hub/main.go` is buildable: `go build ./cmd/audit-hub/`",
+        ]),
     ]:
         g8 = add_subtask(g8, sub)
 
@@ -1871,8 +1979,8 @@ def _traceability() -> list[TraceabilityEntry]:
     return [
         TraceabilityEntry(requirement_id="01-REQ-1.1", test_spec_id="TS-01-1", task_id="5.1", test_path="TestIngestValidEvent"),
         TraceabilityEntry(requirement_id="01-REQ-1.2", test_spec_id="TS-01-2", task_id="5.1", test_path="TestIngestWrongContentType"),
-        TraceabilityEntry(requirement_id="01-REQ-1.3", test_spec_id="TS-01-13", task_id="2.2", test_path="TestConfigDefaults"),
-        TraceabilityEntry(requirement_id="01-REQ-1.4", test_spec_id="TS-01-13", task_id="2.2", test_path="TestConfigDefaults"),
+        TraceabilityEntry(requirement_id="01-REQ-1.3", test_spec_id="TS-01-13", task_id="5.3", test_path="TestConfigDefaults"),
+        TraceabilityEntry(requirement_id="01-REQ-1.4", test_spec_id="TS-01-13", task_id="5.3", test_path="TestConfigDefaults"),
         TraceabilityEntry(requirement_id="01-REQ-1.E1", test_spec_id="TS-01-E1", task_id="5.1", test_path="TestIngestEmptyBody"),
         TraceabilityEntry(requirement_id="01-REQ-1.E2", test_spec_id="TS-01-E2", task_id="5.1", test_path="TestIngestOversizedBody"),
         TraceabilityEntry(requirement_id="01-REQ-1.E3", test_spec_id="TS-01-E3", task_id="5.1", test_path="TestIngestInvalidJSON"),
@@ -1886,6 +1994,7 @@ def _traceability() -> list[TraceabilityEntry]:
         TraceabilityEntry(requirement_id="01-REQ-3.1", test_spec_id="TS-01-6", task_id="3.1", test_path="TestStoreCreatesTable"),
         TraceabilityEntry(requirement_id="01-REQ-3.2", test_spec_id="TS-01-6", task_id="3.1", test_path="TestStoreWALMode"),
         TraceabilityEntry(requirement_id="01-REQ-3.3", test_spec_id="TS-01-6", task_id="3.1", test_path="TestStoreAutoCreateDB"),
+        TraceabilityEntry(requirement_id="01-REQ-3.3", test_spec_id="TS-01-7", task_id="3.1", test_path="TestStoreAutoCreateDB"),
         TraceabilityEntry(requirement_id="01-REQ-3.4", test_spec_id="TS-01-7", task_id="3.1", test_path="TestStoreCreatesParentDirs"),
         TraceabilityEntry(requirement_id="01-REQ-3.E1", test_spec_id="TS-01-E7", task_id="3.2", test_path="TestDuplicateEventID"),
         TraceabilityEntry(requirement_id="01-REQ-3.E2", test_spec_id="TS-01-E8", task_id="3.1", test_path="TestStoreOpenFailure"),
@@ -1900,12 +2009,13 @@ def _traceability() -> list[TraceabilityEntry]:
         TraceabilityEntry(requirement_id="01-REQ-5.3", test_spec_id="TS-01-12", task_id="5.3", test_path="TestHealthSkipsAuth"),
         TraceabilityEntry(requirement_id="01-REQ-5.E1", test_spec_id="TS-01-E11", task_id="5.2", test_path="TestReadyzDBDown"),
         TraceabilityEntry(requirement_id="01-REQ-6.1", test_spec_id="TS-01-13", task_id="2.2", test_path="TestConfigDefaults"),
+        TraceabilityEntry(requirement_id="01-REQ-6.2", test_spec_id="TS-01-13", task_id="2.2", test_path="TestConfigDefaults"),
         TraceabilityEntry(requirement_id="01-REQ-6.2", test_spec_id="TS-01-14", task_id="2.2", test_path="TestConfigOverrides"),
         TraceabilityEntry(requirement_id="01-REQ-6.3", test_spec_id="TS-01-E12", task_id="2.2", test_path="TestConfigFileNotFound"),
         TraceabilityEntry(requirement_id="01-REQ-6.4", test_spec_id="TS-01-E13", task_id="2.2", test_path="TestConfigInvalidTOML"),
         TraceabilityEntry(requirement_id="01-REQ-6.E1", test_spec_id="TS-01-E14", task_id="2.2", test_path="TestRetentionDaysZero"),
         TraceabilityEntry(requirement_id="01-REQ-6.E2", test_spec_id="TS-01-E15", task_id="2.2", test_path="TestPortOutOfRange"),
-        TraceabilityEntry(requirement_id="01-REQ-7.1", test_spec_id="TS-01-15", task_id="3.3", test_path="TestRetentionPurge"),
+        TraceabilityEntry(requirement_id="01-REQ-7.1", test_spec_id="TS-01-15", task_id="6.1", test_path="TestRetentionPurge"),
         TraceabilityEntry(requirement_id="01-REQ-7.2", test_spec_id="TS-01-SMOKE-3", task_id="6.1", test_path="TestSmokeRetentionCycle"),
         TraceabilityEntry(requirement_id="01-REQ-7.3", test_spec_id="TS-01-15", task_id="3.3", test_path="TestRetentionPurge"),
         TraceabilityEntry(requirement_id="01-REQ-7.4", test_spec_id="TS-01-13", task_id="2.2", test_path="TestConfigDefaults"),
@@ -1918,7 +2028,7 @@ def _traceability() -> list[TraceabilityEntry]:
         TraceabilityEntry(requirement_id="01-REQ-9.3", test_spec_id="TS-01-16", task_id="6.2", test_path="TestStartupLog"),
         TraceabilityEntry(requirement_id="01-REQ-9.4", test_spec_id="TS-01-16", task_id="5.3", test_path="TestRequestLogging"),
         TraceabilityEntry(requirement_id="01-REQ-9.E1", test_spec_id="TS-01-E17", task_id="2.2", test_path="TestInvalidLogLevel"),
-        TraceabilityEntry(requirement_id="01-REQ-10.1", test_spec_id="TS-01-17", task_id="3.2", test_path="TestConcurrentWrites"),
+        TraceabilityEntry(requirement_id="01-REQ-10.1", test_spec_id="TS-01-17", task_id="3.1", test_path="TestConcurrentWrites"),
         TraceabilityEntry(requirement_id="01-REQ-10.2", test_spec_id="TS-01-E18", task_id="3.2", test_path="TestBusyTimeout"),
         TraceabilityEntry(requirement_id="01-REQ-10.E1", test_spec_id="TS-01-E18", task_id="3.2", test_path="TestBusyTimeoutExhausted"),
     ]

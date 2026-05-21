@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -131,7 +132,16 @@ The service is designed for single-instance deployment on Kubernetes.
 
 ### Configuration
 
-All runtime configuration is read from a local TOML file.
+All runtime configuration is read from a local TOML file. Configurable fields:
+
+| Section    | Field            | Default          | Description                        |
+|------------|------------------|------------------|------------------------------------|
+| ` + "`server`" + `   | ` + "`port`" + `           | ` + "`8080`" + `           | HTTP listen port                   |
+| ` + "`server`" + `   | ` + "`bind_address`" + `   | ` + "`\"0.0.0.0\"`" + `     | Network interface to bind to       |
+| ` + "`database`" + ` | ` + "`path`" + `           | ` + "`\"./data/audit.db\"`" + ` | SQLite database file path      |
+| ` + "`database`" + ` | ` + "`retention_days`" + ` | ` + "`30`" + `             | Event retention period in days     |
+| ` + "`auth`" + `     | ` + "`bearer_token`" + `   | (required)       | Bearer token for API auth          |
+| ` + "`logging`" + `  | ` + "`level`" + `          | ` + "`\"info\"`" + `         | Log level (debug, info, warn, error) |
 
 ### Logging
 
@@ -144,6 +154,14 @@ All runtime configuration is read from a local TOML file.
 - On shutdown, the service stops accepting new connections, drains in-flight
   requests, and closes the database connection cleanly.
 
+## Non-Functional Requirements
+
+- **Concurrency**: The service must handle concurrent write requests safely
+  using SQLite WAL mode.
+- **Deployment**: Single-instance deployment on Kubernetes.
+- **Framework**: Uses the Echo HTTP framework for Go.
+- **Future extensibility**: Other use-cases will be added in future versions.
+
 ## Out of Scope (v0.0.1)
 
 - Query/read API endpoints
@@ -151,6 +169,30 @@ All runtime configuration is read from a local TOML file.
 - Dynamic token management (registration API)
 - Batch event ingestion
 - Event forwarding or streaming
+
+## Clarifications
+
+1. **API endpoint path**: ` + "`POST /api/v1/audit`" + `
+2. **Single vs. batch**: Single event per request
+3. **Payload validation**: Validate incoming events against the envelope schema
+4. **Authentication**: Bearer token, hardcoded in config for v0.0.1
+5. **Response format**: HTTP status codes only (no response body)
+6. **Port**: Configurable, 8080 default
+7. **K8s endpoints**: Standard ` + "`/healthz`" + ` and ` + "`/readyz`" + `
+8. **SQLite location**: Default ` + "`./data/audit.db`" + `, configurable
+9. **DB schema**: Envelope metadata as columns, payload as JSON text
+10. **Retention**: Configurable, 30-day default based on event timestamp
+11. **Config fields**: Server, database, auth, and logging settings in TOML
+12. **Logging**: JSON structured logging via logrus
+13. **Graceful shutdown**: Handle SIGTERM/SIGINT, drain requests, close DB
+14. **Query API**: Write-only in v0.0.1
+15. **Concurrency**: WAL mode for concurrent writes
+16. **Deployment**: Single-instance
+17. **Event ordering**: Timestamp-based ordering in the database
+
+## Source
+
+Source: .agent-fox/specs/prd.md
 `
 
 // ---------------------------------------------------------------------------
@@ -680,7 +722,7 @@ func addCorrectnessProperties(r *speclib.Requirements) {
 	p6 := speclib.NewCorrectnessProperty(
 		"01-PROP-6", "Health Probe Independence",
 		"HTTP request to `/healthz` or `/readyz`",
-		"the service returns a response regardless of the presence or absence of an Authorization header; `/healthz` always returns 200 when the process is running; `/readyz` returns 200 if and only if the database is accessible",
+		"the service returns a response regardless of the presence or absence of an Authorization header. `/healthz` always returns 200 when the process is running. `/readyz` returns 200 if and only if the database is accessible",
 	)
 	p6.Validates = []string{"01-REQ-5.1", "01-REQ-5.2", "01-REQ-5.3"}
 	must(r.AddCorrectnessProperty(p6))
@@ -688,7 +730,7 @@ func addCorrectnessProperties(r *speclib.Requirements) {
 	p7 := speclib.NewCorrectnessProperty(
 		"01-PROP-7", "Configuration Validation Completeness",
 		"TOML configuration file",
-		"the service starts successfully if and only if the file is syntactically valid TOML, contains a non-empty `auth.bearer_token`, and all numeric fields are within valid ranges",
+		"the service starts successfully if and only if the file is syntactically valid TOML, contains a non-empty `auth.bearer_token`, and all numeric fields are within valid ranges (`server.port` in 1–65535, `database.retention_days` > 0)",
 	)
 	p7.Validates = []string{"01-REQ-6.1", "01-REQ-6.2", "01-REQ-6.3", "01-REQ-6.4", "01-REQ-4.5", "01-REQ-6.E1", "01-REQ-6.E2"}
 	must(r.AddCorrectnessProperty(p7))
@@ -704,7 +746,7 @@ func addCorrectnessProperties(r *speclib.Requirements) {
 	p9 := speclib.NewCorrectnessProperty(
 		"01-PROP-9", "Graceful Shutdown Completeness",
 		"in-flight request at the time SIGTERM is received",
-		"the service either completes the request and returns a response, or terminates the connection after the 15-second timeout; in both cases, the database connection is closed before the process exits",
+		"the service either completes the request and returns a response, or terminates the connection after the 15-second timeout. In both cases, the database connection is closed before the process exits",
 	)
 	p9.Validates = []string{"01-REQ-8.1", "01-REQ-8.2"}
 	must(r.AddCorrectnessProperty(p9))
@@ -824,64 +866,86 @@ func addTestCases(ts *speclib.TestSpec) {
 	cases := []struct {
 		id, reqID, kind, desc string
 		preconditions         []string
+		expected              string
 		pseudocode            string
 	}{
 		{"TS-01-1", "01-REQ-1.1", "unit", "A valid audit event submitted with correct auth returns 201 and is stored.",
 			[]string{"Store initialized with in-memory SQLite", "AuditHandler wired with store", "Bearer token set to \"test-token\""},
+			"HTTP 201 Created, empty response body, event retrievable from database",
 			"resp = POST(\"/api/v1/audit\", valid_event, auth=\"test-token\")\nASSERT resp.status == 201\nASSERT resp.body == \"\"\nrow = store.query(\"SELECT * FROM events WHERE id = ?\", event.id)\nASSERT row.id == event.id\nASSERT row.event_type == \"run.start\"\nASSERT row.severity == \"info\""},
 		{"TS-01-2", "01-REQ-1.2", "unit", "A request with non-JSON content type is rejected.",
 			[]string{"Server running with valid config"},
+			"HTTP 415 Unsupported Media Type",
 			"resp = POST(\"/api/v1/audit\", \"some text\", content_type=\"text/plain\", auth=\"test-token\")\nASSERT resp.status == 415"},
 		{"TS-01-3", "01-REQ-2.1", "unit", "Events missing any required envelope field are rejected.",
 			[]string{"Validator function available"},
+			"Validate returns a non-nil error for each omitted field",
 			"FOR EACH field IN [id, timestamp, run_id, event_type, severity, payload]:\n    event = valid_event()\n    event[field] = zero_value\n    err = validator.Validate(event)\n    ASSERT err != nil"},
 		{"TS-01-4", "01-REQ-2.2", "unit", "Field format constraints are enforced (timestamp ISO 8601, severity enum, event_type dot-separated, payload is object).",
 			[]string{"Validator function available"},
-			"cases = [(\"timestamp\", \"not-a-date\"), (\"severity\", \"fatal\"), (\"event_type\", \"start\")]\nFOR EACH (field, value) IN cases:\n    event = valid_event()\n    event[field] = value\n    err = validator.Validate(event)\n    ASSERT err != nil"},
+			"Validate returns non-nil error for each invalid value",
+			"cases = [(\"timestamp\", \"not-a-date\"), (\"severity\", \"fatal\"), (\"event_type\", \"start\")]\nFOR EACH (field, value) IN cases:\n    event = valid_event()\n    event[field] = value\n    err = validator.Validate(event)\n    ASSERT err != nil\nevent_null_payload = valid_event()\nevent_null_payload.payload = nil\nerr = validator.Validate(event_null_payload)\nASSERT err != nil"},
 		{"TS-01-5", "01-REQ-2.3", "unit", "Events without optional fields (node_id, session_id, archetype) are accepted with defaults.",
 			[]string{"Store initialized, handler wired"},
+			"HTTP 201, stored row has empty strings for the three optional fields",
 			"event = valid_event_without_optionals()\nresp = POST(\"/api/v1/audit\", event, auth=\"test-token\")\nASSERT resp.status == 201\nrow = store.query(\"SELECT node_id, session_id, archetype FROM events WHERE id = ?\", event.id)\nASSERT row.node_id == \"\"\nASSERT row.session_id == \"\"\nASSERT row.archetype == \"\""},
 		{"TS-01-6", "01-REQ-3.1", "unit", "Store initialization creates the events table and enables WAL mode.",
 			[]string{"Temporary directory for database file"},
+			"Database file created, table `events` exists, WAL mode enabled",
 			"s, err = store.New(tmpdir + \"/test.db\")\nASSERT err == nil\nASSERT file_exists(tmpdir + \"/test.db\")\nrows = s.db.Query(\"SELECT name FROM sqlite_master WHERE type='table' AND name='events'\")\nASSERT rows.count == 1\nmode = s.db.QueryRow(\"PRAGMA journal_mode\").Scan()\nASSERT mode == \"wal\""},
 		{"TS-01-7", "01-REQ-3.4", "unit", "Store creates parent directories and uses configured path.",
 			[]string{"Temporary directory, subdirectory does not exist"},
+			"Parent directories created, database file at specified path",
 			"path = tmpdir + \"/sub/dir/audit.db\"\ns, err = store.New(path)\nASSERT err == nil\nASSERT file_exists(path)"},
 		{"TS-01-8", "01-REQ-4.1", "unit", "Requests without Authorization header receive 401.",
 			[]string{"Echo instance with auth middleware configured, token = \"test-token\""},
+			"HTTP 401 Unauthorized",
 			"resp = POST(\"/api/v1/audit\", valid_event, auth=None)\nASSERT resp.status == 401"},
 		{"TS-01-9", "01-REQ-4.3", "unit", "Requests with incorrect Bearer token receive 401.",
 			[]string{"Echo instance with auth middleware configured, token = \"test-token\""},
+			"HTTP 401 Unauthorized",
 			"resp = POST(\"/api/v1/audit\", valid_event, auth=\"wrong-token\")\nASSERT resp.status == 401"},
 		{"TS-01-10", "01-REQ-5.1", "unit", "Liveness probe always returns 200.",
 			[]string{"Server running"},
+			"HTTP 200 OK",
 			"resp = GET(\"/healthz\")\nASSERT resp.status == 200"},
 		{"TS-01-11", "01-REQ-5.2", "unit", "Readiness probe returns 200 when database is accessible.",
 			[]string{"Server running with healthy SQLite database"},
+			"HTTP 200 OK",
 			"resp = GET(\"/readyz\")\nASSERT resp.status == 200"},
 		{"TS-01-12", "01-REQ-5.3", "unit", "Health endpoints respond without requiring Authorization header.",
 			[]string{"Server running with auth middleware active"},
+			"Both return HTTP 200 (not 401)",
 			"resp1 = GET(\"/healthz\", auth=None)\nASSERT resp1.status == 200\nresp2 = GET(\"/readyz\", auth=None)\nASSERT resp2.status == 200"},
 		{"TS-01-13", "01-REQ-6.1", "unit", "Configuration loads from TOML with correct defaults and overrides.",
 			[]string{"Temporary TOML file with partial config (only `auth.bearer_token` set)"},
+			"All defaults applied correctly",
 			"cfg, err = config.Load(tmpfile_with_token_only)\nASSERT err == nil\nASSERT cfg.Server.Port == 8080\nASSERT cfg.Server.BindAddress == \"0.0.0.0\"\nASSERT cfg.Database.Path == \"./data/audit.db\"\nASSERT cfg.Database.RetentionDays == 30\nASSERT cfg.Auth.BearerToken == \"my-token\"\nASSERT cfg.Logging.Level == \"info\""},
 		{"TS-01-14", "01-REQ-6.2", "unit", "Explicit TOML values override defaults.",
 			[]string{"TOML file with all fields set to non-default values"},
+			"All fields match the overridden values",
 			"cfg, err = config.Load(custom_toml)\nASSERT err == nil\nASSERT cfg.Server.Port == 9090\nASSERT cfg.Server.BindAddress == \"127.0.0.1\"\nASSERT cfg.Database.Path == \"/tmp/custom.db\"\nASSERT cfg.Database.RetentionDays == 7\nASSERT cfg.Logging.Level == \"debug\""},
 		{"TS-01-15", "01-REQ-7.1", "unit", "Purge deletes events older than retention period and returns count.",
 			[]string{"Store with 3 events: one from 60 days ago, one from 15 days ago, one from today"},
+			"Returns count = 1 (the 60-day-old event), 2 events remain",
 			"store.InsertEvent(ctx, event_60_days_old)\nstore.InsertEvent(ctx, event_15_days_old)\nstore.InsertEvent(ctx, event_today)\ncount, err = store.PurgeOlderThan(ctx, now() - 30*day)\nASSERT err == nil\nASSERT count == 1\nremaining = store.query(\"SELECT COUNT(*) FROM events\")\nASSERT remaining == 2"},
 		{"TS-01-16", "01-REQ-9.3", "unit", "HTTP requests produce structured log entries with required fields.",
 			[]string{"Logrus configured with JSON formatter and a test hook to capture entries"},
+			"Log entry contains fields: method, path, status, duration",
 			"hook = test.NewLogHook()\nlogrus.AddHook(hook)\nresp = POST(\"/api/v1/audit\", valid_event, auth=\"test-token\")\nentry = hook.LastEntry()\nASSERT entry.Data[\"method\"] == \"POST\"\nASSERT entry.Data[\"path\"] == \"/api/v1/audit\"\nASSERT entry.Data[\"status\"] == 201\nASSERT entry.Data[\"duration\"] != nil"},
 		{"TS-01-17", "01-REQ-10.1", "integration", "Multiple concurrent inserts succeed without SQLITE_BUSY errors.",
 			[]string{"Store initialized with file-backed SQLite (WAL mode)"},
+			"All 20 inserts succeed, 20 events in database",
 			"wg = WaitGroup()\nerrors = []\nFOR i IN 1..20:\n    wg.Add(1)\n    GO func():\n        err = store.InsertEvent(ctx, unique_event(i))\n        IF err != nil: errors.append(err)\n        wg.Done()\nwg.Wait()\nASSERT len(errors) == 0\ncount = store.query(\"SELECT COUNT(*) FROM events\")\nASSERT count == 20"},
 	}
 	for _, c := range cases {
 		tc := speclib.NewTestCase(c.id, c.reqID, c.kind, c.desc)
 		tc.Preconditions = c.preconditions
 		tc.AssertionPseudocode = c.pseudocode
+		if c.expected != "" {
+			b, _ := json.Marshal(c.expected)
+			tc.Expected = b
+		}
 		must(ts.AddTestCase(tc))
 	}
 }
@@ -890,67 +954,90 @@ func addEdgeCaseTests(ts *speclib.TestSpec) {
 	cases := []struct {
 		id, reqID, kind, desc string
 		preconditions         []string
+		expected              string
 		pseudocode            string
 	}{
 		{"TS-01-E1", "01-REQ-1.E1", "unit", "POST with empty body is rejected.",
 			[]string{"Server running with auth"},
+			"HTTP 400 Bad Request",
 			"resp = POST(\"/api/v1/audit\", body=\"\", auth=\"test-token\")\nASSERT resp.status == 400"},
 		{"TS-01-E2", "01-REQ-1.E2", "unit", "Request body exceeding 1 MB is rejected.",
 			[]string{"Server running with body size limit configured"},
+			"HTTP 413 Payload Too Large",
 			"large_body = \"x\" * (1024 * 1024 + 1)\nresp = POST(\"/api/v1/audit\", body=large_body, auth=\"test-token\")\nASSERT resp.status == 413"},
 		{"TS-01-E3", "01-REQ-1.E3", "unit", "Malformed JSON body is rejected.",
 			[]string{"Server running with auth"},
+			"HTTP 400 Bad Request",
 			"resp = POST(\"/api/v1/audit\", body=\"{invalid json\", auth=\"test-token\")\nASSERT resp.status == 400"},
 		{"TS-01-E4", "01-REQ-2.E1", "unit", "ISO 8601 timestamp without timezone offset is rejected.",
 			[]string{"Validator function available"},
+			"Validation error",
 			"event = valid_event()\nevent.timestamp = \"2026-04-27T10:00:00\"\nerr = validator.Validate(event)\nASSERT err != nil"},
 		{"TS-01-E5", "01-REQ-2.E2", "unit", "Event with null payload is rejected.",
 			[]string{"Validator function available"},
+			"Validation error",
 			"event = valid_event()\nevent.payload = null\nerr = validator.Validate(event)\nASSERT err != nil"},
 		{"TS-01-E6", "01-REQ-2.E3", "unit", "Event type missing dot separator is rejected.",
 			[]string{"Validator function available"},
+			"Validation error",
 			"event = valid_event()\nevent.event_type = \"start\"\nerr = validator.Validate(event)\nASSERT err != nil"},
 		{"TS-01-E7", "01-REQ-3.E1", "unit", "Inserting an event with a duplicate ID returns conflict.",
 			[]string{"Store with one event already inserted"},
+			"InsertEvent returns error; HTTP handler returns 409 Conflict",
 			"store.InsertEvent(ctx, event)\nerr = store.InsertEvent(ctx, event_same_id)\nASSERT err != nil\nresp = POST(\"/api/v1/audit\", event_same_id_json, auth=\"test-token\")\nASSERT resp.status == 409"},
 		{"TS-01-E8", "01-REQ-3.E2", "unit", "Store returns error when database path is not writable.",
 			[]string{"Path to a read-only directory"},
+			"Returns non-nil error",
 			"_, err = store.New(\"/readonly/dir/audit.db\")\nASSERT err != nil"},
 		{"TS-01-E9", "01-REQ-4.E1", "unit", "Extra whitespace between \"Bearer\" and token is handled.",
 			[]string{"Auth middleware configured with token \"test-token\""},
+			"Request proceeds (not rejected as 401)",
 			"resp = POST(\"/api/v1/audit\", valid_event, auth_header=\"Bearer   test-token\")\nASSERT resp.status != 401"},
 		{"TS-01-E10", "01-REQ-4.5", "unit", "Config without bearer_token fails validation.",
 			[]string{"TOML file with no `auth.bearer_token`"},
+			"Returns non-nil error",
 			"_, err = config.Load(toml_without_token)\nASSERT err != nil"},
 		{"TS-01-E11", "01-REQ-5.E1", "unit", "Readiness probe returns 503 when database is inaccessible.",
 			[]string{"HealthHandler with a store whose database has been closed"},
+			"HTTP 503 Service Unavailable",
 			"store.Close()\nresp = GET(\"/readyz\")\nASSERT resp.status == 503"},
 		{"TS-01-E12", "01-REQ-6.3", "unit", "Missing config file returns error.",
 			[]string{"Path to nonexistent file"},
+			"Returns non-nil error",
 			"_, err = config.Load(\"/nonexistent/config.toml\")\nASSERT err != nil"},
 		{"TS-01-E13", "01-REQ-6.4", "unit", "Syntactically invalid TOML returns error.",
 			[]string{"File with invalid TOML content"},
+			"Returns non-nil error",
 			"write_file(tmpfile, \"[invalid toml =\")\n_, err = config.Load(tmpfile)\nASSERT err != nil"},
 		{"TS-01-E14", "01-REQ-6.E1", "unit", "Retention days <= 0 falls back to 30.",
 			[]string{"TOML file with `database.retention_days = 0`"},
+			"cfg.Database.RetentionDays == 30",
 			"cfg, err = config.Load(toml_zero_retention)\nASSERT err == nil\nASSERT cfg.Database.RetentionDays == 30"},
 		{"TS-01-E15", "01-REQ-6.E2", "unit", "Port outside 1-65535 returns error.",
 			[]string{"TOML file with `server.port = 70000`"},
+			"Returns non-nil error",
 			"_, err = config.Load(toml_port_70000)\nASSERT err != nil"},
 		{"TS-01-E16", "01-REQ-7.E1", "unit", "Retention purge gracefully handles database errors.",
 			[]string{"Store whose database has been closed"},
+			"Returns non-nil error (does not panic)",
 			"store.Close()\n_, err = store.PurgeOlderThan(ctx, cutoff)\nASSERT err != nil"},
 		{"TS-01-E17", "01-REQ-9.E1", "unit", "Unrecognized log level falls back to info.",
 			[]string{"TOML file with `logging.level = \"verbose\"` (invalid)"},
+			"cfg.Logging.Level == \"info\"",
 			"cfg, err = config.Load(toml_bad_level)\nASSERT err == nil\nASSERT cfg.Logging.Level == \"info\""},
 		{"TS-01-E18", "01-REQ-10.E1", "unit", "Exhausted busy timeout results in 503 response.",
 			[]string{"Store configured with very short busy timeout", "Database locked by another connection"},
+			"Returns error; handler returns HTTP 503",
 			"lock_database(store)\nerr = store.InsertEvent(ctx, event)\nASSERT err != nil"},
 	}
 	for _, c := range cases {
 		et := speclib.NewEdgeCaseTest(c.id, c.reqID, c.kind, c.desc)
 		et.Preconditions = c.preconditions
 		et.AssertionPseudocode = c.pseudocode
+		if c.expected != "" {
+			b, _ := json.Marshal(c.expected)
+			et.Expected = b
+		}
 		must(ts.AddEdgeCaseTest(et))
 	}
 }
@@ -1088,7 +1175,7 @@ func addTaskGroups(t *speclib.Tasks) {
 	// Group 1: Write failing spec tests
 	g1 := speclib.NewTaskGroup(1, speclib.TaskGroupTests, "Write failing spec tests")
 	addSubtask(&g1, "1.1", "Initialize Go module and project structure",
-		[]string{"Run `go mod init github.com/agent-fox/audit-hub`", "Create directory structure", "Add initial dependencies"},
+		[]string{"Run `go mod init github.com/agent-fox/audit-hub`", "Create directory structure for all internal packages", "Add initial dependencies: echo/v4, modernc.org/sqlite, BurntSushi/toml, logrus, rapid"},
 		nil, nil)
 	addSubtask(&g1, "1.2", "Write config tests",
 		[]string{"internal/config/config_test.go"},
@@ -1115,7 +1202,7 @@ func addTaskGroups(t *speclib.Tasks) {
 	// Group 2: Implement data models and configuration
 	g2 := speclib.NewTaskGroup(2, speclib.TaskGroupStandard, "Implement data models and configuration")
 	addSubtask(&g2, "2.1", "Implement AuditEvent model",
-		[]string{"Create `internal/model/event.go` with `AuditEvent` struct"},
+		[]string{"Create `internal/model/event.go` with `AuditEvent` struct", "JSON tags for deserialization from request body", "`json.RawMessage` for payload field"},
 		nil, []string{"01-REQ-3.1"})
 	addSubtask(&g2, "2.2", "Implement Config model and loader",
 		[]string{"Create `internal/config/config.go`", "Load(path string) (*Config, error)", "Apply defaults and validate"},
@@ -1204,8 +1291,9 @@ func addTaskGroups(t *speclib.Tasks) {
 	g7 := speclib.NewTaskGroup(7, speclib.TaskGroupCheckpoint, "Checkpoint — Core service complete")
 	g7.Subtasks = []speclib.Subtask{}
 	g7.Verification = speclib.NewVerificationSubtask("7.V", []string{
-		"All tests pass: `go test -v -count=1 ./...`",
+		"Ensure all tests pass: `go test -v -count=1 ./...`",
 		"Ask the user if questions arise",
+		"Create or update README.md with build/run/config instructions",
 	})
 	must(t.AddTaskGroup(g7))
 
@@ -1229,7 +1317,7 @@ func addTaskGroups(t *speclib.Tasks) {
 	g8.Verification = speclib.NewVerificationSubtask("8.V", []string{
 		"All smoke tests pass",
 		"No unjustified stubs remain in touched files",
-		"All execution paths from design.md are live",
+		"All execution paths from design.md are live (traceable in code)",
 		"All cross-spec entry points are called from production code",
 		"All existing tests still pass: `go test -v -count=1 ./...`",
 	})
@@ -1254,62 +1342,70 @@ func addSubtask(g *speclib.TaskGroup, id, title string, details, testRefs, reqRe
 }
 
 func addTraceability(t *speclib.Tasks) {
-	entries := []struct{ reqID, tsID, taskID string }{
-		{"01-REQ-1.1", "TS-01-1", "5.1"},
-		{"01-REQ-1.2", "TS-01-2", "5.1"},
-		{"01-REQ-1.3", "TS-01-13", "5.3"},
-		{"01-REQ-1.4", "TS-01-13", "5.3"},
-		{"01-REQ-1.E1", "TS-01-E1", "5.1"},
-		{"01-REQ-1.E2", "TS-01-E2", "5.1"},
-		{"01-REQ-1.E3", "TS-01-E3", "5.1"},
-		{"01-REQ-2.1", "TS-01-3", "4.1"},
-		{"01-REQ-2.2", "TS-01-4", "4.1"},
-		{"01-REQ-2.3", "TS-01-5", "4.1"},
-		{"01-REQ-2.4", "TS-01-4", "4.1"},
-		{"01-REQ-2.E1", "TS-01-E4", "4.1"},
-		{"01-REQ-2.E2", "TS-01-E5", "4.1"},
-		{"01-REQ-2.E3", "TS-01-E6", "4.1"},
-		{"01-REQ-3.1", "TS-01-6", "3.1"},
-		{"01-REQ-3.2", "TS-01-6", "3.1"},
-		{"01-REQ-3.3", "TS-01-6", "3.1"},
-		{"01-REQ-3.4", "TS-01-7", "3.1"},
-		{"01-REQ-3.E1", "TS-01-E7", "3.2"},
-		{"01-REQ-3.E2", "TS-01-E8", "3.1"},
-		{"01-REQ-4.1", "TS-01-8", "4.2"},
-		{"01-REQ-4.2", "TS-01-8", "4.2"},
-		{"01-REQ-4.3", "TS-01-9", "4.2"},
-		{"01-REQ-4.4", "TS-01-13", "2.2"},
-		{"01-REQ-4.5", "TS-01-E10", "2.2"},
-		{"01-REQ-4.E1", "TS-01-E9", "4.2"},
-		{"01-REQ-5.1", "TS-01-10", "5.2"},
-		{"01-REQ-5.2", "TS-01-11", "5.2"},
-		{"01-REQ-5.3", "TS-01-12", "5.3"},
-		{"01-REQ-5.E1", "TS-01-E11", "5.2"},
-		{"01-REQ-6.1", "TS-01-13", "2.2"},
-		{"01-REQ-6.2", "TS-01-13", "2.2"},
-		{"01-REQ-6.3", "TS-01-E12", "2.2"},
-		{"01-REQ-6.4", "TS-01-E13", "2.2"},
-		{"01-REQ-6.E1", "TS-01-E14", "2.2"},
-		{"01-REQ-6.E2", "TS-01-E15", "2.2"},
-		{"01-REQ-7.1", "TS-01-15", "6.1"},
-		{"01-REQ-7.2", "TS-01-SMOKE-3", "6.1"},
-		{"01-REQ-7.3", "TS-01-15", "3.3"},
-		{"01-REQ-7.4", "TS-01-13", "2.2"},
-		{"01-REQ-7.E1", "TS-01-E16", "6.1"},
-		{"01-REQ-8.1", "TS-01-P9", "6.2"},
-		{"01-REQ-8.2", "TS-01-P9", "6.2"},
-		{"01-REQ-8.E1", "TS-01-P9", "6.2"},
-		{"01-REQ-9.1", "TS-01-16", "6.2"},
-		{"01-REQ-9.2", "TS-01-13", "6.2"},
-		{"01-REQ-9.3", "TS-01-16", "6.2"},
-		{"01-REQ-9.4", "TS-01-16", "5.3"},
-		{"01-REQ-9.E1", "TS-01-E17", "2.2"},
-		{"01-REQ-10.1", "TS-01-17", "3.1"},
-		{"01-REQ-10.2", "TS-01-E18", "3.2"},
-		{"01-REQ-10.E1", "TS-01-E18", "3.2"},
+	sp := func(s string) *string { return &s }
+	entries := []struct {
+		reqID, tsID, taskID string
+		testPath            *string
+	}{
+		{"01-REQ-1.1", "TS-01-1", "5.1", sp("TestIngestValidEvent")},
+		{"01-REQ-1.2", "TS-01-2", "5.1", sp("TestIngestWrongContentType")},
+		{"01-REQ-1.3", "TS-01-13", "5.3", sp("TestConfigDefaults")},
+		{"01-REQ-1.4", "TS-01-13", "5.3", sp("TestConfigDefaults")},
+		{"01-REQ-1.E1", "TS-01-E1", "5.1", sp("TestIngestEmptyBody")},
+		{"01-REQ-1.E2", "TS-01-E2", "5.1", sp("TestIngestOversizedBody")},
+		{"01-REQ-1.E3", "TS-01-E3", "5.1", sp("TestIngestInvalidJSON")},
+		{"01-REQ-2.1", "TS-01-3", "4.1", sp("TestValidateMissingFields")},
+		{"01-REQ-2.2", "TS-01-4", "4.1", sp("TestValidateFieldFormats")},
+		{"01-REQ-2.3", "TS-01-5", "4.1", sp("TestOptionalFieldsDefault")},
+		{"01-REQ-2.4", "TS-01-4", "4.1", sp("TestValidateFieldFormats")},
+		{"01-REQ-2.E1", "TS-01-E4", "4.1", sp("TestTimestampNoTimezone")},
+		{"01-REQ-2.E2", "TS-01-E5", "4.1", sp("TestNullPayload")},
+		{"01-REQ-2.E3", "TS-01-E6", "4.1", sp("TestEventTypeNoDot")},
+		{"01-REQ-3.1", "TS-01-6", "3.1", sp("TestStoreCreatesTable")},
+		{"01-REQ-3.2", "TS-01-6", "3.1", sp("TestStoreWALMode")},
+		{"01-REQ-3.3", "TS-01-6", "3.1", sp("TestStoreAutoCreateDB")},
+		{"01-REQ-3.3", "TS-01-7", "3.1", sp("TestStoreAutoCreateDB")},
+		{"01-REQ-3.4", "TS-01-7", "3.1", sp("TestStoreCreatesParentDirs")},
+		{"01-REQ-3.E1", "TS-01-E7", "3.2", sp("TestDuplicateEventID")},
+		{"01-REQ-3.E2", "TS-01-E8", "3.1", sp("TestStoreOpenFailure")},
+		{"01-REQ-4.1", "TS-01-8", "4.2", sp("TestAuthMissingHeader")},
+		{"01-REQ-4.2", "TS-01-8", "4.2", sp("TestAuthMissingHeader")},
+		{"01-REQ-4.3", "TS-01-9", "4.2", sp("TestAuthWrongToken")},
+		{"01-REQ-4.4", "TS-01-13", "2.2", sp("TestConfigDefaults")},
+		{"01-REQ-4.5", "TS-01-E10", "2.2", sp("TestConfigMissingToken")},
+		{"01-REQ-4.E1", "TS-01-E9", "4.2", sp("TestAuthExtraWhitespace")},
+		{"01-REQ-5.1", "TS-01-10", "5.2", sp("TestHealthz")},
+		{"01-REQ-5.2", "TS-01-11", "5.2", sp("TestReadyzHealthy")},
+		{"01-REQ-5.3", "TS-01-12", "5.3", sp("TestHealthSkipsAuth")},
+		{"01-REQ-5.E1", "TS-01-E11", "5.2", sp("TestReadyzDBDown")},
+		{"01-REQ-6.1", "TS-01-13", "2.2", sp("TestConfigDefaults")},
+		{"01-REQ-6.2", "TS-01-13", "2.2", sp("TestConfigDefaults")},
+		{"01-REQ-6.2", "TS-01-14", "2.2", sp("TestConfigOverrides")},
+		{"01-REQ-6.3", "TS-01-E12", "2.2", sp("TestConfigFileNotFound")},
+		{"01-REQ-6.4", "TS-01-E13", "2.2", sp("TestConfigInvalidTOML")},
+		{"01-REQ-6.E1", "TS-01-E14", "2.2", sp("TestRetentionDaysZero")},
+		{"01-REQ-6.E2", "TS-01-E15", "2.2", sp("TestPortOutOfRange")},
+		{"01-REQ-7.1", "TS-01-15", "6.1", sp("TestRetentionPurge")},
+		{"01-REQ-7.2", "TS-01-SMOKE-3", "6.1", sp("TestSmokeRetentionCycle")},
+		{"01-REQ-7.3", "TS-01-15", "3.3", sp("TestRetentionPurge")},
+		{"01-REQ-7.4", "TS-01-13", "2.2", sp("TestConfigDefaults")},
+		{"01-REQ-7.E1", "TS-01-E16", "6.1", sp("TestRetentionErrorRecovery")},
+		{"01-REQ-8.1", "TS-01-P9", "6.2", sp("TestGracefulShutdown")},
+		{"01-REQ-8.2", "TS-01-P9", "6.2", sp("TestGracefulShutdown")},
+		{"01-REQ-8.E1", "TS-01-P9", "6.2", sp("TestDoubleSignalExit")},
+		{"01-REQ-9.1", "TS-01-16", "6.2", sp("TestJSONLogging")},
+		{"01-REQ-9.2", "TS-01-13", "6.2", sp("TestConfigDefaults")},
+		{"01-REQ-9.3", "TS-01-16", "6.2", sp("TestStartupLog")},
+		{"01-REQ-9.4", "TS-01-16", "5.3", sp("TestRequestLogging")},
+		{"01-REQ-9.E1", "TS-01-E17", "2.2", sp("TestInvalidLogLevel")},
+		{"01-REQ-10.1", "TS-01-17", "3.1", sp("TestConcurrentWrites")},
+		{"01-REQ-10.2", "TS-01-E18", "3.2", sp("TestBusyTimeout")},
+		{"01-REQ-10.E1", "TS-01-E18", "3.2", sp("TestBusyTimeoutExhausted")},
 	}
 	for _, e := range entries {
-		must(t.AddTraceabilityEntry(speclib.NewTraceabilityEntry(e.reqID, e.tsID, e.taskID)))
+		te := speclib.NewTraceabilityEntry(e.reqID, e.tsID, e.taskID)
+		te.TestPath = e.testPath
+		must(t.AddTraceabilityEntry(te))
 	}
 }
 
