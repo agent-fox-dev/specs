@@ -56,7 +56,6 @@ check: clean setup build
 	done
 	@echo "ok   [python] — $(PY_OUT)"
 	@uv run python compare.py
-	@rm -rf $(GO_OUT) $(PY_OUT)
 	@echo "all examples passed"
 
 # ── Clean ───────────────────────────────────────────────────────────
