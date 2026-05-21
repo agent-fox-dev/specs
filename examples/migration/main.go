@@ -39,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	outDir := filepath.Join("examples", "01_audit_hub_go")
+	outDir := filepath.Join("examples/migration", "01_audit_hub_go")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		log.Fatalf("creating output directory: %v", err)
 	}

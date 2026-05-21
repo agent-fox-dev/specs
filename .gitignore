@@ -25,6 +25,7 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
+go.sum
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -53,6 +54,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+uv.lock
+.python-version
 
 # env file
 .env
@@ -68,6 +71,13 @@ MANIFEST
 !.agent-fox/profiles/
 !.agent-fox/profiles/*
 .claude/worktrees/
+
+# Python virtual environments
+.venv/
+
+# Generated example output
+examples/01_audit_hub_go/
+examples/migration/01_audit_hub_python/
 
 # other
 prompts.md
