@@ -5,7 +5,7 @@ GO_BIN   := $(BIN_DIR)/migration-go
 GO_OUT   := $(ROOT_DIR)/examples/migration/01_audit_hub_go
 PY_OUT   := $(CURDIR)/01_audit_hub_python
 
-EXPECTED_FILES := prd.md requirements.json tasks.json test_spec.json
+EXPECTED_FILES := prd.md requirements.json tasks.json test_spec.json architecture.md
 
 .PHONY: all clean setup setup-go setup-python build run-go run-python test compare
 

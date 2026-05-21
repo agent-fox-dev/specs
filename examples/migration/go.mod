@@ -10,4 +10,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/af/speclib => github.com/agent-fox-dev/speclib-go v0.0.0-20260520134341-bcd6e3e70b5f
+replace github.com/af/speclib => github.com/agent-fox-dev/speclib-go v0.0.0-20260521131314-b2ecfd9bfb9a
