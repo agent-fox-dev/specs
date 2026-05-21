@@ -35,7 +35,7 @@ run-go: build
 	cd $(ROOT_DIR) && $(GO_BIN)
 
 run-python: setup-python
-	uv run python programmatic_audit_hub.py
+	uv run python main.py
 
 # ── Test ────────────────────────────────────────────────────────────
 
