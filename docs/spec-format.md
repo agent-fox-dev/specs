@@ -1,6 +1,6 @@
 # Spec Format Specification
 
-Version 1.0 — Draft
+Version 1.1 — Draft
 
 ## 1. Scope
 
@@ -9,14 +9,15 @@ package. A specification package (hereafter "spec") is the durable artifact
 that captures design intent, acceptance criteria, verification contracts, and
 implementation plans for one cohesive feature or concern.
 
-A spec consists of exactly four artifacts:
+A spec consists of four required artifacts and one optional artifact:
 
-| File | Format | Purpose |
-|---|---|---|
-| `prd.md` | Markdown with YAML frontmatter | Narrative intent — the "why" and "what" |
-| `requirements.json` | JSON (schema-validated) | What the system must do, must guarantee, and how it wires together |
-| `test_spec.json` | JSON (schema-validated) | How each requirement is verified |
-| `tasks.json` | JSON (schema-validated) | What work to do, in what order, with what dependencies |
+| File | Format | Required | Purpose |
+|---|---|---|---|
+| `prd.md` | Markdown with YAML frontmatter | yes | Narrative intent — the "why" and "what" |
+| `requirements.json` | JSON (schema-validated) | yes | What the system must do, must guarantee, and how it wires together |
+| `test_spec.json` | JSON (schema-validated) | yes | How each requirement is verified |
+| `tasks.json` | JSON (schema-validated) | yes | What work to do, in what order, with what dependencies |
+| `architecture.md` | Markdown (free-form, no schema) | no | Architectural context — modules, interfaces, data models, technology choices |
 
 There is no `design.md`. Content that previously lived in a design document
 is distributed as follows:
@@ -26,10 +27,10 @@ is distributed as follows:
 | Correctness Properties | `requirements.json` — `correctness_properties` |
 | Execution Paths | `requirements.json` — `execution_paths` |
 | Error Handling | `requirements.json` — `error_handling` |
-| Architecture / Module Responsibilities | `prd.md` body (optional prose) or project-level steering |
-| Components and Interfaces | `prd.md` body (optional prose) |
-| Data Models | `prd.md` body (optional prose) |
-| Technology Stack | `prd.md` body (optional prose) or project-level steering |
+| Architecture / Module Responsibilities | `architecture.md` (optional) |
+| Components and Interfaces | `architecture.md` (optional) |
+| Data Models | `architecture.md` (optional) |
+| Technology Stack | `architecture.md` (optional) |
 | Definition of Done | Project-level steering (not per-spec) |
 | Testing Strategy | Project-level steering (not per-spec) |
 
@@ -39,8 +40,8 @@ is distributed as follows:
 
 | Term | Definition |
 |---|---|
-| Spec | A four-artifact package representing one feature or concern |
-| Spec root | The directory containing the four artifacts, e.g. `<spec_root>/specs/05_my_feature/` |
+| Spec | A package of four required artifacts (and one optional) representing one feature or concern |
+| Spec root | The directory containing the spec artifacts, e.g. `<spec_root>/specs/05_my_feature/` |
 | Operator | A human who authors PRDs, reviews specs, and approves plans |
 | Coordinator | The agent role that drafts and mutates JSON artifacts from PRD input |
 | Archetype | An agent role that executes tasks; may only update its own task state |
@@ -60,6 +61,7 @@ Specs live under the project's spec root directory (default: `<spec_root>/specs/
     requirements.json
     test_spec.json
     tasks.json
+    architecture.md      # optional
   archive/
     03_old_feature/      # superseded specs
 ```
@@ -75,20 +77,24 @@ Format: `{NN}_{snake_case_name}`
 
 ### 3.2 Completeness
 
-A spec root **must** contain all four files. A directory missing any file is
-not a valid spec.
+A spec root **must** contain all four required files (`prd.md`,
+`requirements.json`, `test_spec.json`, `tasks.json`). A directory missing
+any required file is not a valid spec. The optional `architecture.md` may
+be present or absent without affecting validity.
 
 ### 3.3 Bootstrap
 
-During creation (via the library's `create()` flow), the four files come
-into existence sequentially. The library operates in bootstrap mode during
-this process: cross-file validation is deferred until all four files are
-written. A partially-created spec directory is in an "incomplete" state —
-not invalid, but not yet valid either.
+During creation (via the library's `create()` flow), the four required
+files come into existence sequentially. The library operates in bootstrap
+mode during this process: cross-file validation is deferred until all four
+required files are written. A partially-created spec directory is in an
+"incomplete" state — not invalid, but not yet valid either.
 
 The standalone `validate()` command always enforces completeness. A
-directory with fewer than four files is reported as incomplete. A spec
+directory missing any required file is reported as incomplete. A spec
 cannot transition from `draft` to `active` while incomplete.
+`architecture.md` may be added at any point — before, during, or after
+the `draft` to `active` transition.
 
 ---
 
@@ -128,7 +134,7 @@ schema_version: 1
 | `spec_id` | string | Numeric prefix as string, e.g. `"05"`. Must match the folder prefix. |
 | `spec_name` | string | Snake-case slug. Must match the folder suffix. |
 | `title` | string | Human-readable title. |
-| `status` | enum | Lifecycle state (see §8). |
+| `status` | enum | Lifecycle state (see §9). |
 | `created_at` | ISO 8601 datetime | When the spec was created. Immutable after creation. |
 | `updated_at` | ISO 8601 datetime | Last modification timestamp. Updated on every save. |
 | `owner` | string | Who owns this spec. |
@@ -164,14 +170,16 @@ location prevents sync drift.
 All other sections are optional and operator-discretion: Goals, Non-goals,
 Background, Design Decisions, Dependencies, Open Questions, etc. No machine
 reads them — they exist for human reviewers and for context when the
-coordinator drafts `requirements.json`.
+coordinator drafts `requirements.json`. Architectural content (module
+responsibilities, component interfaces, data models, technology stack)
+belongs in `architecture.md` (§5), not in the PRD.
 
 ### 4.3 Optional sections of note
 
 **Dependencies** — When a spec depends on other specs, the PRD may include a
 `## Dependencies` section with a table declaring cross-spec edges at
 task-group granularity. This table is informational in the PRD; the
-machine-readable form lives in `tasks.json` (see §7.2).
+machine-readable form lives in `tasks.json` (see §8.2).
 
 **Design Decisions** — When the operator or coordinator resolves ambiguities
 during PRD refinement, decisions and rationale can be recorded here. These
@@ -179,14 +187,66 @@ are human-oriented context, not machine-consumed structure.
 
 ---
 
-## 5. `requirements.json`
+## 5. `architecture.md`
+
+The architecture document is an **optional** free-form markdown file that
+provides architectural context for a spec. It captures the "how" — module
+structure, interfaces, data models, and technology choices — that would
+clutter the PRD's focus on intent.
+
+A spec is valid without `architecture.md`. When present, the file has no
+YAML frontmatter, no JSON schema, and no machine-validated structure. It is
+authored by operators and coordinators, and consumed by human reviewers and
+by agents that need implementation-level context.
+
+### 5.1 Suggested sections
+
+The following sections are recommended but not enforced. Authors may use any
+markdown structure that serves the spec.
+
+| Section | Purpose |
+|---|---|
+| Architecture Overview | High-level description and diagrams (Mermaid flowcharts, sequence diagrams) |
+| Module Responsibilities | What each major module or component owns |
+| Components and Interfaces | Type signatures, API surface, public contracts |
+| Data Models | Schemas, configuration shapes, examples |
+| Technology Stack | Languages, frameworks, libraries, infrastructure choices |
+| Operational Readiness | Observability, deployment, compatibility, performance targets |
+
+### 5.2 Authoring guidelines
+
+1. **No frontmatter.** The file is pure markdown. Metadata lives in `prd.md`.
+2. **No machine validation.** The library does not parse or validate
+   `architecture.md` content. It checks only for file existence when present.
+3. **Mermaid diagrams encouraged.** Use fenced `mermaid` code blocks for
+   architecture diagrams, sequence diagrams, and data flow illustrations.
+4. **Reference, don't duplicate.** If a concept is already defined in
+   `requirements.json` (e.g., execution paths, correctness properties), reference
+   it by ID rather than restating it.
+5. **Implementation-level names are acceptable.** Unlike execution paths
+   (which use logical actors), architecture.md may name concrete modules,
+   classes, functions, and packages.
+
+### 5.3 Lifecycle
+
+`architecture.md` may be created, modified, or deleted at any point in the
+spec lifecycle, including after the spec transitions to `active`. Because
+the file has no machine-read content, changes to it do not trigger
+cross-file validation or intent-hash checks.
+
+When a spec is superseded or archived, `architecture.md` moves with the
+rest of the spec directory.
+
+---
+
+## 6. `requirements.json`
 
 The requirements file is the largest and most heavily mutated JSON artifact.
 It captures what the system must do (EARS requirements), what invariants must
 hold (correctness properties), how the system wires together (execution
 paths), and how errors are handled.
 
-### 5.1 Top-level schema
+### 6.1 Top-level schema
 
 ```json
 {
@@ -211,12 +271,12 @@ paths), and how errors are handled.
 | `schema_version` | integer | yes | Currently `1`. |
 | `introduction` | string | yes | Brief description of the system being specified. |
 | `glossary` | object | yes | Map of term → definition. Every domain-specific term used in any requirement, property, or path must have an entry. |
-| `requirements` | array | yes | Requirement objects (§5.2). |
-| `correctness_properties` | array | yes | Correctness property objects (§5.3). May be empty. |
-| `execution_paths` | array | yes | Execution path objects (§5.4). May be empty. |
-| `error_handling` | array | yes | Error handling objects (§5.5). May be empty. |
+| `requirements` | array | yes | Requirement objects (§6.2). |
+| `correctness_properties` | array | yes | Correctness property objects (§6.3). May be empty. |
+| `execution_paths` | array | yes | Execution path objects (§6.4). May be empty. |
+| `error_handling` | array | yes | Error handling objects (§6.5). May be empty. |
 
-### 5.2 Requirements
+### 6.2 Requirements
 
 Each requirement has a user story, acceptance criteria, and edge cases. IDs
 are globally unique via the `{spec_id}-REQ-{N}` format.
@@ -240,13 +300,13 @@ are globally unique via the `{spec_id}-REQ-{N}` format.
 | `id` | string | yes | Format: `{spec_id}-REQ-{N}`. N is a positive integer, sequential within the spec. |
 | `title` | string | yes | Short descriptive title. |
 | `user_story` | object | yes | Contains `role`, `goal`, `benefit` (all strings, all required). |
-| `acceptance_criteria` | array | yes | Criterion objects (§5.2.1). At least one required. |
+| `acceptance_criteria` | array | yes | Criterion objects (§6.2.1). At least one required. |
 | `edge_cases` | array | yes | Criterion objects using the edge-case ID format. May be empty. |
 
 **Scope limit:** A single spec should contain no more than 10 requirements
 (excluding edge cases). Exceeding this suggests the spec should be split.
 
-#### 5.2.1 Acceptance criterion
+#### 6.2.1 Acceptance criterion
 
 Each criterion is a discriminated union keyed on `ears_pattern`. The EARS
 sentence is computed from the structured fields — the fields are the source
@@ -297,7 +357,7 @@ discriminated `oneOf`.
 | `state` | `state_driven` | string | The state during which the action applies. |
 | `feature` | `optional` | string | The feature or configuration flag that enables the action. |
 
-#### 5.2.2 Requirement quality rules
+#### 6.2.2 Requirement quality rules
 
 These rules apply to all requirements. Each is tagged with its enforcement
 mechanism:
@@ -313,7 +373,7 @@ mechanism:
 4. **[review guidance]** Prefer measurable constraints over qualitative
    language.
 
-### 5.3 Correctness properties
+### 6.3 Correctness properties
 
 Formal invariants that must hold across all valid executions. Each property
 validates one or more acceptance criteria.
@@ -336,7 +396,7 @@ validates one or more acceptance criteria.
 | `invariant` | string | yes | The condition that must hold for all values of the quantifier. |
 | `validates` | array of strings | yes | Non-empty array of acceptance criterion IDs that this property validates. Every ID must exist in `requirements`. |
 
-#### 5.3.1 Coverage rules
+#### 6.3.1 Coverage rules
 
 After all properties are written:
 
@@ -346,7 +406,7 @@ After all properties are written:
    handling, and one for boundary conditions.
 3. Properties must be testable — each maps to a property-based test.
 
-### 5.4 Execution paths
+### 6.4 Execution paths
 
 Integration-level wiring requirements. Each path traces a user-visible
 feature from entry point to observable side effect using logical actors
@@ -377,7 +437,7 @@ Each step:
 | `actor` | string | yes | Logical component name. Free-form string. |
 | `action` | string | yes | What the actor does at this step. |
 
-#### 5.4.1 Path rules
+#### 6.4.1 Path rules
 
 1. Every path must start at a user action, CLI command, API call, or
    scheduled trigger.
@@ -388,7 +448,7 @@ Each step:
 4. Every execution path must have a corresponding smoke test in
    `test_spec.json`.
 
-### 5.5 Error handling
+### 6.5 Error handling
 
 Maps error conditions to system behavior, cross-referencing requirement IDs.
 
@@ -410,14 +470,14 @@ Maps error conditions to system behavior, cross-referencing requirement IDs.
 
 ---
 
-## 6. `test_spec.json`
+## 7. `test_spec.json`
 
 The test specification translates every acceptance criterion, correctness
 property, and execution path into a concrete, language-agnostic test
 contract. It is derived from `requirements.json` — the coordinator generates
 and patches it. Operators do not edit it directly.
 
-### 6.1 Top-level schema
+### 7.1 Top-level schema
 
 ```json
 {
@@ -433,7 +493,7 @@ and patches it. Operators do not edit it directly.
 }
 ```
 
-### 6.2 Test cases
+### 7.2 Test cases
 
 One test case per acceptance criterion. The 1:1 mapping is enforced by
 cross-file validation.
@@ -467,11 +527,11 @@ cross-file validation.
 | `kind` | enum | yes | `"unit"` or `"integration"`. |
 | `description` | string | yes | One-sentence description of what is verified. |
 | `preconditions` | array of strings | yes | System state required before test runs. May be empty. |
-| `input` | object | yes | Concrete input values or description of input shape. Free-form object. |
+| `input` | object or null | no | Concrete input values or description of input shape. Free-form object. Null when inputs are fully described by preconditions or assertion pseudocode. |
 | `expected` | object | yes | Concrete expected output, return value, side effect, or state change. Free-form object. |
-| `assertion_pseudocode` | string | yes | Language-agnostic pseudocode for the assertion. May reference concrete module, function, and class names — test-spec pseudocode is the one place where implementation-level names are acceptable (contrast with execution paths, which use logical actors per §5.4). Must not use language-specific syntax. |
+| `assertion_pseudocode` | string | yes | Language-agnostic pseudocode for the assertion. May reference concrete module, function, and class names — test-spec pseudocode is the one place where implementation-level names are acceptable (contrast with execution paths, which use logical actors per §6.4). Must not use language-specific syntax. |
 
-### 6.3 Property tests
+### 7.3 Property tests
 
 One per correctness property.
 
@@ -495,9 +555,9 @@ One per correctness property.
 | `for_any_strategy` | string | yes | How the property test generator should sample inputs. |
 | `invariant_check` | string | yes | The invariant assertion in pseudocode. |
 
-### 6.4 Edge case tests
+### 7.4 Edge case tests
 
-Same structure as test cases (§6.2). One per edge case requirement
+Same structure as test cases (§7.2). One per edge case requirement
 (`{spec_id}-REQ-{N}.E{C}`).
 
 ```json
@@ -515,7 +575,7 @@ Same structure as test cases (§6.2). One per edge case requirement
 
 The `id` format is `TS-{spec_id}-E{N}` where N is a running number.
 
-### 6.5 Smoke tests
+### 7.5 Smoke tests
 
 One per execution path. These are integration tests that traverse a full
 path from entry point to observable side effect.
@@ -546,7 +606,7 @@ path from entry point to observable side effect.
 | `mockable` | array of strings | yes | What may be stubbed (only external I/O). |
 | `expected_effects` | array of strings | yes | Concrete observable outcomes. |
 
-### 6.6 Coverage
+### 7.6 Coverage
 
 Computed, not authored. Populated on every save by the validation library.
 
@@ -570,12 +630,12 @@ Computed, not authored. Populated on every save by the validation library.
 
 ---
 
-## 7. `tasks.json`
+## 8. `tasks.json`
 
 The implementation plan. The most actively mutated file — task state changes
 happen throughout execution.
 
-### 7.1 Top-level schema
+### 8.1 Top-level schema
 
 ```json
 {
@@ -597,11 +657,11 @@ happen throughout execution.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `test_commands` | object | yes | Commands for running tests. Contains `spec_tests`, `all_tests`, `linter` (all strings). |
-| `dependencies` | array | yes | Cross-spec dependencies (§7.2). May be empty. |
-| `task_groups` | array | yes | Ordered list of task group objects (§7.3). At least one required. |
-| `traceability` | array | yes | Traceability entries (§7.5). |
+| `dependencies` | array | yes | Cross-spec dependencies (§8.2). May be empty. |
+| `task_groups` | array | yes | Ordered list of task group objects (§8.3). At least one required. |
+| `traceability` | array | yes | Traceability entries (§8.5). |
 
-### 7.2 Dependencies
+### 8.2 Dependencies
 
 Cross-spec dependencies at task-group granularity.
 
@@ -623,7 +683,7 @@ Cross-spec dependencies at task-group granularity.
 | `relationship` | string | yes | What the dependency provides and why `from_group` is the earliest sufficient one. |
 | `sentinel` | boolean | yes | `true` when `from_group` is `0` (upstream spec unplanned). |
 
-### 7.3 Task groups
+### 8.3 Task groups
 
 ```json
 {
@@ -640,8 +700,8 @@ Cross-spec dependencies at task-group granularity.
 | `id` | integer | yes | Positive integer. Sequential within the spec. |
 | `kind` | enum | yes | `"tests"`, `"standard"`, `"checkpoint"`, or `"wiring_verification"`. |
 | `title` | string | yes | Short descriptive title. |
-| `subtasks` | array | yes | Subtask objects (§7.3.1). Target 3–6 per group (excluding verification). |
-| `verification` | object | yes | Verification subtask (§7.3.2). |
+| `subtasks` | array | yes | Subtask objects (§8.3.1). Target 3–6 per group (excluding verification). |
+| `verification` | object | yes | Verification subtask (§8.3.2). |
 
 **Structural rules (schema-enforced):**
 
@@ -652,7 +712,7 @@ Cross-spec dependencies at task-group granularity.
 - Target 3–6 subtasks per group. More than 6 suggests splitting; fewer than
   2 suggests merging. These are guidelines, not hard limits.
 
-#### 7.3.1 Subtask
+#### 8.3.1 Subtask
 
 ```json
 {
@@ -709,7 +769,7 @@ Illegal transitions are rejected by the validation library.
 here.** `tasks.json` is declarative planning state. Runtime state belongs in
 the operational store.
 
-#### 7.3.2 Verification subtask
+#### 8.3.2 Verification subtask
 
 Every task group has exactly one verification subtask.
 
@@ -730,7 +790,7 @@ Every task group has exactly one verification subtask.
 | `id` | string | yes | Format: `{group_id}.V`. |
 | `checks` | array of strings | yes | Verification criteria. At least one required. Should include test commands. |
 
-### 7.4 Wiring verification (final task group)
+### 8.4 Wiring verification (final task group)
 
 The last task group of every spec must be a wiring verification group. Its
 purpose is to catch integration gaps. It cannot be satisfied by checking
@@ -755,7 +815,7 @@ Required subtasks:
 **Hard rule:** An execution path that is not live in production code fails
 the wiring verification. Errata or deferrals do not satisfy the check.
 
-### 7.5 Traceability
+### 8.5 Traceability
 
 Bidirectional links from requirements through test specs and tasks to
 executable tests.
@@ -786,7 +846,7 @@ The pair is the primary key — duplicates are rejected.
 
 ---
 
-## 8. Lifecycle
+## 9. Lifecycle
 
 Lifecycle state is stored in `prd.md` frontmatter `status`. Transitions are
 enforced by the library — free-form edits to the status field are rejected.
@@ -799,7 +859,7 @@ enforced by the library — free-form edits to the status field are rejected.
 | `superseded` | Replaced by another spec | None (deprecation banner applied automatically) |
 | `archived` | Moved to `archive/` | None |
 
-### 8.1 Superseding
+### 9.1 Superseding
 
 When a new spec replaces an existing one:
 
@@ -809,7 +869,7 @@ When a new spec replaces an existing one:
 3. The superseded spec's status transitions to `superseded`.
 4. The superseded spec folder is moved to `<spec_root>/specs/archive/`.
 
-### 8.2 Archiving without superseding
+### 9.2 Archiving without superseding
 
 A spec may be archived without being replaced — for example, a feature that
 was prototyped but abandoned, or a spec that was completed and is no longer
@@ -820,11 +880,11 @@ banner is added because there is no replacement spec to point to.
 
 ---
 
-## 9. Validation
+## 10. Validation
 
 Two layers, both run on every mutation:
 
-### 9.1 Schema validation
+### 10.1 Schema validation
 
 JSON Schema validation per file. Sub-millisecond. Rejects:
 
@@ -834,10 +894,14 @@ JSON Schema validation per file. Sub-millisecond. Rejects:
 - Illegal state transitions.
 - Invalid ID formats.
 
-### 9.2 Cross-file integrity
+`architecture.md` is exempt from schema validation — it is free-form
+markdown with no required structure.
 
-Custom validation across all four artifacts. Runs after schema validation
-succeeds. Rules:
+### 10.2 Cross-file integrity
+
+Custom validation across the four required artifacts. Runs after schema
+validation succeeds. `architecture.md` is not included in cross-file
+integrity checks. Rules:
 
 1. Every `requirement_id` referenced in `test_spec.json`, `tasks.json`
    traceability, and `error_handling` must exist in `requirements.json`.
@@ -848,7 +912,7 @@ succeeds. Rules:
 5. Every `test_spec_id` referenced in `tasks.json` must exist in
    `test_spec.json`.
 6. Glossary cross-check (see below).
-7. `spec_id` and `spec_name` must be consistent across all four files.
+7. `spec_id` and `spec_name` must be consistent across all four required files.
 8. No two entries in the `tasks.json` traceability array may share the
    same `(requirement_id, test_spec_id)` pair.
 
@@ -870,27 +934,27 @@ it as common English.
 A mutation that breaks integrity is rejected. The coordinator fixes
 dependent files in the same transaction or does not make the change.
 
-### 9.3 Standalone validation
+### 10.3 Standalone validation
 
 The library exposes a standalone `validate()` for CI and pre-commit hooks.
 This runs both layers without requiring a mutation.
 
 ---
 
-## 10. Mutation contract
+## 11. Mutation contract
 
-### 10.1 JSON Patch
+### 11.1 JSON Patch
 
 Every mutation to a JSON artifact is expressed as an RFC 6902 JSON Patch.
 Patches are validated against the file's JSON Schema before application.
 
-### 10.2 Atomic multi-file patches
+### 11.2 Atomic multi-file patches
 
 A single mutation event can patch multiple files atomically. Adding a
 requirement typically requires patching `requirements.json`, `test_spec.json`,
 and `tasks.json` together. The transaction succeeds entirely or not at all.
 
-### 10.3 Per-actor permissions
+### 11.3 Per-actor permissions
 
 | File / scope | Operator | Coordinator | Archetype |
 |---|---|---|---|
@@ -898,6 +962,7 @@ and `tasks.json` together. The transaction succeeds entirely or not at all.
 | `prd.md` frontmatter (protected fields) | — | library only | — |
 | `prd.md` body (Intent, pre-active) | write | — | — |
 | `prd.md` body (other sections) | write | — | — |
+| `architecture.md` | write | write | — |
 | `requirements.json` | write | write | — |
 | `test_spec.json` | — | write | — |
 | `tasks.json` (planning fields) | write | write | — |
@@ -906,7 +971,7 @@ and `tasks.json` together. The transaction succeeds entirely or not at all.
 **Protected frontmatter fields** (library-managed, not directly writable by
 any actor): `status`, `spec_id`, `spec_name`, `created_at`, `supersedes`,
 `intent_hash`. These are modified only through library lifecycle transitions
-(§8). The operator writes mutable fields: `title`, `updated_at`, `owner`,
+(§9). The operator writes mutable fields: `title`, `updated_at`, `owner`,
 `source`, `tags`.
 
 Archetypes can only transition their own task's state through legal
@@ -914,22 +979,22 @@ transitions. Everything else routes through the coordinator.
 
 ---
 
-## 11. Rendering
+## 12. Rendering
 
 The library provides a renderer that produces markdown from JSON artifacts.
 Rendering is deterministic: same JSON in, same markdown out, byte-for-byte.
 
-### 11.1 Render targets
+### 12.1 Render targets
 
 | Target | Description |
 |---|---|
 | Per-file | Markdown rendering of one JSON file |
-| Combined | PRD markdown (as-is) followed by rendered JSON artifacts in order: requirements → test_spec → tasks |
+| Combined | PRD markdown (as-is), then `architecture.md` (as-is, if present), followed by rendered JSON artifacts in order: requirements → test_spec → tasks |
 
-### 11.2 EARS rendering
+### 12.2 EARS rendering
 
 EARS sentences are rendered from decomposed fields using the templates in
-§5.2.1. The rendered form is a derived view, never the source of truth.
+§6.2.1. The rendered form is a derived view, never the source of truth.
 
 ---
 
@@ -967,3 +1032,6 @@ The `$schema` URIs in JSON files (e.g.
 `https://agent-fox.dev/schemas/requirements.v1.json`) are informational —
 they enable editor autocompletion and hover documentation. The library
 validates against its bundled copy, not the hosted URL.
+
+`architecture.md` has no JSON schema. It is free-form markdown and is not
+schema-validated.
