@@ -39,13 +39,8 @@ run-python: setup-python
 
 # ── Test ────────────────────────────────────────────────────────────
 
-check: clean setup build test
-
-test: test-go test-python
-	@echo "all examples passed"
-
-test-go: build
-	@rm -rf $(GO_OUT)
+check: clean setup build
+	@rm -rf $(GO_OUT) $(PY_OUT)
 	@cd $(ROOT_DIR) && $(GO_BIN) 2>/dev/null
 	@for f in $(EXPECTED_FILES); do \
 		if [ ! -f "$(GO_OUT)/$$f" ]; then \
@@ -53,10 +48,6 @@ test-go: build
 		fi; \
 	done
 	@echo "ok   [go] — $(GO_OUT)"
-	@rm -rf $(GO_OUT)
-
-test-python: setup-python
-	@rm -rf $(PY_OUT)
 	@uv run python main.py >/dev/null
 	@for f in $(EXPECTED_FILES); do \
 		if [ ! -f "$(PY_OUT)/$$f" ]; then \
@@ -64,16 +55,9 @@ test-python: setup-python
 		fi; \
 	done
 	@echo "ok   [python] — $(PY_OUT)"
-	@rm -rf $(PY_OUT)
-
-# ── Compare ────────────────────────────────────────────────────────
-
-compare: build setup-python
-	@rm -rf $(GO_OUT) $(PY_OUT)
-	@cd $(ROOT_DIR) && $(GO_BIN) 2>/dev/null
-	@uv run python main.py >/dev/null
 	@uv run python compare.py
 	@rm -rf $(GO_OUT) $(PY_OUT)
+	@echo "all examples passed"
 
 # ── Clean ───────────────────────────────────────────────────────────
 
