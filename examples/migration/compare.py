@@ -16,7 +16,7 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 GO_DIR = SCRIPT_DIR / "01_audit_hub_go"
 PY_DIR = SCRIPT_DIR / "01_audit_hub_python"
-EXPECTED_FILES = ["prd.md", "requirements.json", "test_spec.json", "tasks.json"]
+EXPECTED_FILES = ["prd.md", "requirements.json", "test_spec.json", "tasks.json", "architecture.md"]
 REPORT_PATH = SCRIPT_DIR / "DIFF_REPORT.md"
 
 

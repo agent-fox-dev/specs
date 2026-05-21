@@ -59,6 +59,7 @@ func buildAuditHubSpec() *speclib.Spec {
 	buildRequirements(spec)
 	buildTestSpec(spec)
 	buildTasks(spec)
+	buildArchitecture(spec)
 
 	return spec
 }
@@ -1408,6 +1409,296 @@ func addTraceability(t *speclib.Tasks) {
 		must(t.AddTraceabilityEntry(te))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Architecture
+// ---------------------------------------------------------------------------
+
+func buildArchitecture(spec *speclib.Spec) {
+	content := architectureContent
+	spec.Architecture = &content
+}
+
+const architectureContent = `# Architecture: Audit Hub
+
+## Overview
+
+Audit Hub is a single-binary Go service built on the Echo HTTP framework. It
+receives agent-fox audit events via a single authenticated endpoint, validates
+them against the envelope schema, and persists them in an embedded SQLite
+database running in WAL mode. A background goroutine handles time-based data
+retention. The service exposes unauthenticated Kubernetes health probes and
+performs graceful shutdown on SIGTERM/SIGINT.
+
+## Architecture
+
+` + "```mermaid" + `
+flowchart TD
+    AF[agent-fox instances] -->|POST /api/v1/audit\nBearer token| GW[Echo Router]
+    K8S[Kubernetes] -->|GET /healthz, /readyz| GW
+
+    GW --> AM[Auth Middleware]
+    AM --> VL[Validator]
+    VL --> SH[Store Handler]
+    SH --> DB[(SQLite WAL)]
+
+    GW --> HC[Health Controller]
+    HC --> DB
+
+    RT[Retention Ticker] -->|hourly| DB
+
+    CFG[config.toml] -->|startup| APP[Application]
+    APP --> GW
+    APP --> DB
+    APP --> RT
+` + "```" + `
+
+` + "```mermaid" + `
+sequenceDiagram
+    participant C as agent-fox
+    participant E as Echo Router
+    participant A as Auth Middleware
+    participant V as Validator
+    participant S as Store
+    participant DB as SQLite
+
+    C->>E: POST /api/v1/audit (Bearer token, JSON body)
+    E->>A: Check Authorization header
+    alt Invalid/missing token
+        A-->>C: 401 Unauthorized
+    end
+    A->>V: Pass request body
+    V->>V: Parse JSON, validate envelope fields
+    alt Validation failure
+        V-->>C: 422 Unprocessable Entity
+    end
+    V->>S: Validated AuditEvent struct
+    S->>DB: INSERT INTO events (...)
+    alt Duplicate id
+        DB-->>S: UNIQUE constraint error
+        S-->>C: 409 Conflict
+    else Success
+        DB-->>S: OK
+        S-->>C: 201 Created
+    end
+` + "```" + `
+
+### Module Responsibilities
+
+1. **cmd/audit-hub** — Application entry point: parses CLI flags, loads config, wires dependencies, starts server, handles OS signals.
+2. **internal/config** — TOML configuration loading, validation, and defaults.
+3. **internal/server** — Echo server setup, route registration, middleware wiring, graceful shutdown.
+4. **internal/middleware** — Bearer token authentication middleware for Echo.
+5. **internal/handler** — HTTP request handler for the audit ingest endpoint.
+6. **internal/validator** — Envelope schema validation logic for incoming audit events.
+7. **internal/store** — SQLite database initialization (WAL mode, table creation), event insertion, health check query, retention purge.
+8. **internal/retention** — Background ticker goroutine that triggers periodic purge via the store.
+9. **internal/health** — Health and readiness endpoint handlers.
+10. **internal/model** — Data types: ` + "`AuditEvent`" + ` struct, ` + "`Config`" + ` struct.
+
+## Components and Interfaces
+
+### CLI
+
+` + "```" + `
+audit-hub [--config <path>]
+
+Flags:
+  --config string   Path to TOML configuration file (default "config.toml")
+` + "```" + `
+
+### Core Data Types
+
+` + "```go" + `
+// internal/model/event.go
+
+type AuditEvent struct {
+    ID        string          ` + "`" + `json:"id"` + "`" + `
+    Timestamp string          ` + "`" + `json:"timestamp"` + "`" + `
+    RunID     string          ` + "`" + `json:"run_id"` + "`" + `
+    EventType string          ` + "`" + `json:"event_type"` + "`" + `
+    NodeID    string          ` + "`" + `json:"node_id"` + "`" + `
+    SessionID string          ` + "`" + `json:"session_id"` + "`" + `
+    Archetype string          ` + "`" + `json:"archetype"` + "`" + `
+    Severity  string          ` + "`" + `json:"severity"` + "`" + `
+    Payload   json.RawMessage ` + "`" + `json:"payload"` + "`" + `
+}
+` + "```" + `
+
+` + "```go" + `
+// internal/config/config.go
+
+type Config struct {
+    Server   ServerConfig   ` + "`" + `toml:"server"` + "`" + `
+    Database DatabaseConfig ` + "`" + `toml:"database"` + "`" + `
+    Auth     AuthConfig     ` + "`" + `toml:"auth"` + "`" + `
+    Logging  LoggingConfig  ` + "`" + `toml:"logging"` + "`" + `
+}
+
+type ServerConfig struct {
+    Port        int    ` + "`" + `toml:"port"` + "`" + `
+    BindAddress string ` + "`" + `toml:"bind_address"` + "`" + `
+}
+
+type DatabaseConfig struct {
+    Path          string ` + "`" + `toml:"path"` + "`" + `
+    RetentionDays int    ` + "`" + `toml:"retention_days"` + "`" + `
+}
+
+type AuthConfig struct {
+    BearerToken string ` + "`" + `toml:"bearer_token"` + "`" + `
+}
+
+type LoggingConfig struct {
+    Level string ` + "`" + `toml:"level"` + "`" + `
+}
+` + "```" + `
+
+### Module Interfaces
+
+` + "```go" + `
+// internal/store/store.go
+
+type Store struct { /* contains *sql.DB */ }
+
+func New(dbPath string) (*Store, error)
+func (s *Store) InsertEvent(ctx context.Context, event model.AuditEvent) error
+func (s *Store) Ping(ctx context.Context) error
+func (s *Store) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+func (s *Store) Close() error
+` + "```" + `
+
+` + "```go" + `
+// internal/validator/validator.go
+
+func Validate(event model.AuditEvent) error
+` + "```" + `
+
+` + "```go" + `
+// internal/middleware/auth.go
+
+func BearerAuth(token string) echo.MiddlewareFunc
+` + "```" + `
+
+` + "```go" + `
+// internal/handler/audit.go
+
+type AuditHandler struct { store *store.Store }
+
+func NewAuditHandler(store *store.Store) *AuditHandler
+func (h *AuditHandler) Ingest(c echo.Context) error
+` + "```" + `
+
+` + "```go" + `
+// internal/health/health.go
+
+type HealthHandler struct { store *store.Store }
+
+func NewHealthHandler(store *store.Store) *HealthHandler
+func (h *HealthHandler) Healthz(c echo.Context) error
+func (h *HealthHandler) Readyz(c echo.Context) error
+` + "```" + `
+
+` + "```go" + `
+// internal/retention/retention.go
+
+func StartRetention(ctx context.Context, store *store.Store, interval time.Duration, retentionDays int)
+` + "```" + `
+
+` + "```go" + `
+// internal/server/server.go
+
+type Server struct { /* contains *echo.Echo */ }
+
+func New(cfg *config.Config, store *store.Store) *Server
+func (s *Server) Start() error
+func (s *Server) Shutdown(ctx context.Context) error
+` + "```" + `
+
+` + "```go" + `
+// internal/config/config.go
+
+func Load(path string) (*Config, error)
+` + "```" + `
+
+## Data Models
+
+### SQLite Schema
+
+` + "```sql" + `
+CREATE TABLE IF NOT EXISTS events (
+    id          TEXT PRIMARY KEY,
+    timestamp   TEXT NOT NULL,
+    run_id      TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    node_id     TEXT NOT NULL DEFAULT '',
+    session_id  TEXT NOT NULL DEFAULT '',
+    archetype   TEXT NOT NULL DEFAULT '',
+    severity    TEXT NOT NULL,
+    payload     TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_events_run_id ON events(run_id);
+CREATE INDEX IF NOT EXISTS idx_events_event_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
+` + "```" + `
+
+### TOML Configuration Example
+
+` + "```toml" + `
+[server]
+port = 8080
+bind_address = "0.0.0.0"
+
+[database]
+path = "./data/audit.db"
+retention_days = 30
+
+[auth]
+bearer_token = "your-secret-token-here"
+
+[logging]
+level = "info"
+` + "```" + `
+
+## Technology Stack
+
+| Component | Technology | Version/Notes |
+|-----------|-----------|---------------|
+| Language | Go | 1.22+ |
+| HTTP framework | Echo | v4 |
+| Database | SQLite | via ` + "`modernc.org/sqlite`" + ` (pure Go, CGo-free) |
+| Configuration | TOML | via ` + "`github.com/BurntSushi/toml`" + ` |
+| Logging | logrus | ` + "`github.com/sirupsen/logrus`" + ` |
+| Testing | Go stdlib | ` + "`testing`" + `, ` + "`net/http/httptest`" + ` |
+| Property testing | rapid | ` + "`pgregory.net/rapid`" + ` |
+| Build | Go modules | ` + "`go.mod`" + ` |
+| Container | Docker | Multi-stage build |
+
+## Operational Readiness
+
+### Observability
+
+- **Structured logs**: All log output is JSON via logrus, suitable for
+  ingestion by Kubernetes log aggregators (Fluentd, Loki, etc.).
+- **Request logging**: Every HTTP request is logged with method, path, status
+  code, and duration.
+- **Retention logging**: Each purge cycle logs the number of deleted events.
+
+### Rollout / Rollback
+
+- Single binary deployment; rollback is a container image revert.
+- Database schema is forward-only (single table, additive changes in future
+  versions).
+- Configuration changes require a pod restart (no hot-reload in v0.0.1).
+
+### Migration / Compatibility
+
+- v0.0.1 creates the schema on first run; no migration framework needed yet.
+- Future schema changes should use a migration library (e.g., golang-migrate).
+`
 
 func must(err error) {
 	if err != nil {
