@@ -9,7 +9,7 @@
 
 > Naming note: capital-C **Context** is the grounding entity defined in section 7.10. To keep it unambiguous, this document does not use "context" as a loose common noun; it uses "prompt" for what an agent is given on a turn, "grounding" for the layer, and "token budget" for the model's input limit.
 
-This work is inspired by Intent, a macOS application from Augment Code (https://www.intentapp.dev): a software development workspace where humans and AI agents plan and build software side by side. In Intent, each unit of work lives in its own workspace that bundles the repository (files, branches, and diffs), a layer of shared context (a spec, scratchpad notes, and agent tools such as MCP servers and skills), and a team of specialist agents that a Coordinator keeps pointed at one goal. That product is the reference point for the design below and the source of the vocabulary it borrows: workspace, spec, context, Coordinator, specialist.
+This work is inspired by Intent, a macOS application from Augment Code (https://www.intentapp.dev): a software development workspace where humans and AI agents plan and build software side by side. In Intent, each unit of work lives in its own workspace that bundles the repository (files, branches, and diffs), a layer of shared grounding (a spec, scratchpad notes, and agent tools such as MCP servers and skills), and a team of specialist agents that a Coordinator keeps pointed at one goal. That product is the reference point for the design below and the source of the vocabulary it borrows: workspace, spec, context, Coordinator, specialist.
 
 What follows is not a specification of Intent, and the system it describes is not a clone. Intent is the starting point we reason from; the design here diverges on purpose. The harness is headless rather than a desktop application, its coordination is rebuilt on a validated spec package that freezes once approved, all grounding is unified under a single Context abstraction, and the provider, agent memory, and external tools sit behind pluggable interfaces. Where this PRD and Intent differ, this PRD governs what we are building; Intent is cited only to show where an idea came from. This document calls the system itself **Telos**, a working name (Greek for the end a thing is directed toward) that keeps the through-line to Intent while marking this as its own design.
 
@@ -72,7 +72,7 @@ graph TD
     SP -->|contains| TS[test_spec.json]
     SP -->|contains| TK[tasks.json]
     SP -->|optionally contains| ARCH[architecture.md]
-    TK -->|task_groups to subtasks| STK[Subtasks + state]
+    TK -->|task_groups to subtasks| STK[Subtasks]
     W -->|attaches at pinned revision| CTX[Context - grounding]
 ```
 
@@ -104,8 +104,8 @@ The relationship that matters most: agents do not message each other to coordina
 A workspace is the unit of isolation and the unit of state. It bundles, for one task:
 
 - a git worktree on its own branch, which holds the files agents read and edit;
-- one spec package (the four required artifacts, plus an optional architecture doc), stored under a spec root;
-- one or more attached Contexts, each pinned to a fixed revision for this workspace's runs, providing grounding;
+- one active spec package (the four required artifacts, plus an optional architecture doc), stored under a spec root (a superseded spec may remain in the workspace's archive but is no longer the active package);
+- zero or more attached Contexts, each pinned to a fixed revision for this workspace's runs, providing grounding;
 - a registry of agents (active and finished) and their conversation histories;
 - managed scripts, meaning long-running processes such as a dev server that an agent started;
 - an append-only activity log.
@@ -126,7 +126,7 @@ Distinct from the spec lifecycle (section 7.6); a workspace contains a spec, and
 
 | State | Meaning | Transitions |
 | --- | --- | --- |
-| Created | Branch and worktree exist; bootstrap pending or running. | to Active on bootstrap success; to Failed on bootstrap error. |
+| Created | Branch and worktree exist; bootstrap pending, running, or deferred (campaign-gated, section 6.5). | to Active on bootstrap success; to Failed on bootstrap error. |
 | Failed | Bootstrap did not complete; no agents run. | to Created (retry bootstrap); to Deleted. |
 | Active | Agents may run; the spec and files are live. | to Archived; to Deleted. |
 | Archived | Read-only; kept for reference, hidden from default listings. | to Active (reopen); to Deleted. |
@@ -249,7 +249,9 @@ Structural rules the harness enforces through schema validation:
 - Task group 1 is always `kind: "tests"`.
 - The final task group is always `kind: "wiring_verification"`, and there is at most one.
 - `"checkpoint"` and `"standard"` groups may appear between.
-- Each group targets three to six subtasks (a guideline) and carries one verification subtask `{group}.V` whose checks include the test commands.
+- Each group carries exactly one verification subtask `{group}.V` whose checks include the test commands.
+
+As a planning guideline (not schema-enforced), each group targets three to six implementation subtasks.
 
 Subtask state is a fixed machine:
 
@@ -257,13 +259,13 @@ Subtask state is a fixed machine:
 | --- | --- | --- |
 | `pending` | Not started | `queued`, `dropped` |
 | `queued` | Selected for dispatch | `in_progress`, `pending`, `dropped` |
-| `in_progress` | An archetype is executing it | `awaiting_verification` |
-| `awaiting_verification` | Implementation complete; queued for verification | `done`, `pending_reevaluation` |
+| `in_progress` | An archetype is executing it | `awaiting_verification`, `dropped` |
+| `awaiting_verification` | Implementation complete; queued for verification | `done`, `pending_reevaluation`, `dropped` |
 | `done` | Verification passed | `pending_reevaluation` |
 | `pending_reevaluation` | Verification failed; needs rework or review | `pending`, `dropped` |
 | `dropped` | Removed with explicit rationale | terminal |
 
-Illegal transitions are rejected. Under the freeze (section 7.7) the format spec's original trigger for `pending_reevaluation`, an upstream requirement changing, cannot occur, so in this harness the state captures a verification bounce-back instead: a group check or the final wiring gate failing a subtask. This machine defines the legal transitions, but the live state of each subtask is not stored in `tasks.json`: that state, along with runtime metadata (run ID, started_at, agent assignment), lives in the harness operational store (section 11), because the spec freezes on approval and `tasks.json` stays declarative (section 7.7).
+Illegal transitions are rejected. The `dropped` transition from `in_progress` or `awaiting_verification` is a harness-initiated action on Operator command (including the mid-flight supersede in section 10), not an Archetype-initiated transition; the Archetype's "own subtask only" rule does not grant the right to drop its own work unilaterally. Under the freeze (section 7.7) the format spec's original trigger for `pending_reevaluation`, an upstream requirement changing, cannot occur, so in this harness the state captures a verification bounce-back instead: a group check or the final wiring gate failing a subtask. This machine defines the legal transitions, but the live state of each subtask is not stored in `tasks.json`: that state, along with runtime metadata (run ID, started_at, agent assignment), lives in the harness operational store (section 11), because the spec freezes on approval and `tasks.json` stays declarative (section 7.7).
 
 The final `wiring_verification` group is the integration gate. It traces each execution path through production code, confirms return values propagate, runs the smoke tests with real components, and audits for unreplaced stubs. An execution path that is not live in production code fails this group, and no deferral satisfies it.
 
@@ -287,8 +289,10 @@ The spec carries its own lifecycle in `prd.md` frontmatter, separate from the wo
 | `draft` | Being authored | All, including Intent edits |
 | `active` | Work in progress | None to the artifacts; the spec is frozen on approval (section 7.7). Execution state lives in the operational store, and `architecture.md` may still be revised. |
 | `sealed` | Complete; no further mutation | None |
-| `superseded` | Replaced by another spec | None; deprecation banner applied automatically |
-| `archived` | Moved to `archive/` | None |
+| `superseded` | Replaced by another spec; folder moved to `archive/` | None; deprecation banner applied automatically |
+| `archived` | Complete and put away; folder moved to `archive/` | None |
+
+Both `superseded` and `archived` are terminal states; they share the `archive/` storage convention but are semantically distinct. A `superseded` spec was replaced before or during execution. An `archived` spec completed its lifecycle normally and was put away for reference. Neither transitions to the other.
 
 Transitions are library-enforced. At the `draft` to `active` transition the harness hashes the trimmed Intent section into `intent_hash`. A spec moves from `active` to `sealed` by an explicit Operator action, taken once the wiring verification has passed and the branch has been reviewed and merged; reporting "ready for review" (section 9) does not itself seal a spec, since the human seals only after accepting the work. Because the spec is frozen thereafter (section 7.7), the Intent cannot change through the library, and the stored hash becomes the integrity seal against out-of-band edits to `prd.md` on disk. The harness recomputes and checks that hash whenever it loads the spec (on workspace reopen, on render, and in the standalone `validate()` of section 7.8), reporting a mismatch rather than trusting the file.
 
@@ -407,7 +411,7 @@ Before each turn the harness builds the system prompt and message set from both 
 
 - the agent's specialist role and the applicable rules and instructions, composed per the precedence in section 8.4;
 - the always-on pinned sources of the attached Contexts (content and rules), materialized in full;
-- a rendered slice of the spec relevant to the agent , specifically for a worker Archetype its assigned subtask plus the requirements and test specs that subtask references through traceability;
+- a rendered slice of the spec relevant to the agent, specifically for a worker Archetype its assigned subtask plus the requirements and test specs that subtask references through traceability;
 - any skills loaded on demand for this task kind, which are also sources of an attached Context but pulled in when the task calls for them rather than materialized every turn (section 7.10);
 - the agent memory recalled for this work: learnings relevant to the subtask, retrieved from the agent-memory service against a revision pinned at run start (section 8.6);
 - conversation history.
@@ -496,7 +500,7 @@ interface WebSearch {
 type SearchResult = { title: string; url: string; snippet: string; publishedAt?: string }
 ```
 
-**Untrusted external content and prompt injection.** Web search and `fetch` return content from arbitrary third parties. That content must be treated as data and never as instructions. The harness enforces this structurally: results are injected into the message stream as `tool_result` events with a fixed schema, not as free text in the system prompt or as a continuation of the agent's turn. The agent sees them as the output of a tool call it made, inside a typed wrapper, so the model receives them in a context where instruction-following is not active. No prompt wording alone is sufficient to enforce this boundary; the structure must do it.
+**Untrusted external content and prompt injection.** Web search and `fetch` return content from arbitrary third parties. That content must be treated as data and never as instructions. The harness enforces this structurally: results are injected into the message stream as `tool_result` events with a fixed schema, not as free text in the system prompt or as a continuation of the agent's turn. The agent sees them as the output of a tool call it made, inside a typed wrapper, so the model receives them in a position where instruction-following is not active. No prompt wording alone is sufficient to enforce this boundary; the structure must do it.
 
 Web search is the first input the harness cannot pin. The rest of grounding is snapshot-pinned at run start so a re-run reconstructs the same prompt; the live web does not hold still. In the freshness vocabulary of section 7.10, web search is always a `live` source. The harness keeps it auditable: every query and its returned results are recorded through the ordinary `tool_call` and `tool_result` events (section 11), so a run shows exactly what the agent saw even though a later run may see something different. The boundary with Browser control holds the same way it does for issues: search and `fetch` are read-only discovery and static page text, while driving an interactive page stays with the browser tool.
 
@@ -506,7 +510,7 @@ The harness contains no memory store, the same way it contains no model. Agent m
 
 Memory is grounding, not coordination, so it never touches the spec package. It also differs from a Context on the one axis that matters: a Context is read-only and Operator-curated, the durable human-authored truth about a domain; memory is agent-authored and accumulates from what agents actually did. The two compose without overlapping: Context says what is known to be true, memory says what past work found to work.
 
-Two operations carry the whole contract. `recall` runs at prompt assembly (and backs the memory-read tool in 8.5), returning the learnings relevant to the current work. `consolidate` runs once at session end, when the workspace hands its learnings back and the service advances memory to a new revision.
+Two operations carry the whole contract. `recall` runs at prompt assembly (and backs the memory-read tool in 8.5), returning the learnings relevant to the current work. `consolidate` runs once at the end of a run, when the workspace hands its learnings back and the service advances memory to a new revision.
 
 ```
 interface AgentMemory {
@@ -559,9 +563,9 @@ type Learning = {
 }
 ```
 
-The harness owns the timing; the service owns storage, retrieval, and distillation. Recall pins a revision at run start and the harness logs it as a `memory_pin` event next to the existing `context_pin` (section 11). Consolidate advances the revision only after the run, so memory grows between sessions and never during one, and a re-run reads the same snapshot. This gives memory the reproducibility discipline already applied to Contexts.
+The harness owns the timing; the service owns storage, retrieval, and distillation. Recall pins a revision at run start and the harness logs it as a `memory_pin` event next to the existing `context_pin` (section 11). Consolidate advances the revision only after the run, so memory grows between runs and never during one, and a re-run reads the same snapshot. This gives memory the reproducibility discipline already applied to Contexts.
 
-Three points are left as defaults here with alternatives noted. By default `consolidate` fires at the end of a run; whether a session boundary should instead be the whole workspace is open. By default the harness stages structured `learnings` through a consolidation step, with the `session` pointer offered as the alternative where the service distills its own; which side owns distillation is open. And `scope.namespace` defaults to the workspace's repo, with an attached Context's domain or an explicit value as alternatives.
+Three points are left as defaults here with alternatives noted. By default `consolidate` fires at the end of a single run; whether the boundary should instead be the whole workspace (consolidating once when all runs complete) is open. By default the harness stages structured `learnings` through a consolidation step, with the `session` pointer offered as the alternative where the service distills its own; which side owns distillation is open. And `scope.namespace` defaults to the workspace's repo, with an attached Context's domain or an explicit value as alternatives.
 
 ### 8.7 Ralph: the autonomous loop
 
@@ -636,7 +640,7 @@ Grounding sits outside this loop on purpose. Contexts are read-only and pinned, 
 
 ### 9.3 Concurrency and file claims
 
-Concurrent writes to runtime state are already safe: subtask-state transitions go through the operational store (section 7.7), where the harness serializes them and scopes each to its owning Archetype, so parallel workers cannot corrupt the plan's execution state. The spec artifacts are frozen during a run, so there are no concurrent artifact writes to reconcile at all.
+Concurrent writes to runtime state are already safe: subtask-state transitions go through the operational store (section 11), where the harness serializes them and scopes each to its owning Archetype, so parallel workers cannot corrupt the plan's execution state. The spec artifacts are frozen during a run, so there are no concurrent artifact writes to reconcile at all.
 
 That leaves the hard case, and the highest-risk one: parallel Implementors editing the same source files in a shared worktree. The harness coordinates this with an advisory file-claim mechanism, a mutex-like lease an agent takes on a file before editing it, which other agents are expected to wait on.
 
@@ -674,7 +678,7 @@ An Implementor signals completion by moving its subtask to `awaiting_verificatio
 
 **Campaign (new app).** Caller creates a Campaign with a goal document and registers spec 01 (e.g. data models) with no dependencies. A Planner drafts spec 01's package; the caller approves; a Coordinator drives it to sealed. As spec 01's task groups complete, the harness signals that spec 02 (e.g. auth, which declared a dependency on spec 01 group 3) is now unblocked and activates its workspace. The caller authors spec 02's PRD informed by spec 01's output and repeats the single-spec flow. Specs with no cross-dependency (say a frontend scaffold that only depends on spec 01 group 1) run in parallel with spec 02 once their gate clears. The Campaign reaches `complete` when all registered specs are sealed.
 
-**From scratch.** Caller opens an empty workspace, attaches Contexts if any apply, and authors a PRD. The first agent scaffolds the project, the Planner drafts the spec package, and the flow proceeds as a coordinated feature.
+**From scratch.** Caller opens an empty workspace, attaches Contexts if any apply, and authors a PRD. The Planner drafts a spec package whose first task group includes project scaffolding, and the flow proceeds as a coordinated feature with Implementors creating the initial structure.
 
 **Superseding a spec.** A new spec sets `supersedes` to the prior spec's ID. The harness applies a deprecation banner to the superseded spec's PRD, transitions it to `superseded`, and moves its folder to the archive. No work is lost.
 
@@ -689,7 +693,7 @@ The harness persists per-workspace state so a process restart resumes cleanly. T
 | Entity | Key fields |
 | --- | --- |
 | Workspace | id, name, status, origin, branch, worktree path, base branch, remote, spec_root path, campaign_id (nullable), timestamps. |
-| Campaign | id, name, status, goal document, shared context ids, timestamps. (Optional; lives above workspaces.) |
+| Campaign | id, name, status, goal document, shared Context ids, timestamps. (Optional; lives above workspaces.) |
 | CampaignMember | campaign id, workspace id, spec_id (nullable), dependency edges (depends_on_spec, from_group, to_group). A registered-but-unplanned spec has a workspace and dependency edges but no spec_id until the Operator authors a PRD and the harness bootstraps the spec artifacts. |
 | WorkspaceConfig | workspace id, setup scripts, default provider, default model, spec_root location. |
 | SpecRef | workspace id, spec_id, spec_name, status, intent_hash (nullable in `draft`), schema_version. Created when the spec is bootstrapped, not when the workspace is registered into a Campaign. |
@@ -718,7 +722,7 @@ The spec artifacts are not duplicated into this store beyond the `SpecRef` summa
 - Agent memory: configure which memory backend a workspace uses and its scope; the harness drives `recall` and `consolidate` internally per section 8.6. There is no agent-facing memory-write API; learnings land only through the harness's session-end `consolidate`.
 - Grounding read (debug): fetch the prompt assembled for a given turn, and the pinned Context and memory revisions in effect.
 - Agents: start with a specialist role and actor capability; send a follow-up; stop; fork; subscribe to the event stream.
-- Orchestration: start a Planner on a PRD; approve or amend a drafted spec; hand off to the Coordinator for execution; query subtask and verification status.
+- Orchestration: start a Planner on a PRD; approve a drafted spec or return it to the Planner with feedback for revision; hand off to the Coordinator for execution; query subtask and verification status.
 - Activity: subscribe to or page through the event stream, including `spec_patch`, `context_pin`, and `memory_pin` events.
 - Config: set global and per-workspace providers, models, attached Contexts and pin mode, the memory backend and scope, the issue-tracker and web-search backends, setup scripts, and spec root.
 
@@ -757,7 +761,8 @@ From grounding: a Context's pinned revision is immutable for the duration of a r
 | Ralph | An autonomous loop specialist that operates outside the spec package. Takes a goal, a verifier command, and optional Contexts; iterates until the verifier passes or a circuit breaker fires; delivers a branch. |
 | Planner | The agent actor that drafts the JSON artifacts from PRD input while the spec is in `draft`; hands off on approval. |
 | Coordinator | The agent actor that drives execution after the spec is approved: delegates subtasks, monitors state, triggers verification. |
-| Archetype | An agent actor that executes a subtask and may transition only its own subtask's state. |
+| Archetype | An agent actor that executes a subtask and may transition only its own subtask's state (to `awaiting_verification` on completion). |
+| Awaiting verification | The subtask state an Implementor sets on completion; the harness moves it to `done` after verification passes or to `pending_reevaluation` on failure. |
 | Actor capability | The permission tier (Operator, Planner, Coordinator, Archetype) a specialist carries. |
 | Specialist | A named agent role: prompt, tool policy, model tier, behavior, and actor capability. |
 | Intent hash | SHA-256 of the PRD Intent section, set at draft-to-active and protected thereafter. |
