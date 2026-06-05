@@ -227,7 +227,7 @@ Architectural detail has an explicit, optional home in `architecture.md`. The ha
 | `prd.md` | Markdown + YAML frontmatter | yes | Operator (human) | Narrative intent, goals, non-goals, background; machine-read frontmatter and Intent. |
 | `requirements.json` | Schema-validated JSON | yes | Planner (Operator reviews) | EARS acceptance criteria, correctness properties, execution paths, error handling. |
 | `test_spec.json` | Schema-validated JSON | yes | Planner | Test cases, property tests, edge-case tests, smoke tests, computed coverage. |
-| `tasks.json` | Schema-validated JSON | yes | Planner (planning, Operator reviews); Archetype (own subtask state only) | Task groups, subtasks, dependencies, traceability. |
+| `tasks.json` | Schema-validated JSON | yes | Planner (Operator reviews) | Task groups, subtasks, dependencies, traceability. |
 | `architecture.md` | Free-form markdown | no | Operator and Planner | Module and interface design. No schema, not cross-validated. |
 
 The PRD is the only artifact authored primarily by humans; its `## Intent` section is hashed at the `draft` to `active` transition and protected thereafter (section 7.6). `architecture.md` is outside validation: the harness checks only that it exists when referenced, and never parses its content.
@@ -255,7 +255,8 @@ Subtask state is a fixed machine:
 | --- | --- | --- |
 | `pending` | Not started | `queued`, `dropped` |
 | `queued` | Selected for dispatch | `in_progress`, `pending`, `dropped` |
-| `in_progress` | An archetype is executing it | `done`, `pending_reevaluation` |
+| `in_progress` | An archetype is executing it | `awaiting_verification` |
+| `awaiting_verification` | Implementation complete; queued for verification | `done`, `pending_reevaluation` |
 | `done` | Verification passed | `pending_reevaluation` |
 | `pending_reevaluation` | Verification failed; needs rework or review | `pending`, `dropped` |
 | `dropped` | Removed with explicit rationale | terminal |
@@ -297,7 +298,7 @@ A spec is authored once and is not changed after that. The Planner composes the 
 
 Authoring writes happen only in `draft`. The Planner composes the package as a unit and validates it whole: a requirement, its test, and its task are present together before the spec can leave `draft`, rather than arriving as a stream of post-hoc patches. The schema and cross-file integrity checks (section 7.8) run on the draft and must pass for the spec to become `active`. Within `draft`, writes are still expressed as RFC 6902 JSON Patches validated against each artifact's schema, so the authoring path keeps the same validation guarantees; what goes away is any post-freeze mutation path.
 
-Execution state is not spec state. The one thing that legitimately changes during a run — a subtask moving from `pending` to `in_progress` to `done` — is progress against a fixed plan, not a change to the plan. That state lives in the harness operational store (section 11), keyed by spec and subtask; the frozen `tasks.json` is never rewritten to record it. Run IDs, agent assignments, and subtask `state` all live in the operational store, so the artifact stays purely declarative.
+Execution state is not spec state. The one thing that legitimately changes during a run — a subtask moving from `pending` through `in_progress` and `awaiting_verification` to `done` — is progress against a fixed plan, not a change to the plan. That state lives in the harness operational store (section 11), keyed by spec and subtask; the frozen `tasks.json` is never rewritten to record it. Run IDs, agent assignments, and subtask `state` all live in the operational store, so the artifact stays purely declarative.
 
 Write authority reduces accordingly:
 
@@ -420,7 +421,7 @@ A specialist is a role: a system prompt, a tool policy, a model tier, and a beha
 | Planner     | Planner               | Drafts the requirements, test spec, and task plan from the PRD while the spec is in `draft`; hands off to the Coordinator on approval. |
 | Coordinator | Coordinator           | Delegates subtasks to Implementors, reads execution state, triggers verification, and reports ready for review.               |
 | Implementor | Archetype             | Implements one assigned subtask; transitions only that subtask's state.                                                       |
-| Verifier    | Archetype             | Runs a group's verification subtask and the wiring verification; sets its own verification subtask's state and reports pass or fail, leaving the harness to apply any bounce-back to implementation subtasks.                      |
+| Verifier    | Archetype             | Runs a group's verification checks and the wiring verification; reports pass or fail, with outcomes recorded in the operational store (section 9.5). The harness applies any bounce-back to implementation subtasks. |
 | UI Designer | Archetype             | Builds and visually checks interfaces for assigned subtasks.                                                                  |
 | Ralph       | n/a                               | Runs an autonomous loop against a goal and verifier, outside the spec package. Uses the harness infrastructure (workspace, worktree, Contexts, tools) but bypasses spec authoring and the actor capability model entirely. |
 | PR Reviewer | Archetype             | Reviews a pull request and gives feedback.                                                                                    |
@@ -651,11 +652,11 @@ This is the dynamic answer to the shared-worktree concurrency question. Static d
 
 ### 9.4 Subtask delegation and state
 
-When the Coordinator delegates, the harness records the assignment in its operational store (not in `tasks.json`) and starts the worker with the subtask as its primary prompt and the attached Contexts as grounding. The worker transitions its subtask state as it progresses. The Coordinator reads subtask state rather than watching the worker's stream, and triggers verification when a subtask reports `done`.
+When the Coordinator delegates, the harness records the assignment in its operational store (not in `tasks.json`) and starts the worker with the subtask as its primary prompt and the attached Contexts as grounding. The worker transitions its subtask state as it progresses, ending at `awaiting_verification` when implementation is complete. The Coordinator reads subtask state rather than watching the worker's stream, and triggers verification when a subtask reports `awaiting_verification`.
 
 ### 9.5 Verification gate
 
-A subtask is not done because an Implementor says so. The Verifier runs the group's verification subtask checks and, at the end, the wiring verification group: tracing each execution path through production code, confirming return-value propagation, running smoke tests with real components, and auditing for unreplaced stubs. On a failure the harness transitions the affected implementation subtask to `pending_reevaluation` or back toward `pending`, with the Verifier's notes attached. The Verifier sets only its own verification subtask's state; bouncing another agent's subtask is the harness's action, which keeps the Archetype's "own subtask only" rule intact. Only when the wiring verification passes does the work roll up to "ready for review."
+An Implementor signals completion by moving its subtask to `awaiting_verification`, not to `done`. The Verifier then runs the group's verification subtask checks and, at the end, the wiring verification group: tracing each execution path through production code, confirming return-value propagation, running smoke tests with real components, and auditing for unreplaced stubs. On success the harness transitions the implementation subtask from `awaiting_verification` to `done`. On failure the harness transitions it to `pending_reevaluation` or back toward `pending`, with the Verifier's notes attached. The Verifier reports pass or fail per check; the harness records these outcomes in the operational store. This is a deliberate extension: the format spec's verification subtask schema carries only `id` and `checks` with no `state` field, so verification outcomes are operational data tracked by the harness, not artifact state. Transitioning implementation subtasks on a failure is likewise the harness's action, which keeps the Archetype's "own subtask only" rule intact. Only when the wiring verification passes does the work roll up to "ready for review."
 
 ---
 
