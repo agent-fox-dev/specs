@@ -173,7 +173,7 @@ Each Campaign has a short human-authored goal document: a title, a description o
 
 ### 6.3 The dependency graph
 
-Dependencies between specs in a Campaign are declared at task-group granularity, reusing the `depends_on_spec` / `from_group` / `to_group` structure already in `tasks.json`. The Campaign stores these edges centrally so the harness can evaluate the graph without reading every spec's `tasks.json`. Because a downstream spec is often registered before it is planned, its `to_group` may be unknown at registration; the edge then targets the downstream spec as a whole, recorded as a `to_group` sentinel of `0` (the mirror of the format spec's `from_group: 0` for an unplanned upstream), and resolves to a concrete group once that spec's `tasks.json` exists. Until then the harness gates the whole downstream workspace on the edge.
+Dependencies between specs in a Campaign are declared at task-group granularity, reusing the `depends_on_spec` / `from_group` / `to_group` field names from `tasks.json`. The Campaign stores these edges centrally in the `CampaignMember` record (section 11), which is canonical; they are not duplicated into any spec's `tasks.json`. This lets the harness evaluate the graph without reading every spec's artifacts, and lets edges be registered before a downstream spec's `tasks.json` exists. Because a downstream spec is often registered before it is planned, its `to_group` may be unknown at registration; the edge then targets the downstream spec as a whole, recorded as a `to_group` of `0`. This is a harness-level extension — the format spec defines `from_group: 0` with an associated `sentinel` flag for unplanned upstreams, but has no corresponding `to_group: 0` — so the sentinel lives only in the Campaign store, not in any artifact. The edge resolves to a concrete group once that spec's `tasks.json` exists. Until then the harness gates the whole downstream workspace on the edge.
 
 An edge reads: "spec B's workspace may not activate until spec A's task group N is complete." "Complete" means the group's own verification subtask `{N}.V` has passed, not just the individual subtask states within it. This reuses the existing definition of group completion rather than inventing a new one.
 
@@ -191,7 +191,9 @@ A Campaign starts `active` when the human creates it with its goal document and 
 
 ### 6.5 Workspace activation
 
-When the harness detects that a spec's dependencies are satisfied, it transitions that spec's workspace from `Created` to `Active` automatically and notifies the Operator. The Operator then authors a PRD for that spec (informed by what the upstream work produced) and hands it to a Planner, continuing the normal single-spec flow from there.
+A campaign-gated workspace defers bootstrap until its dependency gate clears. Section 5.3 defines `Created → Active` as triggered by bootstrap success, and that remains true: the difference is when bootstrap runs. For an ungated workspace, bootstrap runs immediately at creation. For a gated workspace, the harness holds it in `Created` without bootstrapping; once the harness detects that all upstream dependencies are satisfied, it runs bootstrap, and the normal `Created → Active` (on success) or `Created → Failed` (on error) transition follows. This avoids a race between two triggers for the same transition.
+
+On activation the harness notifies the Operator, who then authors a PRD for that spec (informed by what the upstream work produced) and hands it to a Planner, continuing the normal single-spec flow from there. The harness subscribes to `status_change` activity events from each member workspace (section 11) to detect when an upstream group's verification subtask passes; that is the signal that clears the dependency edge and potentially unblocks downstream workspaces.
 
 The harness does not author PRDs or make planning decisions across specs. Cross-spec intelligence stays with the human. The harness's job is to watch the dependency graph and signal when a workspace is unblocked.
 
@@ -306,7 +308,7 @@ Write authority reduces accordingly:
 | --- | --- | --- | --- | --- |
 | `prd.md` body and Intent, `draft` only | write | — | — | — |
 | `requirements.json`, `test_spec.json`, `tasks.json`, `draft` only | review | author | — | — |
-| `architecture.md`, any time, not validated | write | write | — | — |
+| `architecture.md`, any time, not validated | write | write (`draft` only) | — | — |
 | Any frozen artifact, `active` and later | — | — | — | — |
 | Subtask execution state, operational store | — | — | read | own subtask only |
 
@@ -343,7 +345,7 @@ Grounding is the second layer of input attached to a workspace, distinct from th
 
 **Sources are typed, and every source declares two contracts the harness acts on:**
 
-- *Resolution strategy* — `pinned` or `retrieved`. A pinned source is materialized in full and included in the assembled prompt on every turn. A retrieved source is indexed and only the chunks relevant to the current turn are pulled in, reached through a tool rather than injected. This is the mechanism section 8.3 needs to decide what enters the prompt versus what stays tool-reachable.
+- *Resolution strategy* — `pinned` or `retrieved`. A pinned source is materialized in full and included in the assembled prompt on every turn. A retrieved source is indexed and only the chunks relevant to the current turn are pulled in, reached through a tool rather than injected. This is the mechanism that lets section 8.3 decide what enters the prompt versus what stays tool-reachable.
 - *Freshness contract* — `snapshot` or `live`. A snapshot source is captured at a revision and does not change. A live source tracks its origin and re-resolves when the origin changes.
 
 | Source type | Default resolution | Default freshness | Notes |
@@ -429,6 +431,8 @@ A specialist is a role: a system prompt, a tool policy, a model tier, and a beha
 
 The Operator capability is reserved for the human caller: only the Operator writes the PRD body and the hashed Intent. No agent holds Operator capability.
 
+The format spec's actor model defines three tiers — Operator, Coordinator, and Archetype — with the Coordinator defined as the role that drafts and mutates JSON artifacts. This harness splits that role into two: a Planner (who authors the artifacts during `draft`) and a Coordinator (who drives execution after the spec is approved), adding a fourth tier. The split does not contradict the format spec's field semantics: the format spec's `actor` field values remain valid, and the Planner maps to the format's Coordinator for artifact-write purposes. The harness enforces narrower permissions on each half (Planner writes only during `draft`; Coordinator reads only during execution) as a stricter operating policy, the same pattern as the freeze in section 7.7.
+
 Because both a specialist role and an attached Context carry directive text, the harness composes them in a fixed order, and the order matters. The specialist role says *what kind of agent* this is (its behavior and its actor capability); a Context instruction says *what domain it is grounded in*. They compose as: harness policy, then the actor-capability constraints, then Context instructions, then any task-level instruction. A Context instruction can narrow behavior within a domain but never widens an agent's actor permissions — a Context cannot turn an Archetype into something that writes requirements. When more than one Context is attached, the order in which their instructions compose is an open design decision (attachment order, explicit priority, or another rule).
 
 ### 8.5 Tools available to agents
@@ -446,7 +450,7 @@ Tools are the agent's only way to affect the world.
 | MCP call             | Invokes a tool exposed by an MCP server that is a capability source of an attached Context.                  | Availability follows the attached Contexts, not a separate mechanism.                                                                                                      |
 | Git                  | Stages, commits, opens a PR, reads PR and CI status.                                                         | Commits land on the workspace branch only.                                                                                                                                 |
 | Issue tracker        | Reads, searches, creates, comments on, and updates issues through a generic, tracker-agnostic interface (defined below). | Backend-agnostic; writes are external side effects scoped to the workspace's configured project. Distinct from a linked-issue grounding source, which is read-only background. |
-| Web search           | Discovers and reads public web content through a generic, provider-agnostic search service: `search` for ranked results, `fetch` for a result's readable text. | Read-only; queries and results land in the activity log. Always live — results are not pinned across runs. All returned content is treated as untrusted data and never as instructions; the harness enforces this through structure, not prompt wording (section 8.5). Interactive pages route through Browser control. |
+| Web search           | Discovers and reads public web content through a generic, provider-agnostic search service: `search` for ranked results, `fetch` for a result's readable text. | Read-only; queries and results land in the activity log. Always live — results are not pinned across runs. All returned content is treated as untrusted data and never as instructions; the harness enforces this through structure, not prompt wording (see the "Untrusted external content" paragraph below). Interactive pages route through Browser control. |
 
 A few constraints are worth drawing out. The MCP-call tool is not a parallel mechanism; its availability flows from the attached Contexts. There is no spec-write tool and no Context-write tool in the runtime toolset: an active spec is frozen and authored only during `draft` through the orchestration surface (sections 7.7 and 12), and a Context is read-only and edited only by the Operator outside a run (section 7.10). Memory has the same shape, a read tool but no write tool, because it is written once per session by the harness rather than by the agent mid-turn (section 8.6). A worker running against an active spec affects the world through code, commands, commits, issues, and grounding reads, never by rewriting the contract it works against.
 
@@ -656,7 +660,7 @@ When the Coordinator delegates, the harness records the assignment in its operat
 
 ### 9.5 Verification gate
 
-An Implementor signals completion by moving its subtask to `awaiting_verification`, not to `done`. The Verifier then runs the group's verification subtask checks and, at the end, the wiring verification group: tracing each execution path through production code, confirming return-value propagation, running smoke tests with real components, and auditing for unreplaced stubs. On success the harness transitions the implementation subtask from `awaiting_verification` to `done`. On failure the harness transitions it to `pending_reevaluation` or back toward `pending`, with the Verifier's notes attached. The Verifier reports pass or fail per check; the harness records these outcomes in the operational store. This is a deliberate extension: the format spec's verification subtask schema carries only `id` and `checks` with no `state` field, so verification outcomes are operational data tracked by the harness, not artifact state. Transitioning implementation subtasks on a failure is likewise the harness's action, which keeps the Archetype's "own subtask only" rule intact. Only when the wiring verification passes does the work roll up to "ready for review."
+An Implementor signals completion by moving its subtask to `awaiting_verification`, not to `done`. The Verifier then runs the group's verification subtask checks and, at the end, the wiring verification group: tracing each execution path through production code, confirming return-value propagation, running smoke tests with real components, and auditing for unreplaced stubs. On success the harness transitions the implementation subtask from `awaiting_verification` to `done`. On failure the harness transitions it to `pending_reevaluation` (and from there to `pending` if rework is needed — the two-hop path through the state machine, never a direct jump), with the Verifier's notes attached. The Verifier reports pass or fail per check; the harness records these outcomes in the operational store. This is a deliberate extension: the format spec's verification subtask schema carries only `id` and `checks` with no `state` field, so verification outcomes are operational data tracked by the harness, not artifact state. Transitioning implementation subtasks on a failure is likewise the harness's action, which keeps the Archetype's "own subtask only" rule intact. Only when the wiring verification passes does the work roll up to "ready for review."
 
 ---
 
@@ -674,6 +678,8 @@ An Implementor signals completion by moving its subtask to `awaiting_verificatio
 
 **Superseding a spec.** A new spec sets `supersedes` to the prior spec's ID. The harness applies a deprecation banner to the superseded spec's PRD, transitions it to `superseded`, and moves its folder to the archive. No work is lost.
 
+**Superseding mid-flight.** The verification loop in section 9.5 bounces subtasks to `pending_reevaluation` or `pending`, which re-runs the same frozen plan. When the plan itself is wrong — a requirement is incorrect, not just unmet — re-running cannot converge and the loop is unproductive. The escape is an Operator-initiated supersede. When the Operator supersedes an `active` spec, the harness stops all running agents in the workspace, transitions every in-progress or awaiting-verification subtask to `dropped` with the rationale "spec superseded," commits any partial work on the branch, and transitions the spec to `superseded`. The workspace stays `Active`; the Operator authors a corrective PRD and a Planner drafts the replacement spec in a new spec directory, inheriting the same workspace and branch so partial commits carry forward. The superseding spec's `tasks.json` may reference completed work from the prior spec's branch rather than re-implementing from scratch. This is the only modeled escape from "the frozen plan is wrong," and the Operator must recognize and initiate it — the harness does not detect requirement defects on its own.
+
 ---
 
 ## 11. Data model and persistence
@@ -684,9 +690,9 @@ The harness persists per-workspace state so a process restart resumes cleanly. T
 | --- | --- |
 | Workspace | id, name, status, origin, branch, worktree path, base branch, remote, spec_root path, campaign_id (nullable), timestamps. |
 | Campaign | id, name, status, goal document, shared context ids, timestamps. (Optional; lives above workspaces.) |
-| CampaignMember | campaign id, workspace id, spec_id, dependency edges (depends_on_spec, from_group, to_group). |
+| CampaignMember | campaign id, workspace id, spec_id (nullable), dependency edges (depends_on_spec, from_group, to_group). A registered-but-unplanned spec has a workspace and dependency edges but no spec_id until the Operator authors a PRD and the harness bootstraps the spec artifacts. |
 | WorkspaceConfig | workspace id, setup scripts, default provider, default model, spec_root location. |
-| SpecRef | workspace id, spec_id, spec_name, status, intent_hash, schema_version. |
+| SpecRef | workspace id, spec_id, spec_name, status, intent_hash (nullable in `draft`), schema_version. Created when the spec is bootstrapped, not when the workspace is registered into a Campaign. |
 | Context | id, name, owner principal, access policy, instruction, current revision, timestamps. (Lives in the Context store, not per workspace.) |
 | Source | id, context id, type, locator, resolution strategy, freshness contract, revision. |
 | ContextAttachment | workspace id, context id, pinned revision, pin mode (pinned/live). |
