@@ -993,6 +993,68 @@ The full runtime layer specification is in a separate document (`docs/runtime-la
 
 ---
 
+## 15. Services architecture
+
+The coordination layer (sections 5-12) and the runtime layer (section 14) need concrete services to run. This section identifies the deployable components, their responsibilities, and how they compose. The design is local-first: everything runs on one machine as a set of cooperating processes. Remote execution, multi-user hosting, and web dashboards are future options that the architecture accommodates but does not require.
+
+### 15.1 Deployable components
+
+Five components make up a running Telos installation:
+
+| Component | What it is | Responsibility |
+| --- | --- | --- |
+| **Telos daemon** | A long-running host process. | Owns the three stores (spec, Context, operational), manages runs, enforces the spec lifecycle and subtask state machine, performs prompt assembly, drives agent memory recall/consolidate, serves the coordination API, and emits the activity log. The MCP bridge inside each agent container connects to this daemon. |
+| **Telos CLI** | A command-line interface on the host. | The Operator's primary surface. Drives the daemon's API: workspace CRUD, spec authoring and lifecycle, Context management, run control, agent operations, Campaign management, and observability queries. Wraps the runtime CLI for agent lifecycle commands. |
+| **Runtime engine** | The runtime layer (section 14) running on the host. | Container lifecycle, worktree management, harness adapters, template hydration, sidecar orchestration. Driven by the daemon, not by the Operator directly. |
+| **Telos MCP bridge** | A sidecar process inside each agent container. | Exposes Telos tools (spec read, Context search, memory recall, subtask state, file claims) as MCP tools to the harness. Stateless proxy to the daemon. One instance per running agent. |
+| **Memory service** | A pluggable backend, in-process or standalone. | Owns agent memory storage, retrieval, and distillation. Driven by the daemon through the `recall`/`consolidate` interface (section 8.6). May run embedded in the daemon (SQLite/local) or as an independent service (for shared or scaled deployments). |
+
+### 15.2 How they compose
+
+```
+Operator ──► Telos CLI ──► Telos daemon ──► Runtime engine
+                               │                  │
+                               │            ┌─────▼──────┐
+                               │            │ Container   │
+                               │            │  ┌────────┐ │
+                               ◄── gRPC ────┤  │MCP     │ │
+                               │            │  │bridge  │ │
+                               │            │  └────────┘ │
+                               │            │  ┌────────┐ │
+                               │            │  │Harness │ │
+                               │            │  └────────┘ │
+                               │            └────────────┘
+                               │
+                               ▼
+                          Memory service
+```
+
+The daemon is the only stateful host-side process. The CLI is stateless and talks to the daemon. The runtime engine is a library the daemon calls, not a separate process. The MCP bridge connects inward to the daemon over gRPC. The memory service is the one component whose deployment model is open (embedded vs. standalone).
+
+### 15.3 Storage
+
+| Store | Content | Default backend | Notes |
+| --- | --- | --- | --- |
+| Spec store | Spec artifacts (prd.md, requirements.json, test_spec.json, tasks.json, architecture.md) | Filesystem (structured directory tree under `~/.telos/specs/`) | Keyed by workspace and spec id. The artifacts are files; the directory layout is the store. |
+| Context store | Context metadata, source descriptors, instruction text, revisions | SQLite (embedded in daemon) | Contexts are lightweight metadata; large source content (repos, blobs) is referenced by locator, not stored inline. |
+| Operational store | Workspaces, campaigns, runs, agents, subtask execution, verification outcomes, file claims, messages, activity events | SQLite (embedded in daemon) | Single-file database. The activity log is append-only and may grow large; it can be rotated to a separate file or external sink. |
+| Memory store | Agent learnings, recall indices | Pluggable (SQLite default, or external service) | The memory service owns this; the daemon delegates through the `AgentMemory` interface. |
+
+SQLite is the default for local-first simplicity: one process, one file, no external dependencies. The daemon owns the database connection and serializes writes. For deployments that need concurrency or scale, the storage backend can be swapped to PostgreSQL behind the same interfaces.
+
+### 15.4 What is deferred
+
+These components are architecturally anticipated but out of scope for the initial implementation:
+
+- **Web dashboard.** A read-only (initially) web surface for watching runs, browsing specs, and reviewing activity logs. The daemon's API is HTTP-capable; a dashboard is a frontend against it.
+- **Remote daemon / Hub.** Running the daemon on a remote machine and connecting the CLI and MCP bridges over the network. The gRPC interface already supports this; what's missing is auth, TLS, and multi-tenant isolation.
+- **Context retrieval engine.** Indexing and vector-search over "retrieved" Context sources. The `retrieved` resolution strategy is defined (section 7.10) but the engine behind it is out of scope. Until built, all sources must be `pinned`.
+- **CI/CD bridge.** An adapter that lets the Verifier and PR Shepherd query CI pipeline status (GitHub Actions, GitLab CI, etc.). Same pluggable-adapter pattern as the issue tracker and web search.
+
+The full services architecture specification is in a separate document (`docs/services-architecture.md`).
+
+---
+
 ## Appendix A: terminology
 
 | Term | Meaning in this document |
@@ -1024,4 +1086,7 @@ The full runtime layer specification is in a separate document (`docs/runtime-la
 | Harness adapter | A runtime-layer adapter that integrates a specific provider (Claude Code, Gemini CLI, etc.) into the runtime, handling provisioning, command construction, and auth. |
 | Template | A blueprint for agent configuration: system prompt, MCP servers, env vars, harness selection, and home directory content. Specialists map to templates. |
 | Telos MCP bridge | A sidecar MCP server inside each agent container that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. |
+| Telos daemon | The long-running host process that owns the three stores, manages runs, enforces the spec lifecycle, serves the coordination API, and receives MCP bridge connections from agent containers. |
+| Telos CLI | The Operator's command-line interface. Stateless; drives the daemon's API. |
+| Memory service | The pluggable backend for agent memory (recall/consolidate). May run embedded in the daemon or as a standalone service. |
 | Activity log | Append-only, ordered event stream, including spec-authoring patches, Context- and memory-pin events, and file-claim events. |
