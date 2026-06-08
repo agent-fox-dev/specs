@@ -13,7 +13,7 @@ stops, and recovers.
 ## 1. Design principles
 
 1. **Local-first.** The default deployment is everything on one machine: one
-   daemon process, one SQLite database, containers on the local Docker. No
+   daemon process, one SQLite database, containers on local Podman. No
    network services, no cloud dependencies, no accounts.
 
 2. **Single stateful process.** The daemon owns all mutable state. The CLI,
@@ -211,7 +211,7 @@ embedded in the daemon, not as a separate process. The daemon calls it to
 create containers, start agents, manage worktrees, and orchestrate sidecars.
 
 This means the daemon process is the only thing the Operator needs to start.
-The container runtime (Docker, Podman) must be available on the host, but
+The container runtime (Podman) must be available on the host, but
 the Operator interacts with it only through the Telos CLI, never directly.
 
 ### 4.1 Runtime lifecycle within the daemon
@@ -238,7 +238,7 @@ The bridge connects to the daemon's bridge port (`localhost:7400` by default)
 on startup. The connection parameters are injected via environment variables:
 
 ```
-TELOS_DAEMON_HOST=host.docker.internal
+TELOS_DAEMON_HOST=host.containers.internal
 TELOS_DAEMON_PORT=7400
 TELOS_AGENT_TOKEN=<jwt>
 TELOS_WORKSPACE_ID=<uuid>
@@ -492,7 +492,7 @@ is localhost-only by default. No authentication is needed for the CLI socket
 
 ### 10.1 Local (default)
 
-Everything on one machine. Docker (or Podman) for containers. SQLite for
+Everything on one machine. Podman for containers. SQLite for
 storage. Embedded memory service. The Operator runs `telos daemon start` and
 uses the CLI.
 

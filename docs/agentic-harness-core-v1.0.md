@@ -987,7 +987,7 @@ The coordination layer (sections 5-12) drives the runtime but does not reach ins
 | The Telos MCP bridge logic | Container, env, and credential isolation |
 | Specialist → template mapping | Template hydration and harness provisioning |
 
-The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the Telos MCP sidecar. The coordination layer does not know or care whether the agent runs in Docker, Podman, or a Kubernetes pod.
+The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the Telos MCP sidecar. The coordination layer does not know or care whether the agent runs in a local Podman container or a Kubernetes pod.
 
 The full runtime layer specification is in a separate document (`docs/runtime-layer.md`).
 

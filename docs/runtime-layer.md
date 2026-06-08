@@ -31,9 +31,9 @@ adapted to our requirements.
    inject configuration. The runtime never calls back into the coordination
    layer — the Telos MCP bridge handles that direction (section 8).
 
-5. **Portable across container runtimes.** Docker is the default. Podman and
-   other OCI-compatible runtimes are supported through a container runtime
-   interface. Kubernetes support is a future option, not a launch requirement.
+5. **Portable across container runtimes.** Podman (rootless) is the default.
+   Kubernetes is supported through the same container runtime interface.
+   Other OCI-compatible runtimes can be added by implementing the interface.
 
 ---
 
@@ -78,21 +78,17 @@ type ContainerState = {
 }
 ```
 
-### 2.1 Docker adapter
+### 2.1 Podman adapter
 
-The default. Uses the Docker Engine API (or CLI as fallback) to create, start,
-stop, and remove containers. Mounts are bind mounts. The agent's worktree is
-mounted at `/workspace`. The agent's home directory is mounted at a
-configurable path (default `/home/agent`). Shadow mounts (tmpfs) prevent
-access to `.telos` configuration and sibling worktrees.
+The default. Uses the Podman socket API to create, start, stop, and remove
+containers. Rootless by default — agents run without root privileges on the
+host, which limits the blast radius of a container escape. Mounts are bind
+mounts. The agent's worktree is mounted at `/workspace`. The agent's home
+directory is mounted at a configurable path (default `/home/agent`). Shadow
+mounts (tmpfs) prevent access to `.telos` configuration and sibling
+worktrees.
 
-### 2.2 Podman adapter
-
-Same interface, targeting the Podman socket. Rootless by default. Behavioral
-differences from Docker (cgroup handling, network namespacing) are absorbed
-by the adapter.
-
-### 2.3 Future: Kubernetes adapter
+### 2.2 Kubernetes adapter
 
 Runs agents as Pods. Each agent is a Pod with the harness as the main
 container and sidecars (including the Telos MCP bridge) as additional
@@ -587,7 +583,7 @@ over the network.
 ```yaml
 # ~/.telos/settings.yaml
 runtime:
-  backend: docker              # docker | podman
+  backend: podman              # podman | kubernetes
   image: telos/agent:latest    # default base image
 
 defaults:
