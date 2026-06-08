@@ -839,20 +839,112 @@ The `ActivityEvent` stream is the recovery backbone. Because it records every sp
 
 ## 12. Harness public surface
 
-- Campaign (optional): create with a goal document and optional shared Contexts; register a workspace into a campaign with dependency edges; query campaign status and the dependency graph; abandon.
-- Workspace: create (with the set of Contexts to attach and their pin mode), get, list, archive, delete; read files, diffs, git status; run and observe bootstrap.
-- Spec lifecycle: create a spec (bootstrap the four files), get the next spec number, transition status, read `intent_hash` and lifecycle state.
-- Spec authoring (`draft` only): apply a validated JSON Patch, single or atomic multi-file; the harness runs schema validation, cross-file integrity, and the actor-permission check inside one transaction, repairing near-misses or returning a proposed patch before the commit gate (section 7.8). Available only while the spec is in `draft`; an active spec is frozen (section 7.7).
-- Spec read and render: fetch any artifact as JSON or markdown from the spec store; fetch the combined render; fetch coverage and traceability; run standalone `validate()`. This is the same data the spec-read tool (section 7.11) exposes to agents at runtime.
-- Contexts (Operator-facing, outside a run): create, get, list a Context; add and remove sources; set the instruction; set ownership and access; cut a new revision. Attach a Context to a workspace with a pin (revision plus pin mode); detach. There is no API by which an agent mutates a Context; Context edits are Operator actions.
-- Agent memory: configure which memory backend a workspace uses and its scope; the harness drives `recall` and `consolidate` internally per section 8.6. There is no agent-facing memory-write API; learnings land only through the harness's session-end `consolidate`.
-- Grounding read (debug): fetch the prompt assembled for a given turn, and the pinned Context and memory revisions in effect.
-- Agents: start with a specialist role and actor capability; send a follow-up; stop; fork; subscribe to the event stream.
-- Orchestration: start a Planner on a PRD; approve a drafted spec or return it to the Planner with feedback for revision; hand off to the Coordinator for execution; query subtask and verification status.
-- Activity: subscribe to or page through the event stream, including `spec_patch`, `context_pin`, and `memory_pin` events.
-- Config: set global and per-workspace providers, models, attached Contexts and pin mode, the memory backend and scope, the issue-tracker and web-search backends, and setup scripts.
+The API is split by audience. **Operator-facing** operations are for the human caller and whatever surface (CLI, web, IDE) wraps the harness. **Agent-facing** operations are exposed to agents as tools during a run. **Observability** operations are available to both. The API is transport-neutral at the core, with a thin server wrapper if a remote surface needs one.
 
-The API stays transport-neutral at the core, with a thin server wrapper if a remote surface needs one.
+### 12.1 Operator-facing API
+
+**Workspace.**
+
+- Create: supply an origin (local repo path, clone URL, or empty), owner principal, Contexts to attach with pin mode per Context, and optionally a Campaign to register into with dependency edges. The harness provisions the branch and worktree and runs bootstrap (section 5.7).
+- Get, list (filterable by status, campaign, owner).
+- Archive, reopen, delete. All Operator-initiated; the harness does not auto-archive or auto-delete (section 5.7).
+- Read worktree: file listing, file contents, git status, per-file diffs.
+- Managed scripts: list active scripts in a workspace; stop a script by id.
+
+**Campaign (optional).**
+
+- Create with a goal document and optional shared Contexts.
+- Register a workspace into a Campaign with dependency edges (`depends_on_spec`, `from_group`, `to_group`).
+- Query campaign status, the dependency graph, and which workspaces are blocked or unblocked.
+- Abandon.
+
+**Spec lifecycle.**
+
+- Create a spec (bootstrap the four artifacts in the spec store), get the next spec id.
+- Transition status: `draft` to `active` (freezes the package, hashes Intent); `active` to `sealed`; `active` or `sealed` to `superseded` (section 10.3).
+- Supersede: supply the new spec's `supersedes` pointer. For mid-flight supersession the harness stops running agents, drops in-flight subtasks, commits partial work, and transitions the spec (section 10.3).
+- Read `intent_hash` and lifecycle state.
+
+**Spec authoring (`draft` only).**
+
+- Apply a validated JSON Patch, single artifact or atomic multi-artifact. The harness runs schema validation, cross-artifact integrity, and the actor-permission check inside one transaction, repairing near-misses or returning a proposed patch before the commit gate (section 7.8).
+- Available only while the spec is in `draft`; an active spec is frozen (section 7.7). The Planner is the primary consumer; the Operator uses it for PRD and `architecture.md` edits.
+
+**Spec read and render.**
+
+- Fetch any artifact as JSON or markdown from the spec store; fetch the combined rendered view; fetch coverage and traceability; run standalone `validate()`.
+- This is the same data the spec-read tool (section 7.11) exposes to agents at runtime; the Operator-facing and agent-facing read paths share one implementation.
+
+**Contexts.**
+
+- Create, get, list Contexts. Add and remove sources; set the instruction; set ownership and access policy; cut a new revision.
+- Attach a Context to a workspace with a pin (revision plus pin mode); detach.
+- There is no API by which an agent mutates a Context; Context edits are Operator actions (section 7.10).
+
+**Agent memory.**
+
+- Configure which memory backend a workspace uses and its scope.
+- The harness drives `recall` and `consolidate` internally per section 8.6. There is no Operator-facing or agent-facing memory-write API; learnings land only through the harness's session-end `consolidate`.
+
+**Runs.**
+
+- Start a spec-driven run: supply the workspace and spec; the harness creates a Run, pins Context and memory revisions, and starts the Coordinator.
+- Start a Ralph run: supply the workspace, goal statement, verifier command, and optionally circuit breaker overrides (section 8.7). The harness creates a Run and starts the loop.
+- Get run status; list runs for a workspace (filterable by kind, status).
+- Stop a run. The harness stops all agents in the run and commits partial work. For a spec-driven run, in-flight subtasks transition to `dropped`; for Ralph, the circuit-breaker-fired path applies.
+
+**Agents.**
+
+- Start an agent with a specialist role, actor capability, provider, and model within a run.
+- Send a follow-up message; stop; fork from an earlier message.
+- Subscribe to the agent's event stream.
+
+**Orchestration.**
+
+- Start a Planner on a PRD (creates a spec-driven run in authoring mode).
+- Approve a drafted spec, or return it to the Planner with feedback for another drafting cycle within phase 3.
+- Hand off an approved spec to the Coordinator for execution (transitions the run from authoring to execution).
+- Query subtask execution state: per subtask (current state, assigned agent, run id, timestamps) and per group (all subtask states, verification outcome).
+- Query verification outcomes: per check within a verification subtask, with pass/fail and detail.
+- Force re-delegate a subtask in `pending_reevaluation` to `pending` for rework.
+
+**File claims (Operator override).**
+
+- List active claims in a workspace (holder, path/glob, lease expiry).
+- Force-release a claim. This is the Operator escape for stuck or leaked leases; normal claim lifecycle is agent-driven through the file-claim tool (section 9.3).
+
+**Config.**
+
+- Set global and per-workspace defaults: providers, models, attached Contexts and pin mode, memory backend and scope, issue-tracker and web-search backends, setup scripts.
+
+### 12.2 Agent-facing API (tools)
+
+These operations are exposed to agents as tools during a run (section 8.5). They are the agent's only way to interact with the harness and the workspace. Each is scoped to the agent's workspace and governed by its actor capability.
+
+| Tool | Operations | Reference |
+| --- | --- | --- |
+| File read/write | Read and edit files in the worktree. Writes honor file claims. | 8.5, 9.3 |
+| File claim | Claim, renew, release an advisory lease on a file or path. | 9.3 |
+| Exec / script | Run a shell command; long-running commands become managed scripts. | 8.5 |
+| Browser control | Drive a headless browser over CDP: load, screenshot, inspect, click. | 8.5 |
+| Spec read | Fetch spec artifacts, rendered views, traceability, coverage from the spec store. Read-only. | 7.11 |
+| Context search / get | Search retrieved sources; fetch pinned-but-on-demand sources from attached Contexts. Read-only. | 8.5, 7.10 |
+| Memory recall | Search agent memory for relevant learnings. Read-only against the pinned revision. | 8.5, 8.6 |
+| MCP call | Invoke a tool from an MCP server that is a capability source of an attached Context. | 8.5 |
+| Git | Stage, commit, open a PR, read PR and CI status. Commits land on the workspace branch only. | 8.5 |
+| Issue tracker | Read, search, create, comment on, update issues through the tracker-agnostic interface. | 8.5 |
+| Web search | Search and fetch public web content through the provider-agnostic interface. | 8.5 |
+| Subtask state | Transition the agent's own subtask state (to `awaiting_verification` on completion). Archetype-scoped: an agent can only write the subtask it is assigned. | 7.4, 9.4 |
+
+There is no spec-write tool, no Context-write tool, and no memory-write tool. An agent working against an active spec interacts with its contract as a read-only surface.
+
+### 12.3 Observability API
+
+Available to both the Operator and diagnostic tooling. Read-only.
+
+- **Activity stream.** Subscribe to or page through the `ActivityEvent` stream. Filterable by workspace, run, agent, event type, and time range. Event types include `spec_patch`, `context_pin`, `memory_pin`, `verification_outcome`, `loop_iteration`, `loop_complete`, `loop_stopped`, `file_claim`, `commit`, `status_change`, `script_start`, `script_stop`, and agent-level events (`text`, `thinking`, `tool_call`, `tool_result`).
+- **Grounding read (debug).** Fetch the full prompt assembled for a given turn, including the spec slice, Context content, recalled memory, and composed instructions. Fetch the pinned Context and memory revisions in effect for a run.
+- **Run history.** Fetch completed runs for a workspace with their status, duration, circuit breaker state (Ralph), and summary (subtasks completed/failed/dropped for spec-driven runs, iterations and verifier output for Ralph runs).
 
 ---
 
