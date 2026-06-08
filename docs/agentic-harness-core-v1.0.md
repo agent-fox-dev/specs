@@ -61,7 +61,7 @@ The browser and terminal deserve a note. Their *UI* (an overlay console, a previ
 
 ## 4. Domain model
 
-The workspace is the aggregate root. Two structures hang off it: the **spec package** (coordination) and one or more attached **Contexts** (grounding). A Context lives above the workspace and is referenced by it, because a Context is reused across many workspaces; the spec package lives inside the workspace, because it is per task.
+The workspace is the aggregate root. Two structures hang off it: the **spec package** (coordination) and one or more attached **Contexts** (grounding). A Context lives above the workspace in the Context store and is referenced by it, because a Context is reused across many workspaces. The spec package lives in the spec store, keyed by workspace, because it is per task; agents access it through the harness API, not as files in the worktree (section 7.11).
 
 ```mermaid
 graph TD
@@ -766,26 +766,74 @@ No spec is authored, frozen, or sealed. No Planner, Coordinator, or Verifier par
 
 ## 11. Data model and persistence
 
-The harness persists per-workspace state so a process restart resumes cleanly. The spec artifacts persist in the harness's spec store, keyed by workspace and spec id. Contexts persist in a Context store above the workspace, keyed by Context id and revision. The operational store below holds runtime state the artifacts exclude.
+The harness persists state across three stores so a process restart resumes cleanly. Each store serves a distinct purpose and nothing is duplicated between them.
 
-| Entity | Key fields |
-| --- | --- |
-| Workspace | id, name, status, origin, branch, worktree path, base branch, remote, campaign_id (nullable), timestamps. |
-| Campaign | id, name, status, goal document, shared Context ids, timestamps. (Optional; lives above workspaces.) |
-| CampaignMember | campaign id, workspace id, spec_id (nullable), dependency edges (depends_on_spec, from_group, to_group). A registered-but-unplanned spec has a workspace and dependency edges but no spec_id until the Operator authors a PRD and the harness bootstraps the spec artifacts. |
-| WorkspaceConfig | workspace id, setup scripts, default provider, default model. |
-| SpecRef | workspace id, spec_id, spec_name, status, intent_hash (nullable in `draft`), schema_version. Created when the spec is bootstrapped, not when the workspace is registered into a Campaign. |
-| Context | id, name, owner principal, access policy, instruction, current revision, timestamps. (Lives in the Context store, not per workspace.) |
-| Source | id, context id, type, locator, resolution strategy, freshness contract, revision. |
-| ContextAttachment | workspace id, context id, pinned revision, pin mode (pinned/live). |
-| MemoryPin | workspace id, run id, memory scope (principal, namespace), pinned revision. The memory itself lives in the memory store or service, not here; this records only what a run read. |
-| Agent | id, workspace id, specialist role, actor capability, provider, model, state, parent agent id. |
-| SubtaskAssignment | workspace id, spec_id, subtask id, assigned agent id, run id, started_at. |
-| FileClaim | workspace id, file path or glob, holder agent id, run id, acquired_at, lease expiry, state (held / released / expired). Operational store only; in-memory single-process, database-backed across processes, with atomic acquisition. |
-| Message | id, agent id, role, content, parent message id, timestamp. |
-| ActivityEvent | id, workspace id, agent id, type (text, thinking, tool_call, tool_result, spec_patch, context_pin, memory_pin, file_claim, commit, status_change, loop_complete, loop_stopped), payload, timestamp. |
+- **Spec store.** Holds the spec artifacts themselves (the four required JSON/markdown files plus optional `architecture.md`), keyed by workspace and spec id. This is the source of truth for spec content; the operational store carries only a lightweight `SpecRef` summary for lifecycle tracking.
+- **Context store.** Holds Contexts and their sources above the workspace, keyed by Context id and revision. A workspace references a Context through a `ContextAttachment` that records the pinned revision; it never copies Context content into its own store.
+- **Operational store.** Holds everything else: workspace and campaign state, agent and run records, subtask execution state, file claims, conversation history, and the activity log. This is where mutable runtime state lives. Agent memory is external (in the memory store or service); the operational store records only what a run read via `MemoryPin`.
 
-The spec artifacts live in the spec store, keyed by workspace and spec id; the `SpecRef` summary in the operational store carries only the identity and lifecycle state. Contexts are referenced, not copied into the workspace; a `ContextAttachment` records which revision a workspace is pinned to. Agent memory is likewise external and referenced: a `MemoryPin` records the scope and revision a run read, and the consolidated learnings live in the memory store or service. The `ActivityEvent` stream is append-only and ordered: it records the authoring patch behind every spec change as a `spec_patch` event, the pinned Context revisions at run start as a `context_pin` event, and the pinned memory revision as a `memory_pin` event, so the spec's evolution and the run's full grounding are reconstructable.
+### 11.1 Spec store
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| SpecArtifacts | workspace id, spec_id. Contains `prd.md`, `requirements.json`, `test_spec.json`, `tasks.json`, and optionally `architecture.md`. | The canonical form of the spec package. Agents access these through the spec-read tool and prompt assembly (section 7.11), never as files in the worktree. |
+
+### 11.2 Context store
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| Context | id, name, owner principal, access policy, instruction, current revision, timestamps. | Lives above workspaces. Many workspaces may attach the same Context. Edited only by the Operator outside a run (section 7.10). |
+| Source | id, context id, type, locator, resolution strategy (`pinned` / `retrieved`), freshness contract (`snapshot` / `live`), revision. | A typed reference inside a Context. Types include content sources (repository, file, linked PR/issue, uploaded blob, free text) and capability sources (MCP server, skill, rule). |
+
+### 11.3 Operational store
+
+**Workspace and campaign layer.**
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| Workspace | id, name, status, owner principal, origin, branch, worktree path, base branch, remote, campaign_id (nullable), timestamps. | The aggregate root. `owner` is the Operator principal who created the workspace (section 5.7). `status` follows the lifecycle in section 5.3. |
+| WorkspaceConfig | workspace id, setup scripts, default provider, default model. | Per-workspace overrides; anything not set falls back to harness-wide defaults (section 5.6). |
+| Campaign | id, name, status, goal document, shared Context ids, timestamps. | Optional; lives above workspaces. `status` is `active`, `complete`, or `abandoned` (section 6.4). |
+| CampaignMember | campaign id, workspace id, spec_id (nullable), dependency edges (`depends_on_spec`, `from_group`, `to_group`). | A registered-but-unplanned spec has a workspace and dependency edges but no spec_id until the Operator authors a PRD and the harness bootstraps the spec artifacts. `to_group` of `0` is a harness-level sentinel for "downstream spec as a whole" (section 6.3). |
+| ContextAttachment | workspace id, context id, pinned revision, pin mode (`pinned` / `live`), attached_at. | Records which Context revision a workspace is pinned to. The Context itself lives in the Context store. |
+
+**Spec lifecycle layer.**
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| SpecRef | workspace id, spec_id, spec_name, status, intent_hash (nullable in `draft`), schema_version, supersedes (nullable), timestamps. | A lightweight summary of the spec's identity and lifecycle state. The actual artifacts live in the spec store. Created when the spec is bootstrapped, not when the workspace is registered into a Campaign. `supersedes` points to the prior spec_id when this spec replaces another (section 10.3). |
+
+**Run and execution layer.**
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| Run | id, workspace id, spec_id (nullable), kind (`spec_driven` / `ralph`), status (`running` / `completed` / `stopped` / `failed`), started_at, ended_at, circuit breaker state (Ralph only: tokens spent, iterations completed, elapsed duration), timestamps. | The unit of execution. A spec-driven run covers phases 5-6 of the generic flow (section 10.1). A Ralph run covers the goal-and-verifier loop (section 10.4). Pinned Context and memory revisions are recorded per run via `ContextAttachment` and `MemoryPin`. |
+| Agent | id, workspace id, run id, specialist role, actor capability, provider, model, status (`running` / `stopped` / `completed` / `failed`), parent agent id (nullable), started_at, ended_at. | A running model instance within a run. `parent_agent_id` links a worker to the Coordinator that spawned it. |
+| SubtaskExecution | workspace id, spec_id, subtask id, run id, assigned agent id, state (`pending` / `queued` / `in_progress` / `awaiting_verification` / `done` / `pending_reevaluation` / `dropped`), drop rationale (nullable), started_at, completed_at. | The live execution state of a subtask. The state machine is defined in section 7.4; transitions are harness-enforced. The frozen `tasks.json` defines the subtask; this entity tracks progress against it. Replaces the former `SubtaskAssignment`. |
+| VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result (`pass` / `fail`), detail (nullable), recorded_at. | One row per check in a verification subtask. The Verifier reports pass or fail; the harness records it here and transitions implementation subtasks accordingly (section 9.5). |
+| FileClaim | workspace id, file path or glob, holder agent id, run id, acquired_at, lease expiry, state (`held` / `released` / `expired`). | Advisory file lease for coordinating parallel worktree writes (section 9.3). In-memory in a single-process harness; database-backed across processes. Atomic acquisition via compare-and-set. |
+| ManagedScript | workspace id, agent id (nullable), run id (nullable), command, pid, status (`running` / `stopped` / `failed`), started_at, stopped_at. | A long-running process started by an agent (dev server, watcher, etc.) that the harness tracks for cleanup on archive or delete (section 5.1). |
+
+**Conversation layer.**
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| Message | id, agent id, role (`system` / `assistant` / `user` / `tool_result`), content, parent message id (nullable), timestamp. | A single message in an agent's conversation. `parent_message_id` supports forking a conversation from an earlier point (section 8.2). |
+
+**Observability layer.**
+
+| Entity | Key fields | Notes |
+| --- | --- | --- |
+| MemoryPin | workspace id, run id, memory scope (principal, namespace), pinned revision, recorded_at. | Records which memory revision a run read. The memory itself lives in the memory store or service; this is a reference for reproducibility and auditability. |
+| ActivityEvent | id, workspace id, run id (nullable), agent id (nullable), type, payload, timestamp. | The append-only, ordered event stream. Types: `text`, `thinking`, `tool_call`, `tool_result`, `spec_patch`, `context_pin`, `memory_pin`, `file_claim`, `commit`, `status_change`, `verification_outcome`, `loop_iteration`, `loop_complete`, `loop_stopped`, `script_start`, `script_stop`. Every state-changing action lands here so runs are auditable and reproducible (section 13). |
+
+### 11.4 Persistence and recovery
+
+The spec store and Context store are durable: their content is the source of truth for artifacts and grounding, and losing them means losing the spec packages and Contexts themselves. The operational store is likewise durable for workspace state, spec lifecycle, run records, subtask execution state, and the activity log; a process restart resumes from persisted state.
+
+File claims are the exception. In a single-process harness they live in memory and are lost on restart; a restarted harness re-evaluates claims from the run state (which agents are active, which subtasks are in progress) rather than restoring stale leases. In a multi-process harness they are database-backed and survive restarts.
+
+The `ActivityEvent` stream is the recovery backbone. Because it records every spec patch, every Context and memory pin, every subtask transition, every verification outcome, and every agent action, a run's full history is reconstructable from the event stream alone. The spec store and operational store are the live state; the activity log is the audit trail.
 
 ---
 
