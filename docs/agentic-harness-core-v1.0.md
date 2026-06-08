@@ -958,6 +958,41 @@ From grounding: a Context's pinned revision is immutable for the duration of a r
 
 ---
 
+## 14. Runtime layer
+
+The harness does not manage containers, worktrees, or provider processes directly. A dedicated runtime layer sits underneath and handles infrastructure: running agents in isolated containers, managing git worktrees, abstracting provider differences, and controlling agent lifecycle. The coordination layer (specs, Contexts, runs, orchestration) drives the runtime through a narrow interface and never reaches past it.
+
+This design follows the pattern established by Google's Scion project (an open-source multi-agent orchestration testbed), adapted to our needs. The key abstractions — a container runtime interface, a harness adapter per provider, and a template system for agent configuration — are borrowed from Scion's architecture. The implementation is our own, kept thin and focused on what the coordination layer requires.
+
+### 14.1 What the runtime provides
+
+- **Container isolation.** Each agent runs in its own OCI container with a dedicated filesystem, environment, and credentials. The workspace's worktree is mounted into the container. Agents cannot access each other's state or the host's Telos configuration.
+- **Git worktree management.** The runtime creates and manages per-workspace branches and worktrees. Workspace creation provisions a branch (e.g. `telos/add-dark-mode`) and a working directory; deletion cleans up the worktree and optionally the branch.
+- **Harness adapters.** One adapter per supported provider (Claude Code, Gemini CLI, Codex, OpenCode). Each adapter handles provisioning, command construction, auth resolution, environment setup, and session resume. Generic Telos commands (start, stop, suspend, resume) work uniformly regardless of the underlying provider.
+- **Agent lifecycle.** Start, stop, suspend (with intent to resume), resume (continuing a prior session), and delete. The runtime tracks agent phase (container lifecycle) and activity (what the agent is doing within a running phase).
+- **Templates.** A template defines the agent's configuration surface: system prompt, MCP server declarations, environment variables, harness selection, and home directory content. Telos specialists (section 8.4) map to templates; the coordination layer injects actor capability constraints and spec context on top.
+- **Sidecar services.** Long-running processes (dev servers, watchers, the Telos MCP bridge) run as sidecar services alongside the agent, with restart policies and readiness gates.
+- **The Telos MCP bridge.** A sidecar MCP server running inside each agent container that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. This is how the coordination layer extends the agent's tool set without interposing on the provider's native tool loop.
+
+### 14.2 Boundary with the coordination layer
+
+The coordination layer (sections 5-12) drives the runtime but does not reach inside it. The boundary:
+
+| Coordination layer owns | Runtime layer owns |
+| --- | --- |
+| Prompt assembly (what the agent is told) | Container lifecycle (how the agent runs) |
+| Spec store, Context store, operational store | Worktree provisioning and mounting |
+| Runs, subtask state, verification gates | Agent start/stop/suspend/resume |
+| Activity log (Telos-level events) | Provider-level telemetry (OTEL) |
+| The Telos MCP bridge logic | Container, env, and credential isolation |
+| Specialist → template mapping | Template hydration and harness provisioning |
+
+The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the Telos MCP sidecar. The coordination layer does not know or care whether the agent runs in Docker, Podman, or a Kubernetes pod.
+
+The full runtime layer specification is in a separate document (`docs/runtime-layer.md`).
+
+---
+
 ## Appendix A: terminology
 
 | Term | Meaning in this document |
@@ -985,4 +1020,8 @@ From grounding: a Context's pinned revision is immutable for the duration of a r
 | Specialist | A named agent role: prompt, tool policy, model tier, behavior, and actor capability. |
 | Intent hash | SHA-256 of the PRD Intent section, set at draft-to-active and protected thereafter. |
 | Provider | External agent backend the harness drives through one interface. |
+| Runtime layer | The infrastructure layer that runs agents in containers, manages worktrees, abstracts provider differences, and controls agent lifecycle. Driven by the coordination layer through a narrow interface. |
+| Harness adapter | A runtime-layer adapter that integrates a specific provider (Claude Code, Gemini CLI, etc.) into the runtime, handling provisioning, command construction, and auth. |
+| Template | A blueprint for agent configuration: system prompt, MCP servers, env vars, harness selection, and home directory content. Specialists map to templates. |
+| Telos MCP bridge | A sidecar MCP server inside each agent container that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. |
 | Activity log | Append-only, ordered event stream, including spec-authoring patches, Context- and memory-pin events, and file-claim events. |
