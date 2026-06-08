@@ -11,7 +11,7 @@
 
 This work is inspired by Intent, a macOS application from Augment Code (https://www.intentapp.dev): a software development workspace where humans and AI agents plan and build software side by side. In Intent, each unit of work lives in its own workspace that bundles the repository (files, branches, and diffs), a layer of shared grounding (a spec, scratchpad notes, and agent tools such as MCP servers and skills), and a team of specialist agents that a Coordinator keeps pointed at one goal. That product is the reference point for the design below and the source of the vocabulary it borrows: workspace, spec, context, Coordinator, specialist.
 
-What follows is not a specification of Intent, and the system it describes is not a clone. Intent is the starting point we reason from; the design here diverges on purpose. The harness is headless rather than a desktop application, its coordination is rebuilt on a validated spec package that freezes once approved, all grounding is unified under a single Context abstraction, and the provider, agent memory, and external tools sit behind pluggable interfaces. Where this PRD and Intent differ, this PRD governs what we are building; Intent is cited only to show where an idea came from. This document calls the system itself **Telos**, a working name (Greek for the end a thing is directed toward) that keeps the through-line to Intent while marking this as its own design.
+What follows is not a specification of Intent, and the system it describes is not a clone. Intent is the starting point we reason from; the design here diverges on purpose. The harness is headless rather than a desktop application, its coordination is rebuilt on a validated spec package that freezes once approved, all grounding is unified under a single Context abstraction, and the provider, agent memory, and external tools sit behind pluggable interfaces. Where this PRD and Intent differ, this PRD governs what we are building; Intent is cited only to show where an idea came from. This document refers to the system as **the harness** throughout; component names use the prefix **af** (from agent-fox, the parent project) to keep paths, environment variables, and CLI commands short and distinct.
 
 Most of what a user touches in Intent is presentation: panels, layout presets, themes, keyboard shortcuts, the spaces switcher overlay. That surface is not what we are rebuilding.
 
@@ -114,7 +114,7 @@ The guiding rule from the source product holds: one workspace per real task. Wit
 
 ### 5.2 Isolation through worktrees
 
-Isolation lets several workspaces run at once without stepping on each other. The harness implements it with `git worktree`. Creating a workspace creates a branch (named with a prefix, for example `telos/add-dark-mode`) and a separate working directory checked out to that branch. The user's main branch and main checkout are never touched.
+Isolation lets several workspaces run at once without stepping on each other. The harness implements it with `git worktree`. Creating a workspace creates a branch (named with a prefix, for example `af/add-dark-mode`) and a separate working directory checked out to that branch. The user's main branch and main checkout are never touched.
 
 A fresh worktree does not inherit untracked files. Environment files, local secrets, seeded data, and installed dependencies do not carry over. Workspace creation must run a bootstrap step (section 5.4) before agents start.
 
@@ -414,13 +414,13 @@ The Operator authors the PRD through the same harness API, not by editing a file
 
 The harness contains no model. It drives an external provider, and "bring your own agent" is first-class: Claude Code, Gemini CLI, Codex, and OpenCode must all be usable, and different agents in the same workspace may use different providers and models.
 
-Each provider runs as an opaque process inside a container managed by the runtime layer (section 14). The provider owns the model call, the tool loop, and which tool to call next. The coordination layer does not intercept the provider's native tool calls — instead, it extends the provider's tool set through the Telos MCP bridge (section 14.1), a sidecar MCP server that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims, CI/CD status, issue tracker, web search) alongside the provider's native tools. From the provider's perspective, Telos tools are indistinguishable from any other MCP server.
+Each provider runs as an opaque process inside a container managed by the runtime layer (section 14). The provider owns the model call, the tool loop, and which tool to call next. The coordination layer does not intercept the provider's native tool calls — instead, it extends the provider's tool set through the af MCP bridge (section 14.1), a sidecar MCP server that exposes harness-specific tools (spec read, Context search, memory recall, subtask state, file claims, CI/CD status, issue tracker, web search) alongside the provider's native tools. From the provider's perspective, harness tools are indistinguishable from any other MCP server.
 
 The coordination layer interacts with a running provider through two channels: it injects configuration before the provider starts (system prompt, instructions, MCP server declarations, environment variables — handled by the harness adapter in the runtime layer), and it receives tool calls and state updates through the MCP bridge during execution.
 
 ### 8.2 The agent execution model
 
-The provider runs its own tool loop inside the container. It reads and writes files in the mounted worktree, executes shell commands, drives a browser, and calls MCP tools — including the Telos MCP bridge — according to its own reasoning. The coordination layer observes this through the MCP bridge (which logs every Telos tool call as an activity event) and through the runtime's agent state reporting (phase and activity updates via heartbeat).
+The provider runs its own tool loop inside the container. It reads and writes files in the mounted worktree, executes shell commands, drives a browser, and calls MCP tools — including the af MCP bridge — according to its own reasoning. The coordination layer observes this through the MCP bridge (which logs every harness tool call as an activity event) and through the runtime's agent state reporting (phase and activity updates via heartbeat).
 
 An agent can be stopped mid-execution with its session preserved for resume (if the harness supports it). The Coordinator can send follow-up messages to a running agent through the runtime's message injection.
 
@@ -992,13 +992,13 @@ This design follows the pattern established by Google's Scion project (an open-s
 
 ### 14.1 What the runtime provides
 
-- **Container isolation.** Each agent runs in its own OCI container with a dedicated filesystem, environment, and credentials. The workspace's worktree is mounted into the container. Agents cannot access each other's state or the host's Telos configuration.
-- **Git worktree management.** The runtime creates and manages per-workspace branches and worktrees. Workspace creation provisions a branch (e.g. `telos/add-dark-mode`) and a working directory; deletion cleans up the worktree and optionally the branch.
-- **Harness adapters.** One adapter per supported provider (Claude Code, Gemini CLI, Codex, OpenCode). Each adapter handles provisioning, command construction, auth resolution, environment setup, and session resume. Generic Telos commands (start, stop, suspend, resume) work uniformly regardless of the underlying provider.
+- **Container isolation.** Each agent runs in its own OCI container with a dedicated filesystem, environment, and credentials. The workspace's worktree is mounted into the container. Agents cannot access each other's state or the host's harness configuration.
+- **Git worktree management.** The runtime creates and manages per-workspace branches and worktrees. Workspace creation provisions a branch (e.g. `af/add-dark-mode`) and a working directory; deletion cleans up the worktree and optionally the branch.
+- **Harness adapters.** One adapter per supported provider (Claude Code, Gemini CLI, Codex, OpenCode). Each adapter handles provisioning, command construction, auth resolution, environment setup, and session resume. Generic af commands (start, stop, suspend, resume) work uniformly regardless of the underlying provider.
 - **Agent lifecycle.** Start, stop, suspend (with intent to resume), resume (continuing a prior session), and delete. The runtime tracks agent phase (container lifecycle) and activity (what the agent is doing within a running phase).
-- **Templates.** A template defines the agent's configuration surface: system prompt, MCP server declarations, environment variables, harness selection, and home directory content. Telos specialists (section 8.4) map to templates; the coordination layer injects actor capability constraints and spec context on top.
-- **Sidecar services.** Long-running processes (dev servers, watchers, the Telos MCP bridge) run as sidecar services alongside the agent, with restart policies and readiness gates.
-- **The Telos MCP bridge.** A sidecar MCP server running inside each agent container that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. This is how the coordination layer extends the agent's tool set without interposing on the provider's native tool loop.
+- **Templates.** A template defines the agent's configuration surface: system prompt, MCP server declarations, environment variables, harness selection, and home directory content. harness specialists (section 8.4) map to templates; the coordination layer injects actor capability constraints and spec context on top.
+- **Sidecar services.** Long-running processes (dev servers, watchers, the af MCP bridge) run as sidecar services alongside the agent, with restart policies and readiness gates.
+- **The af MCP bridge.** A sidecar MCP server running inside each agent container that exposes harness-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. This is how the coordination layer extends the agent's tool set without interposing on the provider's native tool loop.
 
 ### 14.2 Boundary with the coordination layer
 
@@ -1009,11 +1009,11 @@ The coordination layer (sections 5-12) drives the runtime but does not reach ins
 | Prompt assembly (what the agent is told) | Container lifecycle (how the agent runs) |
 | Spec store, Context store, operational store | Worktree provisioning and mounting |
 | Runs, subtask state, verification gates | Agent start/stop/suspend/resume |
-| Activity log (Telos-level events) | Provider-level telemetry (OTEL) |
-| The Telos MCP bridge logic | Container, env, and credential isolation |
+| Activity log (harness-level events) | Provider-level telemetry (OTEL) |
+| The af MCP bridge logic | Container, env, and credential isolation |
 | Specialist → template mapping | Template hydration and harness provisioning |
 
-The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the Telos MCP sidecar. The coordination layer does not know or care whether the agent runs in a local Podman container or a Kubernetes pod.
+The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the af MCP sidecar. The coordination layer does not know or care whether the agent runs in a local Podman container or a Kubernetes pod.
 
 The full runtime layer specification is in a separate document (`docs/runtime-layer.md`).
 
@@ -1025,20 +1025,20 @@ The coordination layer (sections 5-12) and the runtime layer (section 14) need c
 
 ### 15.1 Deployable components
 
-Five components make up a running Telos installation:
+Five components make up a running af installation:
 
 | Component | What it is | Responsibility |
 | --- | --- | --- |
-| **Telos daemon** | A long-running host process. | Owns the three stores (spec, Context, operational), manages runs, enforces the spec lifecycle and subtask state machine, performs prompt assembly, drives agent memory recall/consolidate, serves the coordination API, and emits the activity log. The MCP bridge inside each agent container connects to this daemon. |
-| **Telos CLI** | A command-line interface on the host. | The Operator's primary surface. Drives the daemon's API: workspace CRUD, spec authoring and lifecycle, Context management, run control, agent operations, Campaign management, and observability queries. Wraps the runtime CLI for agent lifecycle commands. |
+| **af daemon** | A long-running host process. | Owns the three stores (spec, Context, operational), manages runs, enforces the spec lifecycle and subtask state machine, performs prompt assembly, drives agent memory recall/consolidate, serves the coordination API, and emits the activity log. The MCP bridge inside each agent container connects to this daemon. |
+| **af CLI** | A command-line interface on the host. | The Operator's primary surface. Drives the daemon's API: workspace CRUD, spec authoring and lifecycle, Context management, run control, agent operations, Campaign management, and observability queries. Wraps the runtime CLI for agent lifecycle commands. |
 | **Runtime engine** | The runtime layer (section 14) running on the host. | Container lifecycle, worktree management, harness adapters, template hydration, sidecar orchestration. Driven by the daemon, not by the Operator directly. |
-| **Telos MCP bridge** | A sidecar process inside each agent container. | Exposes Telos tools (spec read, Context search, memory recall, subtask state, file claims) as MCP tools to the harness. Stateless proxy to the daemon. One instance per running agent. |
+| **af MCP bridge** | A sidecar process inside each agent container. | Exposes harness tools (spec read, Context search, memory recall, subtask state, file claims) as MCP tools to the harness. Stateless proxy to the daemon. One instance per running agent. |
 | **Memory service** | A pluggable backend, in-process or standalone. | Owns agent memory storage, retrieval, and distillation. Driven by the daemon through the `recall`/`consolidate` interface (section 8.6). May run embedded in the daemon (SQLite/local) or as an independent service (for shared or scaled deployments). |
 
 ### 15.2 How they compose
 
 ```
-Operator ──► Telos CLI ──► Telos daemon ──► Runtime engine
+Operator ──► af CLI ──► af daemon ──► Runtime engine
                                │                  │
                                │            ┌─────▼──────┐
                                │            │ Container   │
@@ -1061,7 +1061,7 @@ The daemon is the only stateful host-side process. The CLI is stateless and talk
 
 | Store | Content | Default backend | Notes |
 | --- | --- | --- | --- |
-| Spec store | Spec artifacts (prd.md, requirements.json, test_spec.json, tasks.json, architecture.md) | Filesystem (structured directory tree under `~/.telos/specs/`) | Keyed by workspace and spec id. The artifacts are files; the directory layout is the store. |
+| Spec store | Spec artifacts (prd.md, requirements.json, test_spec.json, tasks.json, architecture.md) | Filesystem (structured directory tree under `~/.af/specs/`) | Keyed by workspace and spec id. The artifacts are files; the directory layout is the store. |
 | Context store | Context metadata, source descriptors, instruction text, revisions | SQLite (embedded in daemon) | Contexts are lightweight metadata; large source content (repos, blobs) is referenced by locator, not stored inline. |
 | Operational store | Workspaces, campaigns, runs, agents, subtask execution, verification outcomes, file claims, messages, activity events | SQLite (embedded in daemon) | Single-file database. The activity log is append-only and may grow large; it can be rotated to a separate file or external sink. |
 | Memory store | Agent learnings, recall indices | Pluggable (SQLite default, or external service) | The memory service owns this; the daemon delegates through the `AgentMemory` interface. |
@@ -1115,8 +1115,8 @@ The full services architecture specification is in a separate document (`docs/se
 | Runtime layer | The infrastructure layer that runs agents in containers, manages worktrees, abstracts provider differences, and controls agent lifecycle. Driven by the coordination layer through a narrow interface. |
 | Harness adapter | A runtime-layer adapter that integrates a specific provider (Claude Code, Gemini CLI, etc.) into the runtime, handling provisioning, command construction, and auth. |
 | Template | A blueprint for agent configuration: system prompt, MCP servers, env vars, harness selection, and home directory content. Specialists map to templates. |
-| Telos MCP bridge | A sidecar MCP server inside each agent container that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. |
-| Telos daemon | The long-running host process that owns the three stores, manages runs, enforces the spec lifecycle, serves the coordination API, and receives MCP bridge connections from agent containers. |
-| Telos CLI | The Operator's command-line interface. Stateless; drives the daemon's API. |
+| af MCP bridge | A sidecar MCP server inside each agent container that exposes harness-specific tools (spec read, Context search, memory recall, subtask state, file claims) to the harness. |
+| af daemon | The long-running host process that owns the three stores, manages runs, enforces the spec lifecycle, serves the coordination API, and receives MCP bridge connections from agent containers. |
+| af CLI | The Operator's command-line interface. Stateless; drives the daemon's API. |
 | Memory service | The pluggable backend for agent memory (recall/consolidate). May run embedded in the daemon or as a standalone service. |
 | Activity log | Append-only, ordered event stream, including spec-authoring patches, Context- and memory-pin events, and file-claim events. |

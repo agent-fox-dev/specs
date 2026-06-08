@@ -3,9 +3,9 @@
 **Status:** Draft
 **Parent:** Agentic Harness Core PRD v1.0, section 14
 
-This document specifies the runtime layer that sits underneath the Telos
+This document specifies the runtime layer that sits underneath the af
 coordination layer. It covers container isolation, git worktree management,
-harness adapters, agent lifecycle, templates, sidecar services, and the Telos
+harness adapters, agent lifecycle, templates, sidecar services, and the af
 MCP bridge. The design follows patterns established by Google's Scion project,
 adapted to our requirements.
 
@@ -22,14 +22,14 @@ adapted to our requirements.
    provider means implementing one adapter.
 
 3. **Container-first isolation.** Each agent runs in its own OCI container.
-   The worktree is mounted in; everything else (spec store, Telos
+   The worktree is mounted in; everything else (spec store, harness
    configuration, sibling agents) is invisible. This is stronger than
    process-level or worktree-level isolation alone.
 
 4. **The coordination layer drives.** The runtime exposes a narrow API. The
    coordination layer calls it to start/stop agents, provision worktrees, and
    inject configuration. The runtime never calls back into the coordination
-   layer — the Telos MCP bridge handles that direction (section 8).
+   layer — the af MCP bridge handles that direction (section 8).
 
 5. **Portable across container runtimes.** Podman (rootless) is the default.
    Kubernetes is supported through the same container runtime interface.
@@ -85,13 +85,13 @@ containers. Rootless by default — agents run without root privileges on the
 host, which limits the blast radius of a container escape. Mounts are bind
 mounts. The agent's worktree is mounted at `/workspace`. The agent's home
 directory is mounted at a configurable path (default `/home/agent`). Shadow
-mounts (tmpfs) prevent access to `.telos` configuration and sibling
+mounts (tmpfs) prevent access to `.af` configuration and sibling
 worktrees.
 
 ### 2.2 Kubernetes adapter
 
 Runs agents as Pods. Each agent is a Pod with the harness as the main
-container and sidecars (including the Telos MCP bridge) as additional
+container and sidecars (including the af MCP bridge) as additional
 containers. Worktree provisioning uses init containers or CSI volumes. This
 adapter is out of scope for the initial implementation but the interface is
 designed to accommodate it.
@@ -107,7 +107,7 @@ section 5.2 of the PRD.
 interface WorktreeManager {
   create(input: {
     repoPath: string          // path to the main repo
-    branch: string            // e.g. "telos/add-dark-mode"
+    branch: string            // e.g. "af/add-dark-mode"
     baseBranch: string        // e.g. "main"
   }): Promise<WorktreeInfo>
 
@@ -126,14 +126,14 @@ type WorktreeInfo = {
 
 ### 3.1 Branch naming
 
-Branches follow the convention `telos/<workspace-name>`, e.g.
-`telos/add-dark-mode`. The prefix is configurable per installation. Collisions
+Branches follow the convention `af/<workspace-name>`, e.g.
+`af/add-dark-mode`. The prefix is configurable per installation. Collisions
 are rejected at creation.
 
 ### 3.2 Worktree location
 
 Worktrees are created outside the main repo's working directory to avoid
-polluting it: `<repo-parent>/.telos_worktrees/<workspace-id>/`. Each
+polluting it: `<repo-parent>/.af_worktrees/<workspace-id>/`. Each
 worktree is a full working directory checked out to its branch.
 
 ### 3.3 Lifecycle
@@ -371,17 +371,17 @@ harness: claude
 description: "Implements a subtask against a frozen spec."
 
 env:
-  TELOS_ROLE: implementor
+  AF_ROLE: implementor
 
 mcp_servers:
-  telos:
+  af:
     transport: stdio
-    command: /usr/local/bin/telos-mcp-bridge
-    args: ["--workspace", "${TELOS_WORKSPACE_ID}"]
+    command: /usr/local/bin/af-mcp-bridge
+    args: ["--workspace", "${AF_WORKSPACE_ID}"]
 
 services:
-  - name: telos-bridge
-    command: ["/usr/local/bin/telos-mcp-bridge", "--workspace", "${TELOS_WORKSPACE_ID}"]
+  - name: af-bridge
+    command: ["/usr/local/bin/af-mcp-bridge", "--workspace", "${AF_WORKSPACE_ID}"]
     restart: always
     ready_check:
       type: tcp
@@ -391,8 +391,8 @@ services:
 
 ### 6.3 Template resolution
 
-Templates are resolved in order: project-level (`.telos/templates/`)
-overrides global (`~/.telos/templates/`), which overrides built-in defaults.
+Templates are resolved in order: project-level (`.af/templates/`)
+overrides global (`~/.af/templates/`), which overrides built-in defaults.
 The coordination layer can also pass inline configuration at agent creation
 time, which overrides the template.
 
@@ -408,7 +408,7 @@ The runtime ships default templates for each specialist role:
 | `verifier` | configurable | Runs verification checks. |
 | `ralph` | configurable | Autonomous goal+verifier loop. |
 
-Each template includes the Telos MCP bridge as a sidecar service and
+Each template includes the af MCP bridge as a sidecar service and
 pre-configures the MCP server declaration so the harness discovers it.
 The harness itself (Claude Code, Gemini CLI, etc.) is configurable per
 template.
@@ -436,16 +436,16 @@ type ServiceSpec = {
 ```
 
 The harness does not start until all sidecar services with readiness checks
-have reported ready. This ensures the Telos MCP bridge is available before
+have reported ready. This ensures the af MCP bridge is available before
 the agent begins working.
 
 ---
 
-## 8. The Telos MCP bridge
+## 8. The af MCP bridge
 
-The Telos MCP bridge is the key integration point between the runtime layer
+The af MCP bridge is the key integration point between the runtime layer
 and the coordination layer. It runs as a sidecar service inside each agent
-container and exposes Telos-specific capabilities as MCP tools that the
+container and exposes harness-specific capabilities as MCP tools that the
 harness (Claude Code, Gemini CLI, etc.) can call.
 
 ### 8.1 Why an MCP bridge
@@ -462,15 +462,15 @@ layer's tools appear to the agent as standard MCP tools.
 
 | Tool | Description | Direction |
 | --- | --- | --- |
-| `telos_spec_read` | Fetch spec artifacts, rendered views, traceability, coverage. | Agent → Telos service |
-| `telos_context_search` | Search retrieved sources in attached Contexts. | Agent → Telos service |
-| `telos_context_get` | Fetch a pinned source from an attached Context. | Agent → Telos service |
-| `telos_memory_recall` | Search agent memory for relevant learnings. | Agent → Telos service |
-| `telos_subtask_state` | Transition the agent's own subtask state. | Agent → Telos service |
-| `telos_file_claim` | Claim, renew, release an advisory file lease. | Agent → Telos service |
-| `telos_ci_status` | Query CI pipeline runs, job results, and logs. | Agent → Telos service |
-| `telos_issues` | Read, search, create, comment on, update issues through the tracker-agnostic interface. | Agent → Telos service |
-| `telos_web_search` | Search and fetch public web content through the provider-agnostic interface. | Agent → Telos service |
+| `af_spec_read` | Fetch spec artifacts, rendered views, traceability, coverage. | Agent → af service |
+| `af_context_search` | Search retrieved sources in attached Contexts. | Agent → af service |
+| `af_context_get` | Fetch a pinned source from an attached Context. | Agent → af service |
+| `af_memory_recall` | Search agent memory for relevant learnings. | Agent → af service |
+| `af_subtask_state` | Transition the agent's own subtask state. | Agent → af service |
+| `af_file_claim` | Claim, renew, release an advisory file lease. | Agent → af service |
+| `af_ci_status` | Query CI pipeline runs, job results, and logs. | Agent → af service |
+| `af_issues` | Read, search, create, comment on, update issues through the tracker-agnostic interface. | Agent → af service |
+| `af_web_search` | Search and fetch public web content through the provider-agnostic interface. | Agent → af service |
 
 ### 8.3 Architecture
 
@@ -478,7 +478,7 @@ layer's tools appear to the agent as standard MCP tools.
 ┌─── Agent Container ─────────────────────────────────────┐
 │                                                         │
 │  ┌─────────────┐         ┌──────────────────────┐       │
-│  │   Harness    │◄──MCP──►│  Telos MCP Bridge    │       │
+│  │   Harness    │◄──MCP──►│  af MCP Bridge    │       │
 │  │ (Claude Code │         │  (sidecar service)   │       │
 │  │  Gemini CLI) │         └──────────┬───────────┘       │
 │  └──────┬──────┘                     │                   │
@@ -488,7 +488,7 @@ layer's tools appear to the agent as standard MCP tools.
 └─────────────────────────────────────┼───────────────────┘
                                        │
                           ┌────────────▼────────────┐
-                          │   Telos Coordination    │
+                          │   af Coordination    │
                           │       Service           │
                           │                         │
                           │  Spec store             │
@@ -499,7 +499,7 @@ layer's tools appear to the agent as standard MCP tools.
                           └─────────────────────────┘
 ```
 
-The bridge communicates with the Telos coordination service on the host via
+The bridge communicates with the af coordination service on the host via
 gRPC or HTTP. The coordination service is the source of truth for spec
 content, Context data, memory, subtask state, and file claims. The bridge
 is stateless — it proxies requests and returns responses.
@@ -509,14 +509,14 @@ is stateless — it proxies requests and returns responses.
 Every bridge instance knows its agent's identity (workspace ID, agent ID,
 run ID, specialist role) via environment variables injected at container
 creation. The coordination service uses this identity to scope tool calls:
-an Implementor's `telos_subtask_state` call can only transition its own
-assigned subtask; a `telos_spec_read` call returns only the artifacts for
+an Implementor's `af_subtask_state` call can only transition its own
+assigned subtask; a `af_spec_read` call returns only the artifacts for
 the agent's workspace.
 
 ### 8.5 Activity logging
 
 The bridge logs every tool call and response as activity events, forwarded
-to the coordination service. This is how Telos-level tool calls (spec reads,
+to the coordination service. This is how harness-level tool calls (spec reads,
 Context searches, subtask transitions) enter the activity log even though
 the runtime does not intercept the harness's native tool loop.
 
@@ -531,7 +531,7 @@ The full sequence from workspace creation to a running agent:
 
 2. **Coordination layer** assembles the agent configuration: resolves the
    specialist to a template, composes the system prompt (section 8.3 of
-   the PRD), gathers MCP server configs (including the Telos bridge), and
+   the PRD), gathers MCP server configs (including the af bridge), and
    collects environment variables (workspace ID, agent ID, run ID, etc.).
 
 3. **Coordination layer** calls `AgentLifecycle.create()` with the assembled
@@ -544,7 +544,7 @@ The full sequence from workspace creation to a running agent:
 
 5. **Runtime** builds the `ContainerSpec`: image, mounts (worktree at
    `/workspace`, agent home, shadow mounts for isolation), env vars, sidecar
-   services (including the Telos MCP bridge), and the harness command.
+   services (including the af MCP bridge), and the harness command.
 
 6. **Runtime** calls `ContainerRuntime.create()` and
    `ContainerRuntime.start()`.
@@ -554,7 +554,7 @@ The full sequence from workspace creation to a running agent:
 8. **Runtime** starts the harness process inside the container with the task
    as input.
 
-9. **Agent** begins working. The harness discovers the Telos MCP bridge as
+9. **Agent** begins working. The harness discovers the af MCP bridge as
    an available MCP server and can call its tools.
 
 ---
@@ -566,14 +566,14 @@ The runtime uses a base container image that includes:
 - A shell and standard Unix tools.
 - Git.
 - A terminal multiplexer (tmux).
-- The Telos MCP bridge binary.
+- The af MCP bridge binary.
 - Common language runtimes and build tools (configurable per image variant).
 
 The harness (Claude Code, Gemini CLI, etc.) is either pre-installed in the
 image or installed during provisioning. Image variants per harness keep image
 sizes manageable.
 
-The image does not include the Telos coordination service, the spec store,
+The image does not include the af coordination service, the spec store,
 or any coordination logic. These run on the host and the bridge reaches them
 over the network.
 
@@ -584,18 +584,18 @@ over the network.
 ### 11.1 Global configuration
 
 ```yaml
-# ~/.telos/settings.yaml
+# ~/.af/settings.yaml
 runtime:
   backend: podman              # podman | kubernetes
-  image: telos/agent:latest    # default base image
+  image: af/agent:latest    # default base image
 
 defaults:
   harness: claude
   template: implementor
 
 worktrees:
-  prefix: telos                # branch prefix: telos/<workspace-name>
-  location: ../.telos_worktrees  # relative to repo root
+  prefix: af                # branch prefix: af/<workspace-name>
+  location: ../.af_worktrees  # relative to repo root
 ```
 
 ### 11.2 Per-workspace overrides
@@ -604,7 +604,7 @@ worktrees:
 # Set via the coordination layer's workspace config (section 5.6 of PRD)
 harness: gemini
 template: implementor
-image: telos/agent:gemini
+image: af/agent:gemini
 env:
   CUSTOM_VAR: value
 ```
@@ -634,6 +634,6 @@ Key decisions that diverge from "adopt Scion":
 - **Our own harness adapters.** We implement the same set of providers
   (Claude Code, Gemini CLI, Codex, OpenCode) but with adapters shaped to
   our needs, not forked from Scion's codebase.
-- **The Telos MCP bridge.** Scion has no equivalent. This is our key
+- **The af MCP bridge.** Scion has no equivalent. This is our key
   architectural addition: the sidecar that connects the opaque harness to
   the coordination layer's tools and state.

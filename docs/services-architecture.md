@@ -3,7 +3,7 @@
 **Status:** Draft
 **Parent:** Agentic Harness Core PRD v1.0, section 15
 
-This document specifies the deployable components of a Telos installation:
+This document specifies the deployable components of a af installation:
 the daemon, CLI, runtime engine, MCP bridge, and memory service. It covers
 how they communicate, how state is persisted, and how the system starts,
 stops, and recovers.
@@ -23,7 +23,7 @@ stops, and recovers.
 3. **Process boundaries follow trust boundaries.** The daemon runs on the
    host with full access. The MCP bridge runs inside the agent container
    with scoped identity. The harness (Claude Code, etc.) runs inside the
-   container with no direct access to Telos state.
+   container with no direct access to harness state.
 
 4. **Pluggable where the PRD says pluggable.** Memory, issue tracker, web
    search, and the container runtime are behind interfaces. Everything else
@@ -31,7 +31,7 @@ stops, and recovers.
 
 ---
 
-## 2. The Telos daemon
+## 2. The af daemon
 
 ### 2.1 Responsibilities
 
@@ -68,12 +68,12 @@ The daemon is the coordination service. It owns:
 ### 2.2 Process model
 
 The daemon is a single long-running process. It starts when the Operator
-invokes `telos daemon start` (or automatically on the first CLI command that
+invokes `af daemon start` (or automatically on the first CLI command that
 needs it) and runs until explicitly stopped or until the machine shuts down.
 
 It listens on two interfaces:
 
-- **CLI socket.** A Unix domain socket (default `~/.telos/daemon.sock`) for
+- **CLI socket.** A Unix domain socket (default `~/.af/daemon.sock`) for
   CLI-to-daemon communication. HTTP/JSON over the socket. Local only; no
   network exposure.
 - **Bridge port.** A TCP port (default `localhost:7400`) for MCP bridge
@@ -84,9 +84,9 @@ It listens on two interfaces:
 ### 2.3 Startup and shutdown
 
 **Startup:**
-1. Open or create the SQLite database (`~/.telos/telos.db`).
+1. Open or create the SQLite database (`~/.af/af.db`).
 2. Run schema migrations if needed.
-3. Verify the spec store directory exists (`~/.telos/specs/`).
+3. Verify the spec store directory exists (`~/.af/specs/`).
 4. Start listening on the CLI socket and bridge port.
 5. Recover in-flight runs: re-evaluate workspace and agent state against the
    runtime engine. Agents that were running when the daemon last stopped are
@@ -123,7 +123,7 @@ daemon), but the operational store state is consistent.
 
 ---
 
-## 3. The Telos CLI
+## 3. The af CLI
 
 ### 3.1 Responsibilities
 
@@ -136,62 +136,62 @@ database directly.
 Commands mirror the Operator-facing API (section 12.1 of the PRD):
 
 ```
-telos workspace create [--origin <path|url>] [--context <id>...] [--campaign <id>]
-telos workspace list [--status <status>] [--campaign <id>]
-telos workspace get <id>
-telos workspace archive <id>
-telos workspace reopen <id>
-telos workspace delete <id>
+af workspace create [--origin <path|url>] [--context <id>...] [--campaign <id>]
+af workspace list [--status <status>] [--campaign <id>]
+af workspace get <id>
+af workspace archive <id>
+af workspace reopen <id>
+af workspace delete <id>
 
-telos spec create <workspace-id>
-telos spec author <workspace-id> <spec-id> --patch <file>
-telos spec approve <workspace-id> <spec-id>
-telos spec seal <workspace-id> <spec-id>
-telos spec supersede <workspace-id> <spec-id> --new-spec <new-id>
-telos spec show <workspace-id> <spec-id> [--artifact <name>] [--rendered]
-telos spec validate <workspace-id> <spec-id>
-telos spec coverage <workspace-id> <spec-id>
+af spec create <workspace-id>
+af spec author <workspace-id> <spec-id> --patch <file>
+af spec approve <workspace-id> <spec-id>
+af spec seal <workspace-id> <spec-id>
+af spec supersede <workspace-id> <spec-id> --new-spec <new-id>
+af spec show <workspace-id> <spec-id> [--artifact <name>] [--rendered]
+af spec validate <workspace-id> <spec-id>
+af spec coverage <workspace-id> <spec-id>
 
-telos context create --name <name> --instruction <text>
-telos context list
-telos context get <id>
-telos context source add <context-id> --type <type> --locator <loc>
-telos context source remove <context-id> <source-id>
-telos context attach <workspace-id> <context-id> [--pin-mode <pinned|live>]
-telos context detach <workspace-id> <context-id>
+af context create --name <name> --instruction <text>
+af context list
+af context get <id>
+af context source add <context-id> --type <type> --locator <loc>
+af context source remove <context-id> <source-id>
+af context attach <workspace-id> <context-id> [--pin-mode <pinned|live>]
+af context detach <workspace-id> <context-id>
 
-telos run start <workspace-id> <spec-id>
-telos run start-ralph <workspace-id> --goal <text> --verifier <command>
-telos run list <workspace-id>
-telos run get <run-id>
-telos run stop <run-id>
+af run start <workspace-id> <spec-id>
+af run start-ralph <workspace-id> --goal <text> --verifier <command>
+af run list <workspace-id>
+af run get <run-id>
+af run stop <run-id>
 
-telos agent list <workspace-id>
-telos agent get <agent-id>
-telos agent stop <agent-id>
-telos agent logs <agent-id> [--follow]
-telos agent message <agent-id> <text>
+af agent list <workspace-id>
+af agent get <agent-id>
+af agent stop <agent-id>
+af agent logs <agent-id> [--follow]
+af agent message <agent-id> <text>
 
-telos campaign create --goal <file>
-telos campaign register <campaign-id> <workspace-id> [--depends-on <spec:group>...]
-telos campaign status <campaign-id>
-telos campaign abandon <campaign-id>
+af campaign create --goal <file>
+af campaign register <campaign-id> <workspace-id> [--depends-on <spec:group>...]
+af campaign status <campaign-id>
+af campaign abandon <campaign-id>
 
-telos activity <workspace-id> [--run <id>] [--agent <id>] [--type <type>...] [--follow]
+af activity <workspace-id> [--run <id>] [--agent <id>] [--type <type>...] [--follow]
 
-telos daemon start [--foreground]
-telos daemon stop
-telos daemon status
+af daemon start [--foreground]
+af daemon stop
+af daemon status
 ```
 
 ### 3.3 PRD authoring
 
 The CLI supports PRD authoring through two modes:
 
-- **Direct edit.** `telos spec author` applies a JSON Patch to a spec
+- **Direct edit.** `af spec author` applies a JSON Patch to a spec
   artifact, validated by the daemon. For PRD text, the patch replaces the
   body content.
-- **Editor integration.** `telos spec edit <workspace-id> <spec-id>
+- **Editor integration.** `af spec edit <workspace-id> <spec-id>
   --artifact prd` opens the artifact in `$EDITOR`. On save, the CLI diffs
   against the stored version, constructs a patch, and submits it to the
   daemon for validation. This gives the Operator a comfortable editing
@@ -212,7 +212,7 @@ create containers, start agents, manage worktrees, and orchestrate sidecars.
 
 This means the daemon process is the only thing the Operator needs to start.
 The container runtime (Podman) must be available on the host, but
-the Operator interacts with it only through the Telos CLI, never directly.
+the Operator interacts with it only through the af CLI, never directly.
 
 ### 4.1 Runtime lifecycle within the daemon
 
@@ -227,7 +227,7 @@ the Operator interacts with it only through the Telos CLI, never directly.
 
 ---
 
-## 5. The Telos MCP bridge
+## 5. The af MCP bridge
 
 Specified in `docs/runtime-layer.md`, section 8. One instance per running
 agent, inside the agent's container.
@@ -238,12 +238,12 @@ The bridge connects to the daemon's bridge port (`localhost:7400` by default)
 on startup. The connection parameters are injected via environment variables:
 
 ```
-TELOS_DAEMON_HOST=host.containers.internal
-TELOS_DAEMON_PORT=7400
-TELOS_AGENT_TOKEN=<jwt>
-TELOS_WORKSPACE_ID=<uuid>
-TELOS_AGENT_ID=<uuid>
-TELOS_RUN_ID=<uuid>
+AF_DAEMON_HOST=host.containers.internal
+AF_DAEMON_PORT=7400
+AF_AGENT_TOKEN=<jwt>
+AF_WORKSPACE_ID=<uuid>
+AF_AGENT_ID=<uuid>
+AF_RUN_ID=<uuid>
 ```
 
 The agent token is a short-lived JWT issued by the daemon at container
@@ -255,7 +255,7 @@ response accordingly.
 
 If the daemon restarts while an agent is running, the bridge retries
 connection with exponential backoff. While disconnected, the harness can
-still work (editing files, running commands) but Telos-specific tool calls
+still work (editing files, running commands) but harness-specific tool calls
 (spec read, Context search, etc.) return errors. The bridge logs a
 `bridge_disconnected` event locally and replays it to the daemon on
 reconnect.
@@ -298,7 +298,7 @@ existing knowledge base.
 ### 6.3 Configuration
 
 ```yaml
-# ~/.telos/settings.yaml
+# ~/.af/settings.yaml
 memory:
   backend: embedded            # embedded | external
   # For external mode:
@@ -313,9 +313,9 @@ memory:
 ### 7.1 Filesystem layout
 
 ```
-~/.telos/
+~/.af/
   daemon.sock                  # CLI-to-daemon Unix socket
-  telos.db                     # SQLite database (operational + Context stores)
+  af.db                     # SQLite database (operational + Context stores)
   settings.yaml                # Global configuration
   specs/                       # Spec store
     <workspace-id>/
@@ -335,7 +335,7 @@ memory:
     verifier/
     ralph/
   # Worktrees live near the repo, not here — see runtime-layer.md section 3.2
-  # Location: <repo-parent>/.telos_worktrees/<workspace-id>/
+  # Location: <repo-parent>/.af_worktrees/<workspace-id>/
 ```
 
 ### 7.2 Database schema (SQLite)
@@ -388,8 +388,8 @@ Memory tables (embedded mode only):
 
 ### 7.3 Backup and portability
 
-The entire Telos state is in `~/.telos/`: one SQLite file, one specs
-directory, and configuration. Backup is `cp -r ~/.telos/ <backup-path>`.
+The entire harness state is in `~/.af/`: one SQLite file, one specs
+directory, and configuration. Backup is `cp -r ~/.af/ <backup-path>`.
 Moving to a new machine is the same copy plus re-creating worktrees (which
 are tied to the local git repo path).
 
@@ -403,8 +403,8 @@ HTTP/JSON over Unix domain socket. The CLI sends requests; the daemon
 responds. For streaming operations (activity follow, agent logs), the daemon
 uses server-sent events (SSE) over the same connection.
 
-The socket path is `~/.telos/daemon.sock` by default, overridable via
-`TELOS_DAEMON_SOCK` or `--daemon-sock`.
+The socket path is `~/.af/daemon.sock` by default, overridable via
+`AF_DAEMON_SOCK` or `--daemon-sock`.
 
 ### 8.2 MCP bridge ↔ Daemon
 
@@ -414,7 +414,7 @@ includes the agent token in metadata for authentication and scoping.
 Services:
 
 ```protobuf
-service TelosBridge {
+service AfBridge {
   // Spec access
   rpc ReadSpec(ReadSpecRequest) returns (ReadSpecResponse);
   rpc RenderSpec(RenderSpecRequest) returns (RenderSpecResponse);
@@ -493,7 +493,7 @@ capability model (section 8.4 of the PRD) at the bridge boundary.
 
 Detailed in `docs/runtime-layer.md`. The key guarantee: an agent container
 sees only its mounted worktree, its agent home directory, and the MCP bridge
-socket. It cannot see the Telos database, other agents' homes, or the spec
+socket. It cannot see the af database, other agents' homes, or the spec
 store on the host filesystem.
 
 ### 9.3 Daemon access
@@ -509,7 +509,7 @@ is localhost-only by default. No authentication is needed for the CLI socket
 ### 10.1 Local (default)
 
 Everything on one machine. Podman for containers. SQLite for
-storage. Embedded memory service. The Operator runs `telos daemon start` and
+storage. Embedded memory service. The Operator runs `af daemon start` and
 uses the CLI.
 
 ### 10.2 Future: remote daemon
@@ -673,8 +673,8 @@ ci:
 
 ### 12.5 Agent access
 
-The CI/CD bridge is exposed to agents through the Telos MCP bridge as the
-`telos_ci_status` tool. Queries and results are logged as activity events.
+The CI/CD bridge is exposed to agents through the af MCP bridge as the
+`af_ci_status` tool. Queries and results are logged as activity events.
 The tool is read-only — agents cannot trigger pipelines or modify CI
 configuration.
 
@@ -774,7 +774,7 @@ to manage.
 ### 13.6 Configuration
 
 ```yaml
-# ~/.telos/settings.yaml
+# ~/.af/settings.yaml
 notifications:
   channels:
     - type: desktop
