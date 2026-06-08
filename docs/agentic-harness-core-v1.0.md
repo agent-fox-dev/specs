@@ -1,4 +1,4 @@
-# PRD: Telos — Agentic Harness Core (Workspace, Spec Package & Multi-Agent Model)
+# PRD: TAgentic Harness Core (Workspace, Spec Package & Multi-Agent Model)
 
 **Status:** Draft for review
 
@@ -104,7 +104,7 @@ The relationship that matters most: agents do not message each other to coordina
 A workspace is the unit of isolation and the unit of state. It bundles, for one task:
 
 - a git worktree on its own branch, which holds the files agents read and edit;
-- one active spec package (the four required artifacts, plus an optional architecture doc), stored under a spec root (a superseded spec may remain in the workspace's archive but is no longer the active package);
+- one active spec package (the four required artifacts, plus an optional architecture doc), stored in the harness's spec store and accessible to agents only through the harness API (section 7.11); a superseded spec may remain in the store's archive but is no longer the active package;
 - zero or more attached Contexts, each pinned to a fixed revision for this workspace's runs, providing grounding;
 - a registry of agents (active and finished) and their conversation histories;
 - managed scripts, meaning long-running processes such as a dev server that an agent started;
@@ -118,7 +118,7 @@ Isolation lets several workspaces run at once without stepping on each other. Th
 
 A fresh worktree does not inherit untracked files. Environment files, local secrets, seeded data, and installed dependencies do not carry over. Workspace creation must run a bootstrap step (section 5.4) before agents start.
 
-Where the spec package lives relative to the worktree is an open design decision: inside the worktree under a `specs/` root (versioned with the code) or in a sidecar store keyed by workspace. Attached Contexts are not part of the worktree at all; they live in a Context store above the workspace and are referenced by id and pinned revision.
+The spec package does not live in the worktree. It is stored in the harness's spec store, keyed by workspace, and agents access it only through the harness API (section 7.11). Spec artifacts never appear in the project's source tree or its git history. This is the same separation already applied to Contexts, which live in a Context store above the workspace and are referenced by id and pinned revision.
 
 ### 5.3 Workspace lifecycle
 
@@ -146,14 +146,32 @@ The harness exposes the workspace's live state through read APIs (query endpoint
 
 - file listing and file contents for the worktree;
 - git status and per-file diffs;
-- the spec package: each artifact in raw JSON or markdown, and a rendered combined view (section 7.9);
+- the spec package from the spec store: each artifact in raw JSON or markdown, and a rendered combined view (section 7.9);
 - the spec's computed coverage and traceability;
 - the attached Contexts and the revision each is pinned to, plus, for debugging, the prompt assembled for a given turn;
 - the activity log, filterable by agent and by time.
 
 ### 5.6 Per-workspace configuration
 
-A workspace can override global defaults for: git remote and base branch, attached Contexts and their pin mode, setup scripts, the default provider and model, and the spec root location. Anything not set falls back to harness-wide configuration.
+A workspace can override global defaults for: git remote and base branch, attached Contexts and their pin mode, setup scripts, and the default provider and model. Anything not set falls back to harness-wide configuration.
+
+### 5.7 Workspace ownership and management
+
+Every workspace is created and managed by the Operator. No agent creates, archives, or deletes a workspace; those are human decisions.
+
+**Creation.** The Operator creates a workspace by supplying:
+
+- an **origin**: a local repo path, a remote URL the harness clones, or an empty start;
+- the **Contexts** to attach, with pin mode per Context (pinned by default);
+- optionally, a **Campaign** to register the workspace into, with dependency edges.
+
+The harness provisions the branch and worktree, runs bootstrap (section 5.4), and transitions the workspace to `Active` on success. If the workspace is registered into a Campaign with unsatisfied dependencies, bootstrap is deferred until the gate clears (section 6.5); the Operator still created it, the harness only controls when it activates.
+
+**Management.** Archive, reopen, and delete are Operator actions. The harness does not auto-archive a workspace when its spec seals or auto-delete on any condition. The Operator decides when work is done and when to clean up.
+
+The one automatic transition the harness performs is `Created` to `Active` (or `Failed`) on bootstrap completion. Every other lifecycle transition in section 5.3 requires an explicit Operator action through the harness API (section 12).
+
+**Why Operator-only.** Workspace creation is a resource decision (a branch, a worktree, disk, agent budget) and a scoping decision (which repo, which Contexts, which Campaign). Both are human judgment. Keeping creation Operator-only also means the harness never proliferates workspaces on its own, which bounds resource consumption and keeps the workspace list human-comprehensible.
 
 ---
 
@@ -234,11 +252,11 @@ Architectural detail has an explicit, optional home in `architecture.md`. The ha
 
 The PRD is the only artifact authored primarily by humans; its `## Intent` section is hashed at the `draft` to `active` transition and protected thereafter (section 7.6). `architecture.md` is outside validation: the harness checks only that it exists when referenced, and never parses its content.
 
-### 7.3 Folder layout, completeness, and bootstrap
+### 7.3 Identity, completeness, and bootstrap
 
-Specs live under a spec root, by convention `<spec_root>/specs/{NN}_{snake_case_name}/`, where `NN` is a monotonically increasing integer assigned as `max(existing) + 1`, with collisions rejected at creation.
+Specs are stored in the harness's spec store, keyed by workspace and identified by a spec id: a monotonically increasing integer assigned as `max(existing) + 1`, with collisions rejected at creation. The conventional display name is `{NN}_{snake_case_name}`, where `NN` is the zero-padded id.
 
-Completeness is a hard rule: a spec directory is valid only with all four required files. During creation the harness operates in bootstrap mode, writing the four files sequentially and deferring cross-file validation until all four exist. A partially created spec is "incomplete," distinct from "invalid": incomplete means not yet validatable. A spec cannot move from `draft` to `active` while incomplete. The optional `architecture.md` may be added at any point without affecting validity.
+Completeness is a hard rule: a spec is valid only with all four required artifacts. During creation the harness operates in bootstrap mode, writing the four artifacts sequentially and deferring cross-artifact validation until all four exist. A partially created spec is "incomplete," distinct from "invalid": incomplete means not yet validatable. A spec cannot move from `draft` to `active` while incomplete. The optional `architecture.md` may be added at any point without affecting validity.
 
 ### 7.4 The task model
 
@@ -374,6 +392,20 @@ Agents read a Context; they never write to it. There is no tool that mutates a C
 
 A Context is owned by a principal (a user or an organization) and carries an access policy. A Context's effective grounding for a given run is filtered by the access of the principal the run acts for: a source the acting principal cannot read is treated as absent. Inside a single workspace this is usually moot, since all agents act for the same caller, but it matters for org-owned Contexts shared across teams, and it raises the unresolved question of how credentials are scoped when Contexts are shared across principals with different access levels.
 
+### 7.11 Spec access at runtime
+
+Agents do not read spec artifacts as files. The spec package lives in the harness's spec store, outside the worktree, and agents access it through the harness API. This enforces the freeze (section 7.7) structurally: an agent cannot edit a frozen spec through exec, a code generator, or any file tool, because the spec is not a file in its working tree.
+
+The harness provides spec content to agents through two channels:
+
+- **Prompt assembly (section 8.3).** Before each turn the harness renders the slice of the spec relevant to the agent's current work and includes it in the system prompt. For a worker Archetype this is its assigned subtask plus the requirements and test specs that subtask traces to. The agent receives what it needs without querying for it.
+
+- **Spec read tool.** A read-only tool that lets an agent query the spec package on demand: fetch a single artifact, fetch the rendered combined view, or look up traceability and coverage. This supplements prompt assembly for cases where an agent needs to consult a part of the spec outside its assembled slice (for example, an Implementor checking how a neighboring subtask defines an interface it depends on).
+
+There is no spec-write tool. The write path runs through the harness's authoring API (section 12), available to the Planner during `draft` and to the Operator for PRD and `architecture.md` edits. Agents working against an active spec interact with it as a read-only contract.
+
+The Operator authors the PRD through the same harness API, not by editing a file in the worktree. This is a consequence of the sidecar storage decision: the PRD is an artifact in the spec store like the other three, and all writes go through the harness's validation and lifecycle machinery. An authoring surface (CLI, editor integration, or web form) may wrap this API to give the Operator a comfortable editing experience, but that surface is outside the scope of the harness core.
+
 ---
 
 ## 8. Agents
@@ -455,8 +487,9 @@ Tools are the agent's only way to affect the world.
 | Git                  | Stages, commits, opens a PR, reads PR and CI status.                                                         | Commits land on the workspace branch only.                                                                                                                                 |
 | Issue tracker        | Reads, searches, creates, comments on, and updates issues through a generic, tracker-agnostic interface (defined below). | Backend-agnostic; writes are external side effects scoped to the workspace's configured project. Distinct from a linked-issue grounding source, which is read-only background. |
 | Web search           | Discovers and reads public web content through a generic, provider-agnostic search service: `search` for ranked results, `fetch` for a result's readable text. | Read-only; queries and results land in the activity log. Always live; results are not pinned across runs. All returned content is treated as untrusted data and never as instructions; the harness enforces this through structure, not prompt wording (see the "Untrusted external content" paragraph below). Interactive pages route through Browser control. |
+| Spec read            | Fetches spec artifacts, rendered views, traceability, and coverage from the harness spec store (section 7.11). | Read-only; no write path. Supplements the spec slice already in the prompt (section 8.3). |
 
-A few constraints are worth drawing out. The MCP-call tool is not a parallel mechanism; its availability flows from the attached Contexts. There is no spec-write tool and no Context-write tool in the runtime toolset: an active spec is frozen and authored only during `draft` through the orchestration surface (sections 7.7 and 12), and a Context is read-only and edited only by the Operator outside a run (section 7.10). Memory has the same shape, a read tool but no write tool, because it is written once per session by the harness rather than by the agent mid-turn (section 8.6). A worker running against an active spec affects the world through code, commands, commits, issues, and grounding reads, never by rewriting the contract it works against.
+A few constraints are worth drawing out. The MCP-call tool is not a parallel mechanism; its availability flows from the attached Contexts. There is no spec-write tool and no Context-write tool in the runtime toolset: an active spec is frozen and authored only during `draft` through the orchestration surface (sections 7.7 and 12), and a Context is read-only and edited only by the Operator outside a run (section 7.10). The spec-read tool (section 7.11) gives agents on-demand access to the spec store but never a write path; the spec is not a file in the worktree, so file tools and exec cannot reach it either. Memory has the same shape, a read tool but no write tool, because it is written once per session by the harness rather than by the agent mid-turn (section 8.6). A worker running against an active spec affects the world through code, commands, commits, issues, and grounding reads, never by rewriting the contract it works against.
 
 The issue tool is driven by a generic adapter, the same "bring your own backend" pattern as the provider (section 8.1) and the memory service (section 8.6). The harness normalizes GitHub Issues, GitLab, Jira, Linear, and the like behind one interface and exposes its operations to agents as the tool above:
 
@@ -688,14 +721,14 @@ An Implementor signals completion by moving its subtask to `awaiting_verificatio
 
 ## 11. Data model and persistence
 
-The harness persists per-workspace state so a process restart resumes cleanly. The spec artifacts persist as files under the spec root (their canonical form). Contexts persist in a Context store above the workspace, keyed by Context id and revision. The operational store below holds runtime state the artifacts exclude.
+The harness persists per-workspace state so a process restart resumes cleanly. The spec artifacts persist in the harness's spec store, keyed by workspace and spec id. Contexts persist in a Context store above the workspace, keyed by Context id and revision. The operational store below holds runtime state the artifacts exclude.
 
 | Entity | Key fields |
 | --- | --- |
-| Workspace | id, name, status, origin, branch, worktree path, base branch, remote, spec_root path, campaign_id (nullable), timestamps. |
+| Workspace | id, name, status, origin, branch, worktree path, base branch, remote, campaign_id (nullable), timestamps. |
 | Campaign | id, name, status, goal document, shared Context ids, timestamps. (Optional; lives above workspaces.) |
 | CampaignMember | campaign id, workspace id, spec_id (nullable), dependency edges (depends_on_spec, from_group, to_group). A registered-but-unplanned spec has a workspace and dependency edges but no spec_id until the Operator authors a PRD and the harness bootstraps the spec artifacts. |
-| WorkspaceConfig | workspace id, setup scripts, default provider, default model, spec_root location. |
+| WorkspaceConfig | workspace id, setup scripts, default provider, default model. |
 | SpecRef | workspace id, spec_id, spec_name, status, intent_hash (nullable in `draft`), schema_version. Created when the spec is bootstrapped, not when the workspace is registered into a Campaign. |
 | Context | id, name, owner principal, access policy, instruction, current revision, timestamps. (Lives in the Context store, not per workspace.) |
 | Source | id, context id, type, locator, resolution strategy, freshness contract, revision. |
@@ -707,7 +740,7 @@ The harness persists per-workspace state so a process restart resumes cleanly. T
 | Message | id, agent id, role, content, parent message id, timestamp. |
 | ActivityEvent | id, workspace id, agent id, type (text, thinking, tool_call, tool_result, spec_patch, context_pin, memory_pin, file_claim, commit, status_change, loop_complete, loop_stopped), payload, timestamp. |
 
-The spec artifacts are not duplicated into this store beyond the `SpecRef` summary; the files are the source of truth. Contexts are referenced, not copied into the workspace; a `ContextAttachment` records which revision a workspace is pinned to. Agent memory is likewise external and referenced: a `MemoryPin` records the scope and revision a run read, and the consolidated learnings live in the memory store or service. The `ActivityEvent` stream is append-only and ordered: it records the authoring patch behind every spec change as a `spec_patch` event, the pinned Context revisions at run start as a `context_pin` event, and the pinned memory revision as a `memory_pin` event, so the spec's evolution and the run's full grounding are reconstructable.
+The spec artifacts live in the spec store, keyed by workspace and spec id; the `SpecRef` summary in the operational store carries only the identity and lifecycle state. Contexts are referenced, not copied into the workspace; a `ContextAttachment` records which revision a workspace is pinned to. Agent memory is likewise external and referenced: a `MemoryPin` records the scope and revision a run read, and the consolidated learnings live in the memory store or service. The `ActivityEvent` stream is append-only and ordered: it records the authoring patch behind every spec change as a `spec_patch` event, the pinned Context revisions at run start as a `context_pin` event, and the pinned memory revision as a `memory_pin` event, so the spec's evolution and the run's full grounding are reconstructable.
 
 ---
 
@@ -717,14 +750,14 @@ The spec artifacts are not duplicated into this store beyond the `SpecRef` summa
 - Workspace: create (with the set of Contexts to attach and their pin mode), get, list, archive, delete; read files, diffs, git status; run and observe bootstrap.
 - Spec lifecycle: create a spec (bootstrap the four files), get the next spec number, transition status, read `intent_hash` and lifecycle state.
 - Spec authoring (`draft` only): apply a validated JSON Patch, single or atomic multi-file; the harness runs schema validation, cross-file integrity, and the actor-permission check inside one transaction, repairing near-misses or returning a proposed patch before the commit gate (section 7.8). Available only while the spec is in `draft`; an active spec is frozen (section 7.7).
-- Spec read and render: fetch any artifact as JSON or markdown; fetch the combined render; fetch coverage and traceability; run standalone `validate()`.
+- Spec read and render: fetch any artifact as JSON or markdown from the spec store; fetch the combined render; fetch coverage and traceability; run standalone `validate()`. This is the same data the spec-read tool (section 7.11) exposes to agents at runtime.
 - Contexts (Operator-facing, outside a run): create, get, list a Context; add and remove sources; set the instruction; set ownership and access; cut a new revision. Attach a Context to a workspace with a pin (revision plus pin mode); detach. There is no API by which an agent mutates a Context; Context edits are Operator actions.
 - Agent memory: configure which memory backend a workspace uses and its scope; the harness drives `recall` and `consolidate` internally per section 8.6. There is no agent-facing memory-write API; learnings land only through the harness's session-end `consolidate`.
 - Grounding read (debug): fetch the prompt assembled for a given turn, and the pinned Context and memory revisions in effect.
 - Agents: start with a specialist role and actor capability; send a follow-up; stop; fork; subscribe to the event stream.
 - Orchestration: start a Planner on a PRD; approve a drafted spec or return it to the Planner with feedback for revision; hand off to the Coordinator for execution; query subtask and verification status.
 - Activity: subscribe to or page through the event stream, including `spec_patch`, `context_pin`, and `memory_pin` events.
-- Config: set global and per-workspace providers, models, attached Contexts and pin mode, the memory backend and scope, the issue-tracker and web-search backends, setup scripts, and spec root.
+- Config: set global and per-workspace providers, models, attached Contexts and pin mode, the memory backend and scope, the issue-tracker and web-search backends, and setup scripts.
 
 The API stays transport-neutral at the core, with a thin server wrapper if a remote surface needs one.
 

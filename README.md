@@ -7,7 +7,7 @@ Specifications and architecture documents for [agent-fox](https://github.com/age
 | Document | Description |
 |---|---|
 | [Spec Format Specification v1.1](docs/spec-format_v1.1.md) | The on-disk structure for spec packages: the artifacts that capture design intent, acceptance criteria, verification contracts, and implementation plans for a feature. |
-| [Telos PRD](docs/telos-prd-v4.md) | Product requirements for the agentic harness core: workspaces, the spec package lifecycle, the Context grounding model, multi-agent orchestration, and the pluggable provider/memory/issue-tracker contracts. |
+| [Agentic Harness Core PRD](docs/agentic-harness-core-v1.0.md) | Product requirements for the agentic harness core: workspaces, the spec package lifecycle, the Context grounding model, multi-agent orchestration, and the pluggable provider/memory/issue-tracker contracts. |
 | [Legacy af-spec reference](docs/af-spec-legacy.md) | Reference material from the original af-spec skill. Retained for historical context. |
 
 ## Spec format quick reference
