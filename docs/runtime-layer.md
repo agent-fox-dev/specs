@@ -469,6 +469,8 @@ layer's tools appear to the agent as standard MCP tools.
 | `telos_subtask_state` | Transition the agent's own subtask state. | Agent → Telos service |
 | `telos_file_claim` | Claim, renew, release an advisory file lease. | Agent → Telos service |
 | `telos_ci_status` | Query CI pipeline runs, job results, and logs. | Agent → Telos service |
+| `telos_issues` | Read, search, create, comment on, update issues through the tracker-agnostic interface. | Agent → Telos service |
+| `telos_web_search` | Search and fetch public web content through the provider-agnostic interface. | Agent → Telos service |
 
 ### 8.3 Architecture
 

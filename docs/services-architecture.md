@@ -334,8 +334,8 @@ memory:
     implementor/
     verifier/
     ralph/
-  worktrees/                   # Managed by the runtime engine
-    <workspace-id>/            # git worktree directory
+  # Worktrees live near the repo, not here — see runtime-layer.md section 3.2
+  # Location: <repo-parent>/.telos_worktrees/<workspace-id>/
 ```
 
 ### 7.2 Database schema (SQLite)
@@ -358,7 +358,7 @@ of the PRD:
 - `runs` — id, workspace_id, spec_id, kind, status, circuit_breaker_state
   (JSON), started_at, ended_at
 - `agents` — id, workspace_id, run_id, specialist_role, actor_capability,
-  provider, model, status, parent_agent_id, started_at, ended_at
+  provider, model, phase, activity, parent_agent_id, started_at, ended_at
 - `subtask_executions` — workspace_id, spec_id, subtask_id, run_id,
   assigned_agent_id, state, drop_rationale, started_at, completed_at
 - `verification_outcomes` — workspace_id, spec_id, run_id, group_id,
@@ -441,6 +441,17 @@ service TelosBridge {
   rpc ListCIRuns(ListCIRunsRequest) returns (ListCIRunsResponse);
   rpc GetCIRun(GetCIRunRequest) returns (GetCIRunResponse);
   rpc GetCIJobLog(GetCIJobLogRequest) returns (GetCIJobLogResponse);
+
+  // Issue tracker
+  rpc SearchIssues(SearchIssuesRequest) returns (SearchIssuesResponse);
+  rpc GetIssue(GetIssueRequest) returns (GetIssueResponse);
+  rpc CreateIssue(CreateIssueRequest) returns (CreateIssueResponse);
+  rpc CommentIssue(CommentIssueRequest) returns (CommentIssueResponse);
+  rpc UpdateIssue(UpdateIssueRequest) returns (UpdateIssueResponse);
+
+  // Web search
+  rpc WebSearch(WebSearchRequest) returns (WebSearchResponse);
+  rpc WebFetch(WebFetchRequest) returns (WebFetchResponse);
 
   // Heartbeat
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);

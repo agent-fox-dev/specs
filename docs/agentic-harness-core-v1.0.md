@@ -1,4 +1,4 @@
-# PRD: TAgentic Harness Core (Workspace, Spec Package & Multi-Agent Model)
+# PRD: Agentic Harness Core (Workspace, Spec Package & Multi-Agent Model)
 
 **Status:** Draft for review
 
@@ -52,7 +52,7 @@ Out of scope for this core, by request and by design:
 - Building our own foundation model. Agents run on external providers.
 - A merge queue or CI system. The harness reads CI status and drives PRs but does not run pipelines itself.
 - The JSON Schema authoring tooling and the hosted schema URLs. Schemas are bundled with the validation library; the `$schema` URIs are informational.
-- The Context authoring UI and the retrieval and embedding engine behind retrieved sources. This PRD specifies the contract a Context and its sources must satisfy and how the harness consumes them, not how a Context is edited in a UI or how indexing is implemented.
+- The Context authoring UI. This PRD specifies the contract a Context and its sources must satisfy and how the harness consumes them, not how a Context is edited in a UI. The retrieval and embedding engine for `retrieved` sources is specified in section 15.4 and in the services architecture document.
 - Agent write-back into a Context. Contexts are read-only to agents by design (section 7.10). Editing a Context is an Operator action that happens outside a run.
 
 The browser and terminal deserve a note. Their *UI* (an overlay console, a preview panel) is out of scope. Their *agent-facing capability* (running commands, controlling a headless browser to verify a web app) is in scope, because that is part of how agents do work.
@@ -227,7 +227,7 @@ A Campaign is not a spec. It has no `requirements.json`, no freeze, no traceabil
 
 ## 7. The Spec Package
 
-The coordination layer is a validated package of artifacts, not a single prose note. The reference is the **Spec Format Specification (v1.1)** at `1_workspace/telos/3_resources/spec-format.md`; that document is the authority on field-level detail. Where this PRD and the format spec disagree on structure or field semantics, the format spec wins; where the harness adopts a stricter operating policy than the format permits (such as the freeze in section 7.7), that policy stands. Here we cover only what the harness builds around it. Section 7.10 then covers the grounding layer, which is the other layer of input attached to a workspace.
+The coordination layer is a validated package of artifacts, not a single prose note. The reference is the **Spec Format Specification (v1.1)** at `docs/spec-format_v1.1.md`; that document is the authority on field-level detail. Where this PRD and the format spec disagree on structure or field semantics, the format spec wins; where the harness adopts a stricter operating policy than the format permits (such as the freeze in section 7.7), that policy stands. Here we cover only what the harness builds around it. Section 7.10 then covers the grounding layer, which is the other layer of input attached to a workspace.
 
 ### 7.1 The package structure
 
@@ -412,30 +412,17 @@ The Operator authors the PRD through the same harness API, not by editing a file
 
 ### 8.1 The provider abstraction
 
-The harness contains no model. It drives an external provider, and "bring your own agent" is first-class: Claude Code, Codex, and OpenCode must all be usable, and different agents in the same workspace may use different providers and models. One interface every adapter implements:
+The harness contains no model. It drives an external provider, and "bring your own agent" is first-class: Claude Code, Gemini CLI, Codex, and OpenCode must all be usable, and different agents in the same workspace may use different providers and models.
 
-```
-interface Provider {
-  // Run an agentic turn. The harness supplies the assembled prompt,
-  // the tool definitions the agent may call, and the model.
-  // The provider streams back events: text, thinking, tool calls,
-  // and completion. The harness executes tool calls and feeds
-  // results back until the provider signals done.
-  run(input: {
-    model: string
-    systemPrompt: string          // role + composed instructions + rendered spec excerpt
-    messages: Message[]
-    tools: ToolDefinition[]
-    workspaceId: string
-  }): AsyncStream<AgentEvent>
-}
-```
+Each provider runs as an opaque process inside a container managed by the runtime layer (section 14). The provider owns the model call, the tool loop, and which tool to call next. The coordination layer does not intercept the provider's native tool calls — instead, it extends the provider's tool set through the Telos MCP bridge (section 14.1), a sidecar MCP server that exposes Telos-specific tools (spec read, Context search, memory recall, subtask state, file claims, CI/CD status, issue tracker, web search) alongside the provider's native tools. From the provider's perspective, Telos tools are indistinguishable from any other MCP server.
 
-The harness owns the tool loop and the workspace state. The provider owns the model call and which tool to call next.
+The coordination layer interacts with a running provider through two channels: it injects configuration before the provider starts (system prompt, instructions, MCP server declarations, environment variables — handled by the harness adapter in the runtime layer), and it receives tool calls and state updates through the MCP bridge during execution.
 
-### 8.2 The agent runtime loop
+### 8.2 The agent execution model
 
-A single agent turn: the harness assembles the prompt, calls `run`, streams events (text and thinking to the activity log; a tool call pauses the stream), executes the tool call against the workspace, logs the action and result, returns the result, and repeats until completion or stop. An agent can be stopped mid-generation with history retained, and a conversation can be forked from any earlier message.
+The provider runs its own tool loop inside the container. It reads and writes files in the mounted worktree, executes shell commands, drives a browser, and calls MCP tools — including the Telos MCP bridge — according to its own reasoning. The coordination layer observes this through the MCP bridge (which logs every Telos tool call as an activity event) and through the runtime's agent state reporting (phase and activity updates via heartbeat).
+
+An agent can be stopped mid-execution with its session preserved for resume (if the harness supports it). The Coordinator can send follow-up messages to a running agent through the runtime's message injection.
 
 ### 8.3 Prompt assembly
 
@@ -725,7 +712,7 @@ The mechanism, kept deliberately small:
 - **Deadlock avoidance.** An agent claims the set of files a subtask needs up front, or acquires them in canonical path order, so two agents cannot circularly wait. Leases are the backstop if a cycle forms anyway.
 - **Atomic acquisition.** Taking a claim is a compare-and-set against the claim table, so two agents cannot both believe they hold the same file.
 
-Claims are runtime state, so they live in the operational store (section 11), not in any artifact. In a single-process harness the claim table is in memory; across processes it is database-backed with the same atomic acquisition. Every claim and release is an activity-log event, so file-level coordination is auditable alongside everything else.
+Claims are runtime state, so they live in the operational store (section 11), not in any artifact. The daemon persists claims in the database with atomic acquisition. Every claim and release is an activity-log event, so file-level coordination is auditable alongside everything else.
 
 This is the dynamic answer to the shared-worktree concurrency question. Static disjoint-file scoping assumed each subtask's file set was known in advance, which it rarely is; a claim lets agents reserve files as they discover they need them. The nested-worktree-per-worker option remains the configurable alternative for stronger isolation, trading in-flight coordination for a merge at the end.
 
@@ -846,10 +833,10 @@ The harness persists state across three stores so a process restart resumes clea
 | Entity | Key fields | Notes |
 | --- | --- | --- |
 | Run | id, workspace id, spec_id (nullable), kind (`spec_driven` / `ralph`), status (`running` / `completed` / `stopped` / `failed`), started_at, ended_at, circuit breaker state (Ralph only: tokens spent, iterations completed, elapsed duration), timestamps. | The unit of execution. A spec-driven run covers phases 5-6 of the generic flow (section 10.1). A Ralph run covers the goal-and-verifier loop (section 10.4). Pinned Context and memory revisions are recorded per run via `ContextAttachment` and `MemoryPin`. |
-| Agent | id, workspace id, run id, specialist role, actor capability, provider, model, status (`running` / `stopped` / `completed` / `failed`), parent agent id (nullable), started_at, ended_at. | A running model instance within a run. `parent_agent_id` links a worker to the Coordinator that spawned it. |
+| Agent | id, workspace id, run id, specialist role, actor capability, provider, model, phase (`created` / `provisioning` / `starting` / `running` / `stopping` / `stopped` / `suspended` / `error`), activity (nullable: `working` / `thinking` / `waiting_for_input` / `completed` / `idle`), parent agent id (nullable), started_at, ended_at. | A running model instance within a run. Phase tracks the container lifecycle; activity tracks what the agent is doing within the `running` phase (section 14, `docs/runtime-layer.md` section 5.1). `parent_agent_id` links a worker to the Coordinator that spawned it. |
 | SubtaskExecution | workspace id, spec_id, subtask id, run id, assigned agent id, state (`pending` / `queued` / `in_progress` / `awaiting_verification` / `done` / `pending_reevaluation` / `dropped`), drop rationale (nullable), started_at, completed_at. | The live execution state of a subtask. The state machine is defined in section 7.4; transitions are harness-enforced. The frozen `tasks.json` defines the subtask; this entity tracks progress against it. Replaces the former `SubtaskAssignment`. |
 | VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result (`pass` / `fail`), detail (nullable), recorded_at. | One row per check in a verification subtask. The Verifier reports pass or fail; the harness records it here and transitions implementation subtasks accordingly (section 9.5). |
-| FileClaim | workspace id, file path or glob, holder agent id, run id, acquired_at, lease expiry, state (`held` / `released` / `expired`). | Advisory file lease for coordinating parallel worktree writes (section 9.3). In-memory in a single-process harness; database-backed across processes. Atomic acquisition via compare-and-set. |
+| FileClaim | workspace id, file path or glob, holder agent id, run id, acquired_at, lease expiry, state (`held` / `released` / `expired`). | Advisory file lease for coordinating parallel worktree writes (section 9.3). Database-backed with atomic acquisition via compare-and-set. Stale claims are expired during daemon crash recovery. |
 | ManagedScript | workspace id, agent id (nullable), run id (nullable), command, pid, status (`running` / `stopped` / `failed`), started_at, stopped_at. | A long-running process started by an agent (dev server, watcher, etc.) that the harness tracks for cleanup on archive or delete (section 5.1). |
 
 **Conversation layer.**
@@ -869,7 +856,7 @@ The harness persists state across three stores so a process restart resumes clea
 
 The spec store and Context store are durable: their content is the source of truth for artifacts and grounding, and losing them means losing the spec packages and Contexts themselves. The operational store is likewise durable for workspace state, spec lifecycle, run records, subtask execution state, and the activity log; a process restart resumes from persisted state.
 
-File claims are the exception. In a single-process harness they live in memory and are lost on restart; a restarted harness re-evaluates claims from the run state (which agents are active, which subtasks are in progress) rather than restoring stale leases. In a multi-process harness they are database-backed and survive restarts.
+File claims are database-backed and survive daemon restarts. However, stale claims (held by agents that exited while the daemon was down) are expired during crash recovery rather than restored — the daemon re-evaluates claims against actual agent state on startup (section 15, `docs/services-architecture.md` section 2.4).
 
 The `ActivityEvent` stream is the recovery backbone. Because it records every spec patch, every Context and memory pin, every subtask transition, every verification outcome, and every agent action, a run's full history is reconstructable from the event stream alone. The spec store and operational store are the live state; the activity log is the audit trail.
 
@@ -1034,7 +1021,7 @@ The full runtime layer specification is in a separate document (`docs/runtime-la
 
 ## 15. Services architecture
 
-The coordination layer (sections 5-12) and the runtime layer (section 14) need concrete services to run. This section identifies the deployable components, their responsibilities, and how they compose. The design is local-first: everything runs on one machine as a set of cooperating processes. Remote execution, multi-user hosting, and web dashboards are future options that the architecture accommodates but does not require.
+The coordination layer (sections 5-12) and the runtime layer (section 14) need concrete services to run. This section identifies the deployable components, their responsibilities, and how they compose. The design is local-first: everything runs on one machine as a set of cooperating processes. Remote execution and multi-user hosting are future options that the architecture accommodates but does not require.
 
 ### 15.1 Deployable components
 
