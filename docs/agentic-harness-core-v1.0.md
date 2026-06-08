@@ -703,19 +703,64 @@ An Implementor signals completion by moving its subtask to `awaiting_verificatio
 
 ## 10. Key flows
 
-**Ralph task.** Caller opens a workspace, attaches relevant Contexts (pinned), and gives Ralph a goal statement and a verifier command. Ralph loops (editing files, running tools, checking the verifier) until the verifier passes or a circuit breaker fires. On clean exit it commits the branch and signals ready; on a breaker it commits whatever progress it made and stops. Caller reviews the branch as a PR.
+### 10.1 The generic spec-driven flow
 
-**Solo task.** Caller opens a workspace, attaches the relevant Context (pinned), authors a short PRD, and sends it to a Planner. The Planner drafts a small validated spec grounded in the Context and presents it for review. The caller approves (sealing Intent), and a Coordinator picks up the approved spec, runs the Implementor against the requirements and tests, and reports ready. Caller reviews the diff and merges.
+Every spec-driven task follows one flow. The variants described in 10.2 differ in parameters (worker count, workspace origin, whether a Campaign gates activation), not in structure. Eight phases, in order:
 
-**Coordinated feature.** Caller authors a PRD, attaches the Contexts that describe the domain (pinned), and sends it to a Planner. The Planner reads the grounding, drafts `requirements.json`, `test_spec.json`, and `tasks.json` as validated, mutually consistent artifacts, and presents the rendered spec. Caller approves, moving the spec to `active` and hashing the Intent. The Coordinator takes over, delegates subtasks to parallel Implementors, each grounded in the same pinned Contexts, each transitioning their own state and committing. The Verifier runs verification and the wiring group, bouncing failures back. The Coordinator reports ready.
+| Phase | Who acts | What happens | Sections |
+| --- | --- | --- | --- |
+| **1. Provision** | Operator | Creates the workspace: supplies an origin (repo path, clone URL, or empty), attaches Contexts with pin mode, and optionally registers into a Campaign with dependency edges. | 5.3, 5.7 |
+| **2. Bootstrap** | Harness | Runs the workspace's setup scripts in the worktree. On success the workspace transitions to `Active`; on failure it transitions to `Failed`. If registered into a Campaign with unsatisfied dependencies, bootstrap is deferred until the gate clears. | 5.4, 6.5 |
+| **3. Author** | Operator, then Planner | The Operator authors the PRD through the harness API, defining intent, goals, and non-goals. The Operator may draft the PRD directly or use an agent to assist — generating a first draft from a brief, expanding bullet points into structured narrative, or filling in non-goals and background from the attached Contexts — but the Operator owns the result and is the one who submits it. The Operator then hands the PRD to a Planner. The Planner reads the attached Contexts for domain grounding and drafts the three JSON artifacts (`requirements.json`, `test_spec.json`, `tasks.json`) as a validated, mutually consistent package. The harness validates each write against schema and cross-artifact integrity rules (section 7.8). The Planner presents the rendered spec to the Operator. | 7.2, 7.3, 7.8, 7.11 |
+| **4. Approve** | Operator | Reviews the drafted spec. May return it to the Planner with feedback, restarting the drafting cycle within phase 3. On approval the harness transitions the spec from `draft` to `active`, hashes the Intent section, and freezes the package. From this point the declarative artifacts are immutable. | 7.6, 7.7 |
+| **5. Execute** | Coordinator, Implementors | The Coordinator reads the frozen `tasks.json`, delegates subtasks to Implementors (one or more, sequential or parallel), and monitors execution state in the operational store. Each Implementor reads its assigned subtask and the requirements and test specs it traces to (via prompt assembly and the spec-read tool), implements the work in the worktree, commits, and transitions its own subtask to `awaiting_verification`. The Coordinator triggers verification when subtasks report ready. | 8.3, 7.11, 9.1, 9.4 |
+| **6. Verify** | Verifier, Harness | The Verifier runs the group's verification checks. On pass the harness transitions the subtask to `done`. On failure the harness transitions it to `pending_reevaluation` and the Coordinator re-delegates. After all groups pass, the Verifier runs the wiring verification group: tracing execution paths through production code, running smoke tests, and auditing for stubs. The wiring gate must pass before the work rolls up to ready. | 9.5 |
+| **7. Deliver** | Coordinator, then Operator | The Coordinator signals ready for review. The Operator reviews the branch (as a PR or direct inspection), merges, and seals the spec. Sealing is an explicit Operator action; reporting ready does not seal automatically. | 7.6 |
+| **8. Close** | Operator | Archives the workspace. The branch, commits, and spec remain available for reference. Contexts are unaffected; they outlive the workspace. | 5.3, 5.7 |
 
-**Campaign (new app).** Caller creates a Campaign with a goal document and registers spec 01 (e.g. data models) with no dependencies. A Planner drafts spec 01's package; the caller approves; a Coordinator drives it to sealed. As spec 01's task groups complete, the harness signals that spec 02 (e.g. auth, which declared a dependency on spec 01 group 3) is now unblocked and activates its workspace. The caller authors spec 02's PRD informed by spec 01's output and repeats the single-spec flow. Specs with no cross-dependency (say a frontend scaffold that only depends on spec 01 group 1) run in parallel with spec 02 once their gate clears. The Campaign reaches `complete` when all registered specs are sealed.
+The two human checkpoints are phase 4 (approve the plan before work begins) and phase 7 (review the result before it merges). Everything between is agent-driven. Everything before phase 3 and after phase 7 is Operator-controlled.
 
-**From scratch.** Caller opens an empty workspace, attaches Contexts if any apply, and authors a PRD. The Planner drafts a spec package whose first task group includes project scaffolding, and the flow proceeds as a coordinated feature with Implementors creating the initial structure.
+The flow assumes a single pass through phases 3-6. When verification fails, the Coordinator re-delegates within the same frozen plan (phase 5 re-enters for the affected subtasks). When the plan itself is wrong, the Operator supersedes the spec (section 10.3), which resets to phase 3 in the same workspace.
 
-**Superseding a spec.** A new spec sets `supersedes` to the prior spec's ID. The harness applies a deprecation banner to the superseded spec's PRD, transitions it to `superseded`, and moves its folder to the archive. No work is lost.
+### 10.2 Variants
 
-**Superseding mid-flight.** The verification loop in section 9.5 bounces subtasks to `pending_reevaluation` or `pending`, which re-runs the same frozen plan. When the plan itself is wrong (a requirement is incorrect, not just unmet), re-running cannot converge and the loop is unproductive. The escape is an Operator-initiated supersede. When the Operator supersedes an `active` spec, the harness stops all running agents in the workspace, transitions every in-progress or awaiting-verification subtask to `dropped` with the rationale "spec superseded," commits any partial work on the branch, and transitions the spec to `superseded`. The workspace stays `Active`; the Operator authors a corrective PRD and a Planner drafts the replacement spec in a new spec directory, inheriting the same workspace and branch so partial commits carry forward. The superseding spec's `tasks.json` may reference completed work from the prior spec's branch rather than re-implementing from scratch. This is the only modeled escape from "the frozen plan is wrong," and the Operator must recognize and initiate it — the harness does not detect requirement defects on its own.
+The generic flow accommodates every spec-driven scenario through its parameters. Each variant below names which phases differ and how.
+
+**Single worker vs. parallel workers.** The flow is identical. A small task may have one task group with one Implementor; a larger feature may have multiple groups with parallel Implementors per group. The Coordinator delegates either way. The difference is the shape of `tasks.json` authored in phase 3, not the flow structure.
+
+**Empty origin (from scratch).** Phase 1 supplies an empty directory instead of a repo. Phase 2 bootstrap may be minimal or skipped. Phase 3 produces a `tasks.json` whose first group includes project scaffolding (directory structure, dependency files, initial configuration). Phases 4-8 proceed unchanged.
+
+**Campaign.** A Campaign wraps multiple instances of the generic flow with a dependency graph between them. Phase 1 includes registering the workspace into the Campaign with dependency edges. Phase 2 is deferred until upstream dependencies are satisfied (section 6.5). Once the workspace activates, phases 3-8 proceed as a standalone spec-driven flow. The Campaign reaches `complete` when every registered spec is sealed. The harness watches for upstream group completion and activates downstream workspaces; the Operator authors each downstream PRD informed by what the upstream work produced.
+
+### 10.3 Superseding a spec
+
+Supersession is the modeled escape when the frozen plan is wrong — a requirement is incorrect, not just unmet — and re-running verification cannot converge.
+
+**Superseding a completed spec.** The new spec sets `supersedes` to the prior spec's ID. The harness transitions the prior spec to `superseded`, applies a deprecation banner to its PRD, and moves it to the archive. No work is lost; the prior branch and commits remain.
+
+**Superseding mid-flight.** When the Operator supersedes an `active` spec, the harness:
+
+1. Stops all running agents in the workspace.
+2. Transitions every `in_progress` or `awaiting_verification` subtask to `dropped` with the rationale "spec superseded."
+3. Commits any partial work on the branch.
+4. Transitions the spec to `superseded`.
+
+The workspace stays `Active`. The Operator authors a corrective PRD and hands it to a Planner, restarting from phase 3 of the generic flow in the same workspace and on the same branch, so partial commits carry forward. The replacement spec's `tasks.json` may reference completed work from the prior spec rather than re-implementing from scratch.
+
+This is the only modeled escape from "the frozen plan is wrong." The Operator must recognize and initiate it — the harness does not detect requirement defects on its own.
+
+### 10.4 The Ralph flow
+
+Ralph is the alternative to the spec-driven flow for tasks where iteration is cheaper than upfront planning. It replaces phases 3-7 entirely with a goal-and-verifier loop. Phases 1, 2, and 8 are identical.
+
+| Phase | Who acts | What happens |
+| --- | --- | --- |
+| **1. Provision** | Operator | Creates the workspace and attaches Contexts, same as the generic flow. |
+| **2. Bootstrap** | Harness | Runs setup scripts, same as the generic flow. |
+| **3-7. Loop** | Ralph | The Operator supplies a goal statement (free text) and a verifier command (a shell command whose exit code determines pass/fail). Ralph iterates: assemble prompt from goal, verifier output, Contexts, and history; run one agent turn; execute tool calls; run the verifier; check circuit breakers (section 8.7); repeat. On verifier pass, Ralph commits and signals ready. On a circuit breaker, Ralph commits partial progress and stops. |
+| **8. Close** | Operator | Reviews the branch as a PR, merges, and archives the workspace. |
+
+No spec is authored, frozen, or sealed. No Planner, Coordinator, or Verifier participates. The deliverable is a branch, not a traced spec-to-test-to-task chain. Ralph is for tasks where the goal is clear but the path is not, and where the audit trail of "what was tried" (the activity log) is sufficient without the traceability a spec provides.
 
 ---
 
