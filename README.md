@@ -6,10 +6,10 @@ Specifications and architecture documents for [agent-fox](https://github.com/age
 
 | Document | Description |
 |---|---|
-| [Spec Format Specification v1.1](docs/spec-format_v1.1.md) | The on-disk structure for spec packages: the artifacts that capture design intent, acceptance criteria, verification contracts, and implementation plans for a feature. |
-| [Agentic Harness Core PRD](docs/agentic-harness-core-v1.0.md) | Product requirements for the agentic harness core: workspaces, the spec package lifecycle, the Context grounding model, multi-agent orchestration, and the pluggable provider/memory/issue-tracker contracts. |
-| [Runtime Layer](docs/runtime-layer.md) | Specification for the container runtime, harness adapters, agent lifecycle, templates, and the Telos MCP bridge that sits underneath the coordination layer. |
-| [Services Architecture](docs/services-architecture.md) | Deployable components (daemon, CLI, runtime engine, MCP bridge, memory service), storage backends, communication protocols, and deployment modes. |
+| [Spec Format Specification v1.1](docs/spec-format_v1.2.md) | The on-disk structure for spec packages: the artifacts that capture design intent, acceptance criteria, verification contracts, and implementation plans for a feature. |
+| [Agentic Harness Core PRD](docs/agentic-harness-core_v1.0.md) | Product requirements for the agentic harness core: workspaces, the spec package lifecycle, the Context grounding model, multi-agent orchestration, and the pluggable provider/memory/issue-tracker contracts. |
+| [Runtime Layer](docs/runtime-layer_v1.0.md) | Specification for the container runtime, harness adapters, agent lifecycle, templates, and the Telos MCP bridge that sits underneath the coordination layer. |
+| [Services Architecture](docs/services-architecture_v1.0.md) | Deployable components (daemon, CLI, runtime engine, MCP bridge, memory service), storage backends, communication protocols, and deployment modes. |
 | [Scion Runtime Mapping](docs/scion-runtime-mapping.md) | Analysis of Google's Scion platform as a potential runtime layer: concept mapping, gaps, conflicts, and the rationale for building our own thin runtime instead. |
 | [Legacy af-spec reference](docs/af-spec-legacy.md) | Reference material from the original af-spec skill. Retained for historical context. |
 
@@ -25,7 +25,7 @@ A spec is a directory containing:
 | `tasks.json` | yes | Implementation plan with ordering and dependencies |
 | `architecture.md` | no | Modules, interfaces, data models, technology choices |
 
-The full specification lives in [`docs/spec-format_v1.1.md`](docs/spec-format_v1.1.md).
+The full specification lives in [`docs/spec-format_v1.2.md`](docs/spec-format_v1.2.md).
 
 ## Examples
 

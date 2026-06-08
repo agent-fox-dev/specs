@@ -1,5 +1,6 @@
 # Runtime Layer Specification
 
+**Version:** 1.0
 **Status:** Draft
 **Parent:** Agentic Harness Core PRD v1.0, section 14
 
