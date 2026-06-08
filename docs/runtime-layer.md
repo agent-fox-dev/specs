@@ -468,6 +468,7 @@ layer's tools appear to the agent as standard MCP tools.
 | `telos_memory_recall` | Search agent memory for relevant learnings. | Agent → Telos service |
 | `telos_subtask_state` | Transition the agent's own subtask state. | Agent → Telos service |
 | `telos_file_claim` | Claim, renew, release an advisory file lease. | Agent → Telos service |
+| `telos_ci_status` | Query CI pipeline runs, job results, and logs. | Agent → Telos service |
 
 ### 8.3 Architecture
 

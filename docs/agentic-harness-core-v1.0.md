@@ -488,6 +488,7 @@ Tools are the agent's only way to affect the world.
 | Issue tracker        | Reads, searches, creates, comments on, and updates issues through a generic, tracker-agnostic interface (defined below). | Backend-agnostic; writes are external side effects scoped to the workspace's configured project. Distinct from a linked-issue grounding source, which is read-only background. |
 | Web search           | Discovers and reads public web content through a generic, provider-agnostic search service: `search` for ranked results, `fetch` for a result's readable text. | Read-only; queries and results land in the activity log. Always live; results are not pinned across runs. All returned content is treated as untrusted data and never as instructions; the harness enforces this through structure, not prompt wording (see the "Untrusted external content" paragraph below). Interactive pages route through Browser control. |
 | Spec read            | Fetches spec artifacts, rendered views, traceability, and coverage from the harness spec store (section 7.11). | Read-only; no write path. Supplements the spec slice already in the prompt (section 8.3). |
+| CI/CD status         | Queries pipeline status, job results, and logs from the workspace's configured CI provider through a generic, provider-agnostic interface (defined below). | Read-only; no side effects. Used by the Verifier and PR Shepherd to check whether CI passed before marking work ready. |
 
 A few constraints are worth drawing out. The MCP-call tool is not a parallel mechanism; its availability flows from the attached Contexts. There is no spec-write tool and no Context-write tool in the runtime toolset: an active spec is frozen and authored only during `draft` through the orchestration surface (sections 7.7 and 12), and a Context is read-only and edited only by the Operator outside a run (section 7.10). The spec-read tool (section 7.11) gives agents on-demand access to the spec store but never a write path; the spec is not a file in the worktree, so file tools and exec cannot reach it either. Memory has the same shape, a read tool but no write tool, because it is written once per session by the harness rather than by the agent mid-turn (section 8.6). A worker running against an active spec affects the world through code, commands, commits, issues, and grounding reads, never by rewriting the contract it works against.
 
@@ -536,6 +537,43 @@ type SearchResult = { title: string; url: string; snippet: string; publishedAt?:
 **Untrusted external content and prompt injection.** Web search and `fetch` return content from arbitrary third parties. That content must be treated as data and never as instructions. The harness enforces this structurally: results are injected into the message stream as `tool_result` events with a fixed schema, not as free text in the system prompt or as a continuation of the agent's turn. The agent sees them as the output of a tool call it made, inside a typed wrapper, so the model receives them in a position where instruction-following is not active. No prompt wording alone is sufficient to enforce this boundary; the structure must do it.
 
 Web search is the first input the harness cannot pin. The rest of grounding is snapshot-pinned at run start so a re-run reconstructs the same prompt; the live web does not hold still. In the freshness vocabulary of section 7.10, web search is always a `live` source. The harness keeps it auditable: every query and its returned results are recorded through the ordinary `tool_call` and `tool_result` events (section 11), so a run shows exactly what the agent saw even though a later run may see something different. The boundary with Browser control holds the same way it does for issues: search and `fetch` are read-only discovery and static page text, while driving an interactive page stays with the browser tool.
+
+The CI/CD bridge follows the same pluggable-adapter pattern. The harness normalizes GitHub Actions, GitLab CI, and other pipeline systems behind one read-only interface, so agents can check whether CI passed without knowing which provider runs the pipelines:
+
+```
+interface CIProvider {
+  // List pipeline runs for a ref (branch, SHA, or PR).
+  listRuns(ref: CIRef): Promise<PipelineRun[]>
+
+  // Get a single run with its jobs and overall status.
+  getRun(runId: string): Promise<PipelineRun>
+
+  // Get the log output of a specific job.
+  getJobLog(jobId: string): Promise<string>
+}
+
+type CIRef = { branch?: string; sha?: string; pr?: number }
+
+type PipelineRun = {
+  id: string
+  ref: CIRef
+  status: "queued" | "running" | "passed" | "failed" | "cancelled"
+  startedAt: string
+  completedAt?: string
+  jobs: PipelineJob[]
+  url: string                   // link to the CI provider's UI
+}
+
+type PipelineJob = {
+  id: string
+  name: string
+  status: "queued" | "running" | "passed" | "failed" | "cancelled" | "skipped"
+  startedAt?: string
+  completedAt?: string
+}
+```
+
+The CI/CD bridge is strictly read-only. The harness does not trigger pipelines or modify CI configuration — it reads status and logs so the Verifier can confirm CI passed as part of the wiring verification gate (section 9.5) and the PR Shepherd can wait for green CI before marking a PR as merge-ready.
 
 ### 8.6 The agent-memory contract
 
@@ -915,7 +953,7 @@ The API is split by audience. **Operator-facing** operations are for the human c
 
 **Config.**
 
-- Set global and per-workspace defaults: providers, models, attached Contexts and pin mode, memory backend and scope, issue-tracker and web-search backends, setup scripts.
+- Set global and per-workspace defaults: providers, models, attached Contexts and pin mode, memory backend and scope, issue-tracker, web-search, and CI/CD backends, notification channels and triggers, setup scripts.
 
 ### 12.2 Agent-facing API (tools)
 
@@ -934,6 +972,7 @@ These operations are exposed to agents as tools during a run (section 8.5). They
 | Git | Stage, commit, open a PR, read PR and CI status. Commits land on the workspace branch only. | 8.5 |
 | Issue tracker | Read, search, create, comment on, update issues through the tracker-agnostic interface. | 8.5 |
 | Web search | Search and fetch public web content through the provider-agnostic interface. | 8.5 |
+| CI/CD status | Query pipeline runs, job results, and logs from the configured CI provider. Read-only. | 8.5 |
 | Subtask state | Transition the agent's own subtask state (to `awaiting_verification` on completion). Archetype-scoped: an agent can only write the subtask it is assigned. | 7.4, 9.4 |
 
 There is no spec-write tool, no Context-write tool, and no memory-write tool. An agent working against an active spec interacts with its contract as a read-only surface.
@@ -1042,14 +1081,18 @@ The daemon is the only stateful host-side process. The CLI is stateless and talk
 
 SQLite is the default for local-first simplicity: one process, one file, no external dependencies. The daemon owns the database connection and serializes writes. For deployments that need concurrency or scale, the storage backend can be swapped to PostgreSQL behind the same interfaces.
 
-### 15.4 What is deferred
+### 15.4 Additional services
 
-These components are architecturally anticipated but out of scope for the initial implementation:
+Four services complete the system beyond the core daemon, CLI, runtime, bridge, and memory service. Each is specified in the services architecture document (`docs/services-architecture.md`).
 
-- **Web dashboard.** A read-only (initially) web surface for watching runs, browsing specs, and reviewing activity logs. The daemon's API is HTTP-capable; a dashboard is a frontend against it.
+- **Context retrieval engine.** Indexes "retrieved" Context sources (section 7.10) and serves per-turn similarity searches so agents can query large codebases and document sets without loading them into the prompt. Runs as an embedded module in the daemon (default) or as a standalone service. Without it, all sources must be `pinned`.
+- **CI/CD bridge.** A read-only, pluggable adapter that lets agents query pipeline status, job results, and logs from GitHub Actions, GitLab CI, and other CI providers. Same pattern as the issue tracker and web search adapters. The `CIProvider` interface is defined in section 8.5. Used by the Verifier for the wiring verification gate and by the PR Shepherd to confirm green CI.
+- **Notification service.** Alerts the Operator when events of interest occur (run completion, verification failure, circuit breaker fired, Campaign workspace unblocked). Delivers through pluggable channels (desktop notification, webhook, Slack, email). Runs inside the daemon as an event subscriber.
+- **Web dashboard.** A read-only web frontend against the daemon's HTTP API. Shows workspace status, run progress, activity timeline, spec content, and Campaign dependency graphs. Served as static assets by the daemon.
+
+One component remains deferred with no specification:
+
 - **Remote daemon / Hub.** Running the daemon on a remote machine and connecting the CLI and MCP bridges over the network. The gRPC interface already supports this; what's missing is auth, TLS, and multi-tenant isolation.
-- **Context retrieval engine.** Indexing and vector-search over "retrieved" Context sources. The `retrieved` resolution strategy is defined (section 7.10) but the engine behind it is out of scope. Until built, all sources must be `pinned`.
-- **CI/CD bridge.** An adapter that lets the Verifier and PR Shepherd query CI pipeline status (GitHub Actions, GitLab CI, etc.). Same pluggable-adapter pattern as the issue tracker and web search.
 
 The full services architecture specification is in a separate document (`docs/services-architecture.md`).
 

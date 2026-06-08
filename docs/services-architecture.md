@@ -437,6 +437,11 @@ service TelosBridge {
   // Activity logging
   rpc LogEvent(LogEventRequest) returns (LogEventResponse);
 
+  // CI/CD status
+  rpc ListCIRuns(ListCIRunsRequest) returns (ListCIRunsResponse);
+  rpc GetCIRun(GetCIRunRequest) returns (GetCIRunResponse);
+  rpc GetCIJobLog(GetCIJobLogRequest) returns (GetCIJobLogResponse);
+
   // Heartbeat
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
@@ -511,19 +516,336 @@ registry (analogous to Scion's Hub). Out of scope for this document.
 
 ---
 
-## 11. Deferred components
+## 11. Context retrieval engine
 
-These are identified as needed but not specified here:
+### 11.1 Purpose
 
-- **Web dashboard.** A read-only web frontend against the daemon's HTTP API.
-  Shows workspace status, run progress, activity timeline, and spec content.
-  The daemon already serves HTTP; the dashboard is a static frontend.
-- **Context retrieval engine.** An indexing and vector-search service for
-  "retrieved" Context sources. Until built, all sources must be `pinned`.
-  Could run as a sidecar to the daemon or as a standalone service.
-- **CI/CD bridge.** A pluggable adapter (same pattern as issue tracker and
-  web search) that lets agents query CI pipeline status. GitHub Actions and
-  GitLab CI are the initial targets.
-- **Notification service.** Alerts the Operator when a run completes, a
-  verification fails, or a circuit breaker fires. Desktop notifications,
-  Slack, email — behind a pluggable interface.
+The PRD defines two resolution strategies for Context sources (section 7.10):
+`pinned` (full content in the prompt every turn) and `retrieved` (indexed,
+only relevant chunks pulled in per turn). Pinned sources work for small
+documents but cannot scale to a full repository or a large document set.
+The retrieval engine makes `retrieved` sources practical.
+
+### 11.2 Interface
+
+The daemon calls the retrieval engine when an agent invokes the Context
+search tool and the target source has resolution strategy `retrieved`.
+
+```
+interface RetrievalEngine {
+  // Index a source. Called when a Context revision is cut or when a live
+  // source's origin changes. The engine reads the content, chunks it,
+  // computes embeddings, and stores the index.
+  index(input: {
+    contextId: string
+    sourceId: string
+    revision: string
+    content: ContentStream       // the source content, streamed
+    contentType: string          // e.g. "repository", "file", "blob"
+  }): Promise<void>
+
+  // Search a source. Returns the chunks most relevant to the query,
+  // ranked by similarity.
+  search(input: {
+    contextId: string
+    sourceId: string
+    revision: string             // must match the pinned revision
+    query: string
+    maxResults?: number          // default 10
+    maxTokens?: number           // budget for total returned content
+  }): Promise<RetrievalResult[]>
+
+  // Remove an index. Called when a source is removed from a Context
+  // or when a revision is superseded and no workspace pins it.
+  remove(input: {
+    contextId: string
+    sourceId: string
+    revision: string
+  }): Promise<void>
+}
+
+type RetrievalResult = {
+  chunk: string                  // the retrieved text
+  path?: string                  // file path within a repository source
+  score: number                  // similarity score, 0-1
+  startLine?: number             // position in the source, if applicable
+  endLine?: number
+}
+```
+
+### 11.3 Deployment
+
+**Embedded (default).** The engine runs in-process within the daemon.
+Embeddings are computed using a local model (e.g. a small ONNX embedding
+model shipped with the daemon). The index is stored in SQLite (using a
+vector extension) or in a local file-based index (e.g. HNSW). No external
+dependencies.
+
+**External.** The daemon connects to a standalone retrieval service over
+gRPC, using the same interface. This mode supports GPU-accelerated
+embeddings, larger indices, and shared retrieval across multiple daemon
+instances.
+
+### 11.4 Indexing lifecycle
+
+- When a Context revision is cut: the daemon calls `index()` for each
+  `retrieved` source in the revision.
+- When a workspace attaches a Context: the daemon verifies the pinned
+  revision is indexed. If not (e.g. the engine was added after the
+  revision was cut), it triggers indexing.
+- When a `live` source re-resolves: the daemon calls `index()` with the
+  new content, then `remove()` for the old revision once no workspace
+  pins it.
+- When a source is removed from a Context: `remove()` on all revisions.
+
+### 11.5 Storage
+
+Embedded mode adds to the daemon's storage:
+
+- `retrieval_indices` — context_id, source_id, revision, status
+  (indexing/ready/failed), chunk_count, indexed_at
+- `retrieval_chunks` — index_id, chunk_text, path, start_line, end_line,
+  embedding (blob)
+
+The embedding dimension is fixed per installation (determined by the
+embedding model). A vector similarity index (exact or approximate) is
+maintained over the embeddings for search.
+
+---
+
+## 12. CI/CD bridge
+
+### 12.1 Purpose
+
+The PRD (section 3) states the harness "reads CI status and drives PRs but
+does not run pipelines itself." The CI/CD bridge is the read-only adapter
+that fulfills the first half: agents can query pipeline status so the
+Verifier can confirm CI passed as part of the wiring verification gate and
+the PR Shepherd can wait for green CI before marking a PR merge-ready.
+
+### 12.2 Interface
+
+Defined in the PRD (section 8.5). The `CIProvider` interface is pluggable,
+the same pattern as `IssueTracker` and `WebSearch`:
+
+```
+interface CIProvider {
+  listRuns(ref: CIRef): Promise<PipelineRun[]>
+  getRun(runId: string): Promise<PipelineRun>
+  getJobLog(jobId: string): Promise<string>
+}
+```
+
+### 12.3 Adapters
+
+**GitHub Actions adapter.** Uses the GitHub REST API
+(`GET /repos/{owner}/{repo}/actions/runs`, `GET .../jobs`,
+`GET .../jobs/{id}/logs`). Authenticates with the workspace's configured
+GitHub token (the same token used by the Git tool for PR operations).
+
+**GitLab CI adapter.** Uses the GitLab REST API
+(`GET /projects/{id}/pipelines`, `GET .../jobs`, `GET .../jobs/{id}/trace`).
+Authenticates with a GitLab access token.
+
+Adding a new CI provider means implementing the `CIProvider` interface.
+
+### 12.4 Configuration
+
+```yaml
+# Per-workspace or global
+ci:
+  provider: github              # github | gitlab
+  # Provider-specific settings are inherited from the Git tool's
+  # configuration (remote URL, auth token). No separate config needed
+  # for the common case where CI runs on the same platform as the repo.
+```
+
+### 12.5 Agent access
+
+The CI/CD bridge is exposed to agents through the Telos MCP bridge as the
+`telos_ci_status` tool. Queries and results are logged as activity events.
+The tool is read-only — agents cannot trigger pipelines or modify CI
+configuration.
+
+---
+
+## 13. Notification service
+
+### 13.1 Purpose
+
+The Operator is not always watching the terminal. The notification service
+alerts the Operator when events of interest occur, so they can step in at
+the right moments (approve a drafted spec, review a completed run, handle a
+circuit breaker).
+
+### 13.2 Interface
+
+The notification service subscribes to the daemon's activity event stream
+and matches events against a set of triggers. When a trigger fires, it
+delivers a notification through one or more configured channels.
+
+```
+interface NotificationService {
+  // Register a channel for delivery.
+  addChannel(channel: NotificationChannel): void
+
+  // Configure which events trigger notifications.
+  setTriggers(triggers: NotificationTrigger[]): void
+}
+
+interface NotificationChannel {
+  name: string
+  deliver(notification: Notification): Promise<void>
+}
+
+type NotificationTrigger = {
+  event: string                 // activity event type or pattern
+  filter?: {                    // optional narrowing
+    workspaceId?: string
+    runId?: string
+    campaignId?: string
+  }
+  priority: "info" | "action_required"
+}
+
+type Notification = {
+  title: string
+  body: string
+  priority: "info" | "action_required"
+  source: {
+    workspaceId: string
+    runId?: string
+    agentId?: string
+  }
+  timestamp: string
+  actionUrl?: string            // deep link to the CLI command or dashboard
+}
+```
+
+### 13.3 Built-in channels
+
+**Desktop notification.** Uses the OS notification system (macOS
+Notification Center, Linux `notify-send`). Zero configuration for local
+deployments.
+
+**Webhook.** HTTP POST to a configured URL with the notification payload as
+JSON. The building block for integrations — Slack incoming webhooks, Discord
+webhooks, PagerDuty, or a custom endpoint.
+
+**Log.** Writes notifications to a file or stdout. Useful for headless
+servers or CI environments where no interactive notification is possible.
+
+### 13.4 Default triggers
+
+Out of the box, the notification service fires on:
+
+| Trigger | Priority | When |
+| --- | --- | --- |
+| `spec_ready_for_review` | action_required | A Planner has drafted a spec and it is ready for Operator approval (phase 4). |
+| `run_complete` | info | A spec-driven run completed successfully (all verification passed). |
+| `run_failed` | action_required | A run stopped due to error or unrecoverable verification failure. |
+| `ralph_complete` | info | A Ralph loop exited cleanly (verifier passed). |
+| `ralph_stopped` | action_required | A Ralph loop hit a circuit breaker. |
+| `campaign_workspace_unblocked` | action_required | A Campaign dependency gate cleared; a workspace is ready for PRD authoring. |
+| `verification_failed` | info | A verification gate failed; the Coordinator will re-delegate. |
+| `agent_stalled` | info | An agent has been stalled for longer than the configured threshold. |
+
+The Operator can add, remove, or modify triggers through configuration.
+
+### 13.5 Deployment
+
+The notification service runs inside the daemon process as an event
+subscriber — not a separate service. It reads from the activity event
+stream (the same stream the observability API exposes) and evaluates
+triggers. This keeps the deployment model simple: no additional process
+to manage.
+
+### 13.6 Configuration
+
+```yaml
+# ~/.telos/settings.yaml
+notifications:
+  channels:
+    - type: desktop
+    - type: webhook
+      url: https://hooks.slack.com/services/T.../B.../xxx
+  triggers:
+    # Override or extend the defaults
+    - event: run_complete
+      priority: action_required   # escalate from info to action_required
+    - event: agent_stalled
+      filter:
+        workspaceId: "abc-123"
+      priority: action_required
+```
+
+---
+
+## 14. Web dashboard
+
+### 14.1 Purpose
+
+A read-only web frontend for observing system state without the CLI. Shows
+what's happening across workspaces, runs, agents, and Campaigns at a glance.
+The Operator uses it alongside the CLI, not instead of it — all write
+operations (create workspace, approve spec, start run) remain CLI-driven.
+
+### 14.2 Architecture
+
+The dashboard is a static single-page application (SPA) served by the daemon
+over its HTTP interface. It consumes the same Operator-facing API (section
+12.1 of the PRD) and observability API (section 12.3) that the CLI uses.
+No additional backend logic — the daemon already serves everything the
+dashboard needs.
+
+```
+Browser ──► Daemon HTTP ──► Same API endpoints as CLI
+                     └──► SSE streams for live updates
+```
+
+### 14.3 Views
+
+| View | Content |
+| --- | --- |
+| **Home** | List of active workspaces with status, current run, agent count. Campaigns shown as collapsible groups with their dependency graphs. |
+| **Workspace detail** | Workspace state, attached Contexts (with pinned revisions), spec lifecycle, git status, file listing. |
+| **Spec viewer** | Rendered combined view of the spec (PRD, requirements, test spec, tasks). Coverage and traceability tables. Diff against previous spec (for superseded specs). |
+| **Run timeline** | Gantt-style view of a run: phases, agent lifetimes, subtask state transitions, verification outcomes. Clickable for detail. |
+| **Activity stream** | Filterable, scrollable event log. Live updates via SSE. Filter by workspace, run, agent, event type. |
+| **Agent detail** | Agent state (phase, activity), conversation history, tool call log, assigned subtask and its state. |
+| **Campaign graph** | Dependency graph across specs in a Campaign. Node color by workspace status (blocked, active, sealed). Clicking a node navigates to the workspace detail. |
+
+### 14.4 Live updates
+
+The dashboard subscribes to the daemon's SSE activity stream for real-time
+updates. Workspace status changes, subtask transitions, verification
+outcomes, and agent state changes appear without polling.
+
+### 14.5 Deployment
+
+The daemon serves the dashboard's static assets (HTML, CSS, JS) from a
+built-in directory. No separate web server. The dashboard is available at
+`http://localhost:<daemon-http-port>/` when the daemon is running.
+
+For remote access (when the daemon binds to a network interface), the same
+TLS and authentication requirements as the remote daemon mode apply.
+
+### 14.6 Scope boundary
+
+The dashboard is read-only. It does not provide forms for creating
+workspaces, authoring specs, or starting runs. Those workflows involve
+validation, editor integration, and multi-step interactions that are better
+served by the CLI. If write support is added later, it routes through the
+same API — the dashboard never bypasses the daemon.
+
+---
+
+## 15. Deferred
+
+One component remains architecturally anticipated but not specified:
+
+- **Remote daemon / Hub.** Running the daemon on a remote machine with TLS,
+  Operator authentication, and multi-tenant isolation. The gRPC and HTTP
+  interfaces already support remote access structurally; what's missing is
+  the auth layer and tenant separation. This is the path to shared
+  deployments and team collaboration.
