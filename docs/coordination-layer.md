@@ -279,7 +279,7 @@ For artifact structure, field definitions, and schema details, see [spec-format_
 
 ### 5.2 Identity, completeness, and bootstrap
 
-Specs are stored in the spec store on the filesystem, organized under their parent campaign: `<data_dir>/specs/<campaign-slug>/<spec-slug>/`. The spec-slug follows the `{NN}_{snake_case_name}` convention from the format spec. Collisions on the spec id within a campaign are rejected at creation.
+Specs are stored in the spec store on the filesystem, organized under their parent campaign: `<data_dir>/specs/<campaign-slug>/<spec-slug>/`. The spec-slug follows the `{NN}_{snake_case_name}` convention from the format spec. The numeric prefix is auto-assigned as `max(existing) + 1` within the campaign; collisions are rejected.
 
 Spec creation is handled by **speclib**, a shared library used by both the standalone `af-spec` CLI and the harness Planner. During creation speclib operates in bootstrap mode, writing the four artifacts sequentially and deferring cross-artifact validation until all four exist. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool) for the full spec creation tool description.
 
@@ -302,7 +302,7 @@ Both `superseded` and `archived` are terminal. A `superseded` spec was replaced;
 At the `draft` to `active` transition the harness computes `intent_hash`:
 
 1. Extract the markdown body following the `## Intent` heading, up to (but not including) the next heading at the same or higher level (`##` or `#`).
-2. Trim leading and trailing whitespace from the extracted text.
+2. Strip all leading and trailing whitespace from the extracted text (equivalent to Python `str.strip()`).
 3. Compute the SHA-256 hex digest of the resulting string.
 4. Store the digest in `prd.md` frontmatter as `intent_hash`.
 
@@ -344,11 +344,13 @@ The harness provides spec content through two channels:
 
   | `what` | Returns |
   | --- | --- |
-  | `artifact` | A single frozen artifact (`prd`, `requirements`, `test_spec`, `tasks`, `architecture`). |
+  | `artifact` | A single frozen artifact, specified by an `artifact_name` parameter: `prd`, `requirements`, `test_spec`, `tasks`, or `architecture`. |
   | `rendered` | The combined rendered markdown view. |
   | `traceability` | The traceability table, with `test_path` merged from the operational store (which tracks live test-to-requirement mappings as tests are written). |
   | `coverage` | Computed coverage from `test_spec.json`. |
-  | `execution` | Live subtask execution state from the operational store: current state, assigned agent, timestamps, verification outcomes. This is not in the frozen spec. |
+  | `execution` | Live subtask execution state from the operational store: current state, assigned agent, timestamps, verification outcomes. Optionally filtered by `subtask_id`. This is not in the frozen spec. |
+
+  Full signature: `af_spec_read(what, artifact_name?, subtask_id?)`.
 
 There is no spec-write tool. The write path runs through speclib during authoring (via `af-spec` or the Planner).
 
