@@ -637,16 +637,16 @@ The agent has exclusive access to the worktree. It reads its assigned subtask an
 
 ```mermaid
 sequenceDiagram
-    participant H as Operator (human)
-    participant S as Spec package (frozen)
-    participant CX as Attached Contexts (pinned, read-only)
-    participant A as Agent (Coordinator / Implementor / Verifier)
-    participant RT as Worktree + operational store
+    participant H as Operator
+    participant S as Spec package
+    participant CX as Attached Contexts
+    participant A as Agent
+    participant RT as Worktree + op store
 
-    H->>S: spec authored and approved (via af-spec or Planner)
-    H->>CX: attach Contexts; pin revisions
+    H->>S: spec authored and approved
+    H->>CX: attach Contexts, pin revisions
     H->>A: start execution run
-    A->>CX: read grounding (domain, conventions)
+    A->>CX: read grounding
     A->>S: read task groups, subtasks, requirements, tests
     loop For each task group
         loop For each subtask
