@@ -110,8 +110,8 @@ These must be implemented before task group 3 of this spec.
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings introduced: `uv run ruff check speclib/`
 
-- [ ] 4. Implement prompt templates
-  - [ ] 4.1 Implement speclib/prompts.py
+- [x] 4. Implement prompt templates
+  - [x] 4.1 Implement speclib/prompts.py
     - `assessment_system_prompt()` -- system prompt referencing Intent, Goals, Non-Goals, Background
     - `assessment_user_prompt(prd_text, spec_name)` -- formats PRD text for assessment
     - `refinement_system_prompt()` -- system prompt for incorporating answers
@@ -121,10 +121,10 @@ These must be implemented before task group 3 of this spec.
     - All functions validate required parameters, raising ValueError for empty inputs
     - _Requirements: 03-REQ-4.1, 03-REQ-4.2, 03-REQ-4.3, 03-REQ-4.E1_
 
-  - [ ] 4.V Verify task group 4
-    - [ ] Prompt tests pass: `uv run pytest -q tests/test_prompts.py`
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check speclib/prompts.py`
+  - [x] 4.V Verify task group 4
+    - [x] Prompt tests pass: `uv run pytest -q tests/test_prompts.py`
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check speclib/prompts.py`
 
 - [ ] 5. Implement SpecAgent — infrastructure and assessment
   - [ ] 5.1 Implement speclib/agent.py -- SpecAgent.__init__
