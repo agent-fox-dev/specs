@@ -228,7 +228,7 @@ A Campaign is not a spec. It has no `requirements.json`, no freeze, no traceabil
 
 ## 7. The Spec Package
 
-The coordination layer is a validated package of artifacts, not a single prose note. The reference is the **Spec Format Specification (v1.1)** at `docs/spec-format_v1.2.md`; that document is the authority on field-level detail. Where this PRD and the format spec disagree on structure or field semantics, the format spec wins; where the harness adopts a stricter operating policy than the format permits (such as the freeze in section 7.7), that policy stands. Here we cover only what the harness builds around it. Section 7.10 then covers the grounding layer, which is the other layer of input attached to a workspace.
+The coordination layer is a validated package of artifacts, not a single prose note. The reference is the **Spec Format Specification (v1.1)** at `spec-format_v1.2.md`; that document is the authority on field-level detail. Where this PRD and the format spec disagree on structure or field semantics, the format spec wins; where the harness adopts a stricter operating policy than the format permits (such as the freeze in section 7.7), that policy stands. Here we cover only what the harness builds around it. Section 7.10 then covers the grounding layer, which is the other layer of input attached to a workspace.
 
 ### 7.1 The package structure
 
@@ -834,7 +834,7 @@ The harness persists state across three stores so a process restart resumes clea
 | Entity | Key fields | Notes |
 | --- | --- | --- |
 | Run | id, workspace id, spec_id (nullable), kind (`spec_driven` / `ralph`), status (`running` / `completed` / `stopped` / `failed`), started_at, ended_at, circuit breaker state (Ralph only: tokens spent, iterations completed, elapsed duration), timestamps. | The unit of execution. A spec-driven run covers phases 5-6 of the generic flow (section 10.1). A Ralph run covers the goal-and-verifier loop (section 10.4). Pinned Context and memory revisions are recorded per run via `ContextAttachment` and `MemoryPin`. |
-| Agent | id, workspace id, run id, specialist role, actor capability, provider, model, phase (`created` / `provisioning` / `starting` / `running` / `stopping` / `stopped` / `suspended` / `error`), activity (nullable: `working` / `thinking` / `waiting_for_input` / `completed` / `idle`), parent agent id (nullable), started_at, ended_at. | A running model instance within a run. Phase tracks the container lifecycle; activity tracks what the agent is doing within the `running` phase (section 14, `docs/runtime-layer_v1.0.md` section 5.1). `parent_agent_id` links a worker to the Coordinator that spawned it. |
+| Agent | id, workspace id, run id, specialist role, actor capability, provider, model, phase (`created` / `provisioning` / `starting` / `running` / `stopping` / `stopped` / `suspended` / `error`), activity (nullable: `working` / `thinking` / `waiting_for_input` / `completed` / `idle`), parent agent id (nullable), started_at, ended_at. | A running model instance within a run. Phase tracks the container lifecycle; activity tracks what the agent is doing within the `running` phase (section 14, `runtime-layer_v1.0.md` section 5.1). `parent_agent_id` links a worker to the Coordinator that spawned it. |
 | SubtaskExecution | workspace id, spec_id, subtask id, run id, assigned agent id, state (`pending` / `queued` / `in_progress` / `awaiting_verification` / `done` / `pending_reevaluation` / `dropped`), drop rationale (nullable), started_at, completed_at. | The live execution state of a subtask. The state machine is defined in section 7.4; transitions are harness-enforced. The frozen `tasks.json` defines the subtask; this entity tracks progress against it. Replaces the former `SubtaskAssignment`. |
 | VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result (`pass` / `fail`), detail (nullable), recorded_at. | One row per check in a verification subtask. The Verifier reports pass or fail; the harness records it here and transitions implementation subtasks accordingly (section 9.5). |
 | FileClaim | workspace id, file path or glob, holder agent id, run id, acquired_at, lease expiry, state (`held` / `released` / `expired`). | Advisory file lease for coordinating parallel worktree writes (section 9.3). Database-backed with atomic acquisition via compare-and-set. Stale claims are expired during daemon crash recovery. |
@@ -857,7 +857,7 @@ The harness persists state across three stores so a process restart resumes clea
 
 The spec store and Context store are durable: their content is the source of truth for artifacts and grounding, and losing them means losing the spec packages and Contexts themselves. The operational store is likewise durable for workspace state, spec lifecycle, run records, subtask execution state, and the activity log; a process restart resumes from persisted state.
 
-File claims are database-backed and survive daemon restarts. However, stale claims (held by agents that exited while the daemon was down) are expired during crash recovery rather than restored — the daemon re-evaluates claims against actual agent state on startup (section 15, `docs/services-architecture_v1.0.md` section 2.4).
+File claims are database-backed and survive daemon restarts. However, stale claims (held by agents that exited while the daemon was down) are expired during crash recovery rather than restored — the daemon re-evaluates claims against actual agent state on startup (section 15, `services-architecture_v1.0.md` section 2.4).
 
 The `ActivityEvent` stream is the recovery backbone. Because it records every spec patch, every Context and memory pin, every subtask transition, every verification outcome, and every agent action, a run's full history is reconstructable from the event stream alone. The spec store and operational store are the live state; the activity log is the audit trail.
 
@@ -1016,7 +1016,7 @@ The coordination layer (sections 5-12) drives the runtime but does not reach ins
 
 The Provider interface in section 8.1 remains the coordination layer's view of an agent. The runtime layer implements that interface by starting a containerized harness and bridging through the af MCP sidecar. The coordination layer does not know or care whether the agent runs in a local Podman container or a Kubernetes pod.
 
-The full runtime layer specification is in a separate document (`docs/runtime-layer_v1.0.md`).
+The full runtime layer specification is in a separate document (`runtime-layer_v1.0.md`).
 
 ---
 
@@ -1071,7 +1071,7 @@ SQLite is the default for local-first simplicity: one process, one file, no exte
 
 ### 15.4 Additional services
 
-Four services complete the system beyond the core daemon, CLI, runtime, bridge, and memory service. Each is specified in the services architecture document (`docs/services-architecture_v1.0.md`).
+Four services complete the system beyond the core daemon, CLI, runtime, bridge, and memory service. Each is specified in the services architecture document (`services-architecture_v1.0.md`).
 
 - **Context retrieval engine.** Indexes "retrieved" Context sources (section 7.10) and serves per-turn similarity searches so agents can query large codebases and document sets without loading them into the prompt. Runs as an embedded module in the daemon (default) or as a standalone service. Without it, all sources must be `pinned`.
 - **CI/CD bridge.** A read-only, pluggable adapter that lets agents query pipeline status, job results, and logs from GitHub Actions, GitLab CI, and other CI providers. Same pattern as the issue tracker and web search adapters. The `CIProvider` interface is defined in section 8.5. Used by the Verifier for the wiring verification gate and by the PR Shepherd to confirm green CI.
@@ -1082,7 +1082,7 @@ One component remains deferred with no specification:
 
 - **Remote daemon / Hub.** Running the daemon on a remote machine and connecting the CLI and MCP bridges over the network. The gRPC interface already supports this; what's missing is auth, TLS, and multi-tenant isolation.
 
-The full services architecture specification is in a separate document (`docs/services-architecture_v1.0.md`).
+The full services architecture specification is in a separate document (`services-architecture_v1.0.md`).
 
 ---
 

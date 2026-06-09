@@ -207,7 +207,7 @@ the spec store through the normal authoring API.
 
 ## 4. The runtime engine
 
-The runtime engine (specified in `docs/runtime-layer_v1.0.md`) runs as a library
+The runtime engine (specified in `runtime-layer_v1.0.md`) runs as a library
 embedded in the daemon, not as a separate process. The daemon calls it to
 create containers, start agents, manage worktrees, and orchestrate sidecars.
 
@@ -230,7 +230,7 @@ the Operator interacts with it only through the af CLI, never directly.
 
 ## 5. The af MCP bridge
 
-Specified in `docs/runtime-layer_v1.0.md`, section 8. One instance per running
+Specified in `runtime-layer_v1.0.md`, section 8. One instance per running
 agent, inside the agent's container.
 
 ### 5.1 Daemon connection
@@ -492,7 +492,7 @@ capability model (section 8.4 of the PRD) at the bridge boundary.
 
 ### 9.2 Container isolation
 
-Detailed in `docs/runtime-layer_v1.0.md`. The key guarantee: an agent container
+Detailed in `runtime-layer_v1.0.md`. The key guarantee: an agent container
 sees only its mounted worktree, its agent home directory, and the MCP bridge
 socket. It cannot see the af database, other agents' homes, or the spec
 store on the host filesystem.

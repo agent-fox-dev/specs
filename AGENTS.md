@@ -8,18 +8,8 @@ this repository. Treat this file as mandatory policy for every coding session.
 Before making any changes, orient yourself:
 
 1. **Read `README.md`** for project overview and quick-start.
-2. **Read `docs/memory.md`** — accumulated knowledge from prior automated
-   sessions: gotchas, patterns, decisions, conventions, fragile areas. Skipping
-   this file means repeating mistakes that were already discovered.
-3. **Read `.agent-fox/steering.md`** if it exists — project-level directives that
-   apply to all agents and skills. Follow any instructions found there.
-4. **Read relevant specs** in `.agent-fox/specs/` for the area you're working on.
-5. **Read ADRs** in `docs/adr/` for architectural context.
-6. **Explore the codebase:** `<main_package>/` is the main package, `<test_directory>/` has
-   unit, property, and integration tests. Their location is language dependent.
-7. **Check git state:** `git log --oneline -20`, `git status --short --branch`.
-8. **Run `make check`** to confirm the baseline is green. If tests fail, fix
-   them before starting new work.
+2. **Read relevant specs** (*.md) for the area you're working on.
+3. **Check git state:** `git log --oneline -20`, `git status --short --branch`.
 
 **Important:** Read all documents and code in depth — don't skim.
 
@@ -27,40 +17,6 @@ Before making any changes, orient yourself:
 `.gitignore`. When in doubt, run `git ls-files` to see what's tracked.
 
 Do not implement anything before completing these steps.
-
-## Project Structure
-
-```
-<main_package>/         # Main package
-<test_directory>/       # Tests directory
-docs/                   # Documentation
-.agent-fox/specs/                 # Specs to be implemented
-.agent-fox/specs/archive/         # Old specs. Ignore for coding tasks, except for reference
-```
-
-## Spec-Driven Workflow
-
-This project uses spec-driven development. Specifications live in
-`.agent-fox/specs/NN_name/` (numbered by creation order) and contain five artifacts:
-
-- `prd.md` — product requirements document (source of truth)
-- `requirements.md` — EARS-syntax acceptance criteria
-- `design.md` — architecture, interfaces, correctness properties
-- `test_spec.md` — language-agnostic test contracts
-- `tasks.md` — implementation plan with checkboxes
-
-## Quality Commands
-
-| Command | What it does |
-|---------|-------------|
-| `make check` | Run lint + all tests (use before committing) |
-| `make test` | Run all tests (`uv run pytest -q`) |
-
-Run the full quality suite before committing:
-
-```
-make check
-```
 
 ## Git Workflow
 
@@ -96,10 +52,6 @@ make check
 
 A session is not complete until:
 
-1. `make check` or `make test` passes (no regressions).
-2. Changes are committed with a clear conventional commit message.
-   - **Always include tracked state files** in the commit:
-     `docs/memory.md`. This file is git-tracked and must not be left dirty.
-3. Changes are merged into `develop` locally.
-4. `git status` shows a clean working tree.
-5. You provide a brief handoff note summarizing what was done and what remains.
+1. Changes are merged into `develop` locally.
+2. `git status` shows a clean working tree.
+3. You provide a brief handoff note summarizing what was done and what remains.

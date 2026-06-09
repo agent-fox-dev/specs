@@ -618,7 +618,7 @@ Inline overrides at agent creation time take highest precedence.
 ## 12. Relationship to the Scion mapping
 
 This runtime layer replaces the option of adopting Scion wholesale. The
-mapping document (`docs/scion-runtime-mapping.md`) remains valid as a
+mapping document (`scion-runtime-mapping.md`) remains valid as a
 reference for design decisions and as documentation of why we chose to build
 our own thin runtime rather than depend on an external project.
 
