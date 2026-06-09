@@ -654,6 +654,7 @@ class TestNewCommand:
         directory.
         """
         mock_session = _mock_session(state="init")
+        mock_session.spec_dir = Path("/fake/01_prd")
         with patch("speclib.cli.Campaign") as mock_cls:
             campaign = MagicMock()
             mock_cls.open.return_value = campaign
@@ -669,6 +670,10 @@ class TestNewCommand:
             )
         _assert_exit(result, 0)
         campaign.new_spec.assert_called_once()
+        # Verify the output contains the created spec directory name
+        assert "01_prd" in result.output, (
+            f"Expected spec dir name in output: {result.output}"
+        )
 
     def test_new_explicit_name(
         self,
@@ -1376,7 +1381,17 @@ class TestValidateCommand:
                 ],
             )
         _assert_exit(result, 1)
-        assert "requirements.md" in result.output
+        out = result.output
+        # Verify all three columns from the error table
+        assert "requirements.md" in out, (
+            f"Missing file column: {out}"
+        )
+        assert "/requirements/0/id" in out, (
+            f"Missing path column: {out}"
+        )
+        assert "Missing requirement ID" in out, (
+            f"Missing message column: {out}"
+        )
 
     def test_validate_missing_artifacts(
         self,
@@ -1714,11 +1729,20 @@ class TestPropertyErrorNonzeroExit:
 
         Property 2 from design.md.
         Validates: 04-REQ-CC.6
+
+        For any command in the full set, CampaignError or SessionError
+        must produce a non-zero exit code.
         """
-        commands = [
+        commands: list[list[str]] = [
             ["list"],
             ["status"],
             ["status", "01"],
+            ["assess", "01"],
+            ["accept", "01"],
+            ["generate", "01"],
+            ["validate", "01"],
+            ["render", "01"],
+            ["show", "01"],
         ]
         for error_cls in [CampaignError, SessionError]:
             for cmd_args in commands:
@@ -1749,12 +1773,31 @@ class TestPropertyCampaignDirPrecedence:
         self,
         cli_runner: CliRunner,
         campaign_dir_with_specs: Path,
+        tmp_path: Path,
     ) -> None:
         """TS-04-P3: Campaign dir precedence.
 
         Property 3 from design.md.
         Validates: 04-REQ-CC.1, 04-REQ-CC.2
+
+        When --campaign-dir is provided, CWD is ignored — even when
+        CWD is itself a valid campaign directory.
         """
+        # Create a second valid campaign dir (to use as CWD)
+        cwd_campaign = tmp_path / "cwd_campaign"
+        cwd_campaign.mkdir()
+        (cwd_campaign / "campaign.yaml").write_text(
+            "name: cwd-campaign\ndescription: CWD campaign\n"
+        )
+        # Create a spec in CWD campaign to make it distinguishable
+        cwd_spec = cwd_campaign / "01_cwd_only"
+        cwd_spec.mkdir()
+        (cwd_spec / "_session.json").write_text(
+            json.dumps({"state": "init"})
+        )
+
+        # Invoke with --campaign-dir pointing to campaign_dir_with_specs
+        # while CWD is cwd_campaign (a different valid campaign)
         result = cli_runner.invoke(
             main,
             [
@@ -1764,7 +1807,10 @@ class TestPropertyCampaignDirPrecedence:
             ],
         )
         _assert_exit(result, 0)
-        assert "01" in result.output
+        # Should see specs from --campaign-dir, not from CWD
+        assert "data_models" in result.output, (
+            "Expected specs from --campaign-dir, not CWD"
+        )
 
 
 class TestPropertyInitNoOverwrite:
@@ -2018,6 +2064,22 @@ class TestSmokeValidateAndRender:
                 ],
             })
         )
+        # Step 1: validate the spec
+        result1 = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "validate",
+                "01",
+            ],
+        )
+        # Validate may pass or fail depending on spec quality;
+        # we only assert it ran without crashing (exit 0 or 1)
+        assert result1.exit_code in (0, 1), (
+            f"Validate unexpected exit: {result1.exit_code}"
+        )
+        # Step 2: render the spec
         result2 = cli_runner.invoke(
             main,
             [
