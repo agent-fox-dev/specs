@@ -11,7 +11,7 @@ one most developers will read first.
 
 The runtime layer (container isolation, worktree management, harness adapters,
 agent lifecycle) is specified in [runtime-layer.md](runtime-layer.md). The
-services architecture (daemon, CLI, storage, protocols, deployment) is
+services architecture (hub, CLI, storage, protocols, deployment) is
 specified in [services-architecture.md](services-architecture.md). The spec
 format itself is an independent standard at
 [spec-format_v1.2.md](../spec-format_v1.2.md); this document covers what the
@@ -785,7 +785,7 @@ The harness persists state across three stores so a process restart resumes clea
 
 All three stores are durable. The `ActivityEvent` stream is the recovery backbone: it records every spec patch, Context and memory pin, subtask transition, verification outcome, and agent action. A run's full history is reconstructable from the event stream alone.
 
-File claims survive daemon restarts. Stale claims (held by agents that exited while the daemon was down) are expired during crash recovery. See [services-architecture.md §2.4](services-architecture.md#24-crash-recovery).
+File claims survive hub restarts. Stale claims (held by agents that exited while the hub was down) are expired during crash recovery. See [services-architecture.md §2.4](services-architecture.md#24-crash-recovery).
 
 ---
 
@@ -908,7 +908,7 @@ This document specifies the coordination layer. Two companion documents specify 
 
 - **[Runtime Layer](runtime-layer.md)** — container isolation, worktree management, harness adapters per provider, agent lifecycle (phase and activity), templates, sidecar services, and the af MCP bridge. The coordination layer drives the runtime through a narrow interface and never reaches past it.
 
-- **[Services Architecture](services-architecture.md)** — the af daemon (single stateful process owning all three stores), CLI, storage layout (filesystem + SQLite), communication protocols (HTTP/JSON for CLI, gRPC for bridge), security and isolation, deployment modes, the retrieval engine, CI/CD bridge, notification service, and web dashboard.
+- **[Services Architecture](services-architecture.md)** — the af hub (single stateful process owning all three stores), CLI, storage layout (filesystem + SQLite), communication protocols (HTTP/JSON for CLI, gRPC for bridge), security and isolation, deployment modes, the retrieval engine, CI/CD bridge, notification service, and web dashboard.
 
 | Coordination layer owns | Runtime layer owns |
 | --- | --- |
@@ -919,7 +919,7 @@ This document specifies the coordination layer. Two companion documents specify 
 | The af MCP bridge logic | Container, env, and credential isolation |
 | Specialist → template mapping | Template hydration and harness provisioning |
 
-The af MCP bridge is the integration point between the two layers: it runs as a sidecar inside each agent container (runtime) and proxies harness tool calls to the daemon (coordination). The coordination layer does not know whether the agent runs in a local Podman container or a Kubernetes pod.
+The af MCP bridge is the integration point between the two layers: it runs as a sidecar inside each agent container (runtime) and proxies harness tool calls to the hub (coordination). The coordination layer does not know whether the agent runs in a local Podman container or a Kubernetes pod.
 
 ---
 
@@ -954,7 +954,7 @@ The af MCP bridge is the integration point between the two layers: it runs as a 
 | Harness adapter | Runtime adapter for a specific provider. See [runtime-layer.md §4](runtime-layer.md#4-harness-adapters). |
 | Template | Blueprint for agent configuration. See [runtime-layer.md §6](runtime-layer.md#6-templates). |
 | af MCP bridge | Sidecar MCP server inside each agent container. See [runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge). |
-| af daemon | Long-running host process owning the three stores. See [services-architecture.md §2](services-architecture.md#2-the-af-daemon). |
+| af hub | Long-running host process owning the three stores. See [services-architecture.md §2](services-architecture.md#2-the-af-hub). |
 | af CLI | Operator's command-line interface. See [services-architecture.md §3](services-architecture.md#3-the-af-cli). |
 | Memory service | Pluggable backend for agent memory. See [services-architecture.md §6](services-architecture.md#6-the-memory-service). |
 | Activity log | Append-only, ordered event stream covering all state-changing actions. |

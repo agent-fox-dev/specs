@@ -24,7 +24,7 @@ components that wire them together.
 ```mermaid
 graph TD
     OP[Operator] --> CLI[af CLI]
-    CLI --> D[af Daemon]
+    CLI --> D[af Hub]
     D --> CL[Coordination Layer]
     D --> RL[Runtime Layer]
     CL -->|spec store, Context store,<br/>operational store| DB[(SQLite)]
@@ -45,7 +45,7 @@ the public API surface.
 management, harness adapters per provider, agent lifecycle, templates, sidecar
 services, and the af MCP bridge.
 
-**Services layer** — the deployable components: the af daemon (single stateful
+**Services layer** — the deployable components: the af hub (single stateful
 process), CLI, storage layout, communication protocols, security and isolation,
 retrieval engine, CI/CD bridge, notification service, and web dashboard.
 
@@ -57,7 +57,7 @@ retrieval engine, CI/CD bridge, notification service, and web dashboard.
 | --- | --- | --- |
 | [Coordination Layer](docs/coordination-layer.md) | Domain model, workspaces, campaigns, spec package integration, agents, multi-agent orchestration, key flows, data model, and API surface. | Spec lifecycle, Context management, orchestration, the Coordinator pattern, the public API, or anything in the domain model. |
 | [Runtime Layer](docs/runtime-layer.md) | Container runtime interface, git worktree management, harness adapters (Claude Code, Gemini CLI, Codex, OpenCode), agent lifecycle, templates, sidecar services, and the af MCP bridge. | Container isolation, provider integration, agent start/stop/resume, template system, or the MCP bridge. |
-| [Services Architecture](docs/services-architecture.md) | Deployable components (daemon, CLI, runtime engine, MCP bridge, memory service), storage layout, communication protocols, security, deployment modes, retrieval engine, CI/CD bridge, notifications, and web dashboard. | The af daemon, CLI commands, storage schema, gRPC/HTTP protocols, deployment, or any service-level concern. |
+| [Services Architecture](docs/services-architecture.md) | Deployable components (hub, CLI, runtime engine, MCP bridge, memory service), storage layout, communication protocols, security, deployment modes, retrieval engine, CI/CD bridge, notifications, and web dashboard. | The af hub, CLI commands, storage schema, gRPC/HTTP protocols, deployment, or any service-level concern. |
 | [Spec Format Specification](spec-format_v1.2.md) | The on-disk format for a specification package: `prd.md`, `requirements.json`, `test_spec.json`, `tasks.json`, and optional `architecture.md`. Field-level schemas, EARS patterns, validation rules, ID formats, and rendering. | The spec validation library, artifact schemas, EARS patterns, cross-file integrity rules, or the renderer. |
 
 The **Spec Format Specification** is an independent standard. The coordination
@@ -78,6 +78,6 @@ layer references it for format details and builds harness-specific policies
 | **Provider** | An external agent backend (Claude Code, Gemini CLI, Codex, OpenCode) the harness drives through a uniform adapter interface. |
 | **Coordinator pattern** | Agents coordinate through a shared store (the frozen spec + the operational store), not by messaging each other. The Coordinator delegates subtasks; workers write only their own execution state. |
 | **Ralph** | An autonomous loop specialist for tasks where the goal is clear but the path is not. Iterates against a verifier command; operates outside the spec package entirely. |
-| **af daemon** | The single stateful host process: owns all three stores, manages runs, enforces the spec lifecycle, serves the coordination API, and receives MCP bridge connections. |
+| **af hub** | The single stateful host process: owns all three stores, manages runs, enforces the spec lifecycle, serves the coordination API, and receives MCP bridge connections. |
 | **af MCP bridge** | A sidecar MCP server inside each agent container that exposes harness tools (spec read, Context search, memory recall, subtask state, file claims) to the provider. |
 | **Campaign** | An optional container for work spanning multiple specs, with a dependency graph that gates workspace activation. |

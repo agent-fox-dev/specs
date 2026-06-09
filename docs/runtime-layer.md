@@ -11,7 +11,7 @@ adapted to our requirements.
 
 The coordination layer (domain model, spec package, agents, orchestration)
 is specified in [coordination-layer.md](coordination-layer.md). The services
-architecture (daemon, CLI, storage, deployment) is specified in
+architecture (hub, CLI, storage, deployment) is specified in
 [services-architecture.md](services-architecture.md).
 
 ---

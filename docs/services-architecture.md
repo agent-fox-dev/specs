@@ -4,7 +4,7 @@
 **Status:** Draft
 
 This document specifies the deployable components of an af installation:
-the daemon, CLI, runtime engine, MCP bridge, and memory service. It covers
+the hub, CLI, runtime engine, MCP bridge, and memory service. It covers
 how they communicate, how state is persisted, and how the system starts,
 stops, and recovers.
 
@@ -18,14 +18,14 @@ layer (containers, worktrees, adapters, agent lifecycle) is specified in
 ## 1. Design principles
 
 1. **Local-first.** The default deployment is everything on one machine: one
-   daemon process, one SQLite database, containers on local Podman. No
+   hub process, one SQLite database, containers on local Podman. No
    network services, no cloud dependencies, no accounts.
 
-2. **Single stateful process.** The daemon owns all mutable state. The CLI,
+2. **Single stateful process.** The hub owns all mutable state. The CLI,
    the MCP bridge, and the runtime engine are stateless or ephemeral. This
    makes reasoning about consistency simple: one writer, many readers.
 
-3. **Process boundaries follow trust boundaries.** The daemon runs on the
+3. **Process boundaries follow trust boundaries.** The hub runs on the
    host with full access. The MCP bridge runs inside the agent container
    with scoped identity. The harness (Claude Code, etc.) runs inside the
    container with no direct access to harness state.
@@ -36,11 +36,11 @@ layer (containers, worktrees, adapters, agent lifecycle) is specified in
 
 ---
 
-## 2. The af daemon
+## 2. The af hub
 
 ### 2.1 Responsibilities
 
-The daemon is the coordination service. It owns:
+The hub is the coordination service. It owns:
 
 - **Spec store.** Persists spec artifacts on the filesystem. Serves reads to
   the MCP bridge and the CLI. Accepts writes (JSON Patch) from the CLI during
@@ -74,14 +74,14 @@ The daemon is the coordination service. It owns:
 
 ### 2.2 Process model
 
-The daemon is a single long-running process. It starts when the Operator
-invokes `af daemon start` (or automatically on the first CLI command that
+The hub is a single long-running process. It starts when the Operator
+invokes `af hub start` (or automatically on the first CLI command that
 needs it) and runs until explicitly stopped or until the machine shuts down.
 
 It listens on two interfaces:
 
-- **CLI socket.** A Unix domain socket (default `~/.af/daemon.sock`) for
-  CLI-to-daemon communication. HTTP/JSON over the socket. Local only; no
+- **CLI socket.** A Unix domain socket (default `~/.af/hub.sock`) for
+  CLI-to-hub communication. HTTP/JSON over the socket. Local only; no
   network exposure.
 - **Bridge port.** A TCP port (default `localhost:7400`) for MCP bridge
   connections from agent containers. gRPC with per-agent identity tokens
@@ -96,37 +96,37 @@ It listens on two interfaces:
 3. Verify the spec store directory exists (`~/.af/specs/`).
 4. Start listening on the CLI socket and bridge port.
 5. Recover in-flight runs: re-evaluate workspace and agent state against the
-   runtime engine. Agents that were running when the daemon last stopped are
+   runtime engine. Agents that were running when the hub last stopped are
    detected via the container runtime (containers may still be alive) and
    their state is reconciled.
 
 **Shutdown:**
 1. Stop accepting new CLI and bridge connections.
 2. For each active run: commit partial work, transition in-flight subtasks
-   to a recoverable state, log a `daemon_shutdown` activity event.
+   to a recoverable state, log a `hub_shutdown` activity event.
 3. Close the database.
 4. Exit.
 
-Agents in containers are not stopped on daemon shutdown by default — they
-continue running and reconnect to the bridge when the daemon restarts. The
-Operator can choose to stop all agents before stopping the daemon.
+Agents in containers are not stopped on hub shutdown by default — they
+continue running and reconnect to the bridge when the hub restarts. The
+Operator can choose to stop all agents before stopping the hub.
 
 ### 2.4 Crash recovery
 
-The daemon is the single writer to the operational store. SQLite's WAL mode
-ensures the database is consistent after a crash. On restart, the daemon:
+The hub is the single writer to the operational store. SQLite's WAL mode
+ensures the database is consistent after a crash. On restart, the hub:
 
 1. Opens the database (SQLite recovers the WAL automatically).
 2. Scans for runs marked `running` in the operational store.
 3. Queries the container runtime for the actual state of each agent.
 4. Reconciles: agents still running reconnect through the bridge; agents
-   that exited while the daemon was down are transitioned to `stopped` or
+   that exited while the hub was down are transitioned to `stopped` or
    `error` based on exit code.
 5. File claims held by dead agents are expired.
 
 No data is lost. The activity log may have a gap (events that occurred
-between daemon crash and restart are lost if the bridge couldn't reach the
-daemon), but the operational store state is consistent.
+between hub crash and restart are lost if the bridge couldn't reach the
+hub), but the operational store state is consistent.
 
 ---
 
@@ -135,7 +135,7 @@ daemon), but the operational store state is consistent.
 ### 3.1 Responsibilities
 
 The CLI is the Operator's interface. It is stateless: every command talks
-to the daemon, which owns all state. The CLI never reads or writes the
+to the hub, which owns all state. The CLI never reads or writes the
 database directly.
 
 ### 3.2 Command structure
@@ -187,9 +187,9 @@ af campaign abandon <campaign-id>
 
 af activity <workspace-id> [--run <id>] [--agent <id>] [--type <type>...] [--follow]
 
-af daemon start [--foreground]
-af daemon stop
-af daemon status
+af hub start [--foreground]
+af hub stop
+af hub status
 ```
 
 ### 3.3 PRD authoring
@@ -197,12 +197,12 @@ af daemon status
 The CLI supports PRD authoring through two modes:
 
 - **Direct edit.** `af spec author` applies a JSON Patch to a spec
-  artifact, validated by the daemon. For PRD text, the patch replaces the
+  artifact, validated by the hub. For PRD text, the patch replaces the
   body content.
 - **Editor integration.** `af spec edit <workspace-id> <spec-id>
   --artifact prd` opens the artifact in `$EDITOR`. On save, the CLI diffs
   against the stored version, constructs a patch, and submits it to the
-  daemon for validation.
+  hub for validation.
 
 Agent-assisted PRD authoring (see
 [coordination-layer.md §8.1](coordination-layer.md#81-the-generic-spec-driven-flow),
@@ -215,17 +215,17 @@ agent's output through the normal authoring API.
 ## 4. The runtime engine
 
 The runtime engine (specified in [runtime-layer.md](runtime-layer.md)) runs
-as a library embedded in the daemon, not as a separate process. The daemon
+as a library embedded in the hub, not as a separate process. The hub
 calls it to create containers, start agents, manage worktrees, and
 orchestrate sidecars.
 
-This means the daemon process is the only thing the Operator needs to start.
+This means the hub process is the only thing the Operator needs to start.
 The container runtime (Podman) must be available on the host, but
 the Operator interacts with it only through the af CLI, never directly.
 
-### 4.1 Runtime lifecycle within the daemon
+### 4.1 Runtime lifecycle within the hub
 
-- On daemon startup: the runtime engine initializes, connects to the
+- On hub startup: the runtime engine initializes, connects to the
   container backend, and inventories existing containers.
 - On workspace create: the runtime creates the worktree.
 - On run start: the runtime provisions and starts agent containers with
@@ -241,40 +241,40 @@ the Operator interacts with it only through the af CLI, never directly.
 Specified in [runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge).
 One instance per running agent, inside the agent's container.
 
-### 5.1 Daemon connection
+### 5.1 Hub connection
 
-The bridge connects to the daemon's bridge port (`localhost:7400` by default)
+The bridge connects to the hub's bridge port (`localhost:7400` by default)
 on startup. The connection parameters are injected via environment variables:
 
 ```
-AF_DAEMON_HOST=host.containers.internal
-AF_DAEMON_PORT=7400
+AF_HUB_HOST=host.containers.internal
+AF_HUB_PORT=7400
 AF_AGENT_TOKEN=<jwt>
 AF_WORKSPACE_ID=<uuid>
 AF_AGENT_ID=<uuid>
 AF_RUN_ID=<uuid>
 ```
 
-The agent token is a short-lived JWT issued by the daemon at container
+The agent token is a short-lived JWT issued by the hub at container
 creation, encoding the agent's identity (workspace, agent, run, specialist
-role). The daemon validates it on every bridge request and scopes the
+role). The hub validates it on every bridge request and scopes the
 response accordingly.
 
 ### 5.2 Reconnection
 
-If the daemon restarts while an agent is running, the bridge retries
+If the hub restarts while an agent is running, the bridge retries
 connection with exponential backoff. While disconnected, the harness can
 still work (editing files, running commands) but harness-specific tool calls
 (spec read, Context search, etc.) return errors. The bridge logs a
-`bridge_disconnected` event locally and replays it to the daemon on
+`bridge_disconnected` event locally and replays it to the hub on
 reconnect.
 
 ### 5.3 Health reporting
 
-The bridge reports agent activity to the daemon via a periodic heartbeat
+The bridge reports agent activity to the hub via a periodic heartbeat
 (default every 30 seconds). The heartbeat includes the agent's current
 activity (working, thinking, waiting, etc.) derived from the harness's
-observable behavior (output activity, tool calls). The daemon uses
+observable behavior (output activity, tool calls). The hub uses
 heartbeats for stall detection: an agent whose heartbeat arrives but whose
 activity hasn't changed for a configurable duration (default 5 minutes) is
 flagged as stalled.
@@ -285,7 +285,7 @@ flagged as stalled.
 
 ### 6.1 Embedded mode (default)
 
-The memory service runs in-process within the daemon. Learnings are stored
+The memory service runs in-process within the hub. Learnings are stored
 in the SQLite database alongside the operational store (in a separate set of
 tables). Recall uses a simple keyword and embedding-based similarity search
 over stored learnings.
@@ -295,10 +295,10 @@ dependencies.
 
 ### 6.2 External mode
 
-The daemon connects to an external memory service over gRPC, using the
+The hub connects to an external memory service over gRPC, using the
 `AgentMemory` interface (see
 [coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract)).
-The external service owns storage, retrieval, and distillation. The daemon
+The external service owns storage, retrieval, and distillation. The hub
 passes through `recall` and `consolidate` calls.
 
 This mode is for deployments that want shared memory across machines, more
@@ -324,7 +324,7 @@ memory:
 
 ```
 ~/.af/
-  daemon.sock                  # CLI-to-daemon Unix socket
+  hub.sock                  # CLI-to-hub Unix socket
   af.db                     # SQLite database (operational + Context stores)
   settings.yaml                # Global configuration
   specs/                       # Spec store
@@ -407,18 +407,18 @@ are tied to the local git repo path).
 
 ## 8. Communication protocols
 
-### 8.1 CLI ↔ Daemon
+### 8.1 CLI ↔ Hub
 
-HTTP/JSON over Unix domain socket. The CLI sends requests; the daemon
-responds. For streaming operations (activity follow, agent logs), the daemon
+HTTP/JSON over Unix domain socket. The CLI sends requests; the hub
+responds. For streaming operations (activity follow, agent logs), the hub
 uses server-sent events (SSE) over the same connection.
 
-The socket path is `~/.af/daemon.sock` by default, overridable via
-`AF_DAEMON_SOCK` or `--daemon-sock`.
+The socket path is `~/.af/hub.sock` by default, overridable via
+`AF_HUB_SOCK` or `--hub-sock`.
 
-### 8.2 MCP bridge ↔ Daemon
+### 8.2 MCP bridge ↔ Hub
 
-gRPC over TCP. The bridge is the client; the daemon is the server. Each RPC
+gRPC over TCP. The bridge is the client; the hub is the server. Each RPC
 includes the agent token in metadata for authentication and scoping.
 
 Services:
@@ -468,14 +468,14 @@ service AfBridge {
 }
 ```
 
-### 8.3 Daemon ↔ Runtime engine
+### 8.3 Hub ↔ Runtime engine
 
 In-process function calls. The runtime engine is a Go library (or equivalent)
-linked into the daemon binary. No IPC.
+linked into the hub binary. No IPC.
 
-### 8.4 Daemon ↔ Memory service (external mode)
+### 8.4 Hub ↔ Memory service (external mode)
 
-gRPC over TCP. The daemon is the client; the memory service is the server.
+gRPC over TCP. The hub is the client; the memory service is the server.
 Uses the `AgentMemory` interface from
 [coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract),
 translated to protobuf.
@@ -495,7 +495,7 @@ encodes:
 - `role` — the specialist role (used for actor capability checks)
 - `exp` — expiry (refreshed via bridge heartbeat)
 
-The daemon validates the token on every bridge request. An Implementor
+The hub validates the token on every bridge request. An Implementor
 cannot read another workspace's spec. An Archetype cannot transition another
 agent's subtask. The token is the enforcement mechanism for the actor
 capability model (see
@@ -509,7 +509,7 @@ agent container sees only its mounted worktree, its agent home directory,
 and the MCP bridge socket. It cannot see the af database, other agents'
 homes, or the spec store on the host filesystem.
 
-### 9.3 Daemon access
+### 9.3 Hub access
 
 The CLI socket is file-permission-protected (owner-only). The bridge port
 is localhost-only by default. No authentication is needed for the CLI socket
@@ -522,20 +522,20 @@ is localhost-only by default. No authentication is needed for the CLI socket
 ### 10.1 Local (default)
 
 Everything on one machine. Podman for containers. SQLite for
-storage. Embedded memory service. The Operator runs `af daemon start` and
+storage. Embedded memory service. The Operator runs `af hub start` and
 uses the CLI.
 
-### 10.2 Future: remote daemon
+### 10.2 Future: remote hub
 
-The daemon runs on a remote machine (a beefy server, a cloud VM). The CLI
+The hub runs on a remote machine (a beefy server, a cloud VM). The CLI
 connects over TCP instead of a Unix socket. The bridge port is exposed on the
 network with TLS. Agent containers run on the same remote machine. This
-requires adding TLS and Operator authentication to the daemon — the gRPC and
+requires adding TLS and Operator authentication to the hub — the gRPC and
 HTTP interfaces already support it structurally.
 
 ### 10.3 Future: distributed
 
-Multiple machines each running a daemon instance, coordinated by a central
+Multiple machines each running a hub instance, coordinated by a central
 registry (analogous to Scion's Hub). Out of scope for this document.
 
 ---
@@ -553,7 +553,7 @@ The retrieval engine makes `retrieved` sources practical.
 
 ### 11.2 Interface
 
-The daemon calls the retrieval engine when an agent invokes the Context
+The hub calls the retrieval engine when an agent invokes the Context
 search tool and the target source has resolution strategy `retrieved`.
 
 ```
@@ -600,32 +600,32 @@ type RetrievalResult = {
 
 ### 11.3 Deployment
 
-**Embedded (default).** The engine runs in-process within the daemon.
+**Embedded (default).** The engine runs in-process within the hub.
 Embeddings are computed using a local model (e.g. a small ONNX embedding
-model shipped with the daemon). The index is stored in SQLite (using a
+model shipped with the hub). The index is stored in SQLite (using a
 vector extension) or in a local file-based index (e.g. HNSW). No external
 dependencies.
 
-**External.** The daemon connects to a standalone retrieval service over
+**External.** The hub connects to a standalone retrieval service over
 gRPC, using the same interface. This mode supports GPU-accelerated
-embeddings, larger indices, and shared retrieval across multiple daemon
+embeddings, larger indices, and shared retrieval across multiple hub
 instances.
 
 ### 11.4 Indexing lifecycle
 
-- When a Context revision is cut: the daemon calls `index()` for each
+- When a Context revision is cut: the hub calls `index()` for each
   `retrieved` source in the revision.
-- When a workspace attaches a Context: the daemon verifies the pinned
+- When a workspace attaches a Context: the hub verifies the pinned
   revision is indexed. If not (e.g. the engine was added after the
   revision was cut), it triggers indexing.
-- When a `live` source re-resolves: the daemon calls `index()` with the
+- When a `live` source re-resolves: the hub calls `index()` with the
   new content, then `remove()` for the old revision once no workspace
   pins it.
 - When a source is removed from a Context: `remove()` on all revisions.
 
 ### 11.5 Storage
 
-Embedded mode adds to the daemon's storage:
+Embedded mode adds to the hub's storage:
 
 - `retrieval_indices` — context_id, source_id, revision, status
   (indexing/ready/failed), chunk_count, indexed_at
@@ -700,7 +700,7 @@ circuit breaker).
 
 ### 13.2 Interface
 
-The notification service subscribes to the daemon's activity event stream
+The notification service subscribes to the hub's activity event stream
 and matches events against a set of triggers. When a trigger fires, it
 delivers a notification through one or more configured channels.
 
@@ -769,7 +769,7 @@ The Operator can add, remove, or modify triggers through configuration.
 
 ### 13.5 Deployment
 
-The notification service runs inside the daemon process as an event
+The notification service runs inside the hub process as an event
 subscriber — not a separate service.
 
 ### 13.6 Configuration
@@ -804,12 +804,12 @@ operations remain CLI-driven.
 
 ### 14.2 Architecture
 
-The dashboard is a static single-page application (SPA) served by the daemon
+The dashboard is a static single-page application (SPA) served by the hub
 over its HTTP interface. It consumes the same Operator-facing API and
 observability API that the CLI uses. No additional backend logic.
 
 ```
-Browser ──► Daemon HTTP ──► Same API endpoints as CLI
+Browser ──► Hub HTTP ──► Same API endpoints as CLI
                      └──► SSE streams for live updates
 ```
 
@@ -827,15 +827,15 @@ Browser ──► Daemon HTTP ──► Same API endpoints as CLI
 
 ### 14.4 Live updates
 
-The dashboard subscribes to the daemon's SSE activity stream for real-time
+The dashboard subscribes to the hub's SSE activity stream for real-time
 updates. Workspace status changes, subtask transitions, verification
 outcomes, and agent state changes appear without polling.
 
 ### 14.5 Deployment
 
-The daemon serves the dashboard's static assets from a built-in directory.
+The hub serves the dashboard's static assets from a built-in directory.
 No separate web server. Available at
-`http://localhost:<daemon-http-port>/` when the daemon is running.
+`http://localhost:<hub-http-port>/` when the hub is running.
 
 ### 14.6 Scope boundary
 
@@ -849,7 +849,7 @@ later, it routes through the same API.
 
 One component remains architecturally anticipated but not specified:
 
-- **Remote daemon / Hub.** Running the daemon on a remote machine with TLS,
+- **Remote hub.** Running the hub on a remote machine with TLS,
   Operator authentication, and multi-tenant isolation. The gRPC and HTTP
   interfaces already support remote access structurally; what's missing is
   the auth layer and tenant separation.
