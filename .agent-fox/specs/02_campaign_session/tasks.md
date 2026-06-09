@@ -104,29 +104,29 @@ structure and error hierarchy (`SpeclibError`).
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings introduced: `uv run ruff check`
 
-- [ ] 4. Implement Campaign class
-  - [ ] 4.1 Implement Campaign.create()
+- [x] 4. Implement Campaign class
+  - [x] 4.1 Implement Campaign.create()
     - Validate path: parent must exist, target must be empty or non-existent
     - Create directory if needed
     - Write campaign.yaml with CampaignMetadata
     - Return Campaign instance
     - _Requirements: 02-REQ-1.1, 02-REQ-1.2, 02-REQ-1.E1, 02-REQ-1.E2_
 
-  - [ ] 4.2 Implement Campaign.open()
+  - [x] 4.2 Implement Campaign.open()
     - Check campaign.yaml exists
     - Parse YAML into CampaignMetadata
     - Handle invalid YAML with CampaignError
     - Return Campaign instance
     - _Requirements: 02-REQ-2.1, 02-REQ-2.E1, 02-REQ-2.E2_
 
-  - [ ] 4.3 Implement campaign.specs()
+  - [x] 4.3 Implement campaign.specs()
     - Scan directory for `{NN}_{snake_case}` pattern
     - Sort by numeric prefix
     - Exclude `archive/`, `_session.json`, non-matching entries
     - Return list of Path objects
     - _Requirements: 02-REQ-2.2_
 
-  - [ ] 4.4 Implement campaign.new_spec()
+  - [x] 4.4 Implement campaign.new_spec()
     - Validate spec_name against `[a-z][a-z0-9_]*`
     - Compute next numeric prefix
     - Create spec directory
@@ -136,15 +136,15 @@ structure and error hierarchy (`SpeclibError`).
     - Return SpecSession instance
     - _Requirements: 02-REQ-3.1, 02-REQ-3.2, 02-REQ-3.3, 02-REQ-3.4, 02-REQ-3.E1, 02-REQ-3.E2_
 
-  - [ ] 4.5 Implement campaign.path and campaign.metadata properties
+  - [x] 4.5 Implement campaign.path and campaign.metadata properties
     - _Requirements: 02-REQ-1.1, 02-REQ-2.1_
 
-  - [ ] 4.V Verify task group 4
-    - [ ] Campaign tests pass: `uv run pytest -q tests/test_campaign.py`
-    - [ ] Campaign edge case tests pass (TS-02-E1 through TS-02-E6)
-    - [ ] Campaign property tests pass (TS-02-P3, TS-02-P4)
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
+  - [x] 4.V Verify task group 4
+    - [x] Campaign tests pass: `uv run pytest -q tests/test_campaign.py`
+    - [x] Campaign edge case tests pass (TS-02-E1 through TS-02-E6)
+    - [x] Campaign property tests pass (TS-02-P3, TS-02-P4)
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
 
 - [x] 5. Implement SpecSession class
   - [x] 5.1 Implement session state machine core
@@ -189,9 +189,9 @@ structure and error hierarchy (`SpeclibError`).
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
 
-- [ ] 6. Wiring verification
+- [x] 6. Wiring verification
 
-  - [ ] 6.1 Trace every execution path from design.md end-to-end
+  - [x] 6.1 Trace every execution path from design.md end-to-end
     - Path 1: `Campaign.create` -> validate path -> create dir -> write YAML -> return Campaign
     - Path 2: `Campaign.open` -> check YAML -> parse -> return Campaign; `specs()` -> scan -> sort -> return
     - Path 3: `campaign.new_spec` -> validate name -> compute prefix -> create dir -> write prd.md -> write _session.json -> return SpecSession
@@ -201,33 +201,33 @@ structure and error hierarchy (`SpeclibError`).
     - Verify each function in the chain is actually called by the previous one
     - _Requirements: all_
 
-  - [ ] 6.2 Verify return values propagate correctly
+  - [x] 6.2 Verify return values propagate correctly
     - `Campaign.create()` returns Campaign consumed by callers
     - `campaign.new_spec()` returns SpecSession consumed by callers
     - `session.validate()` returns ValidationResult
     - `session.render()` returns str or dict
     - _Requirements: all_
 
-  - [ ] 6.3 Run the integration smoke tests
+  - [x] 6.3 Run the integration smoke tests
     - All TS-02-SMOKE-* tests pass with real components
     - _Test Spec: TS-02-SMOKE-1 through TS-02-SMOKE-5_
 
-  - [ ] 6.4 Stub / dead-code audit
+  - [x] 6.4 Stub / dead-code audit
     - Search speclib/campaign.py and speclib/session.py for `return []`, `return None` on non-Optional returns, `pass`, `# TODO`, `NotImplementedError`
     - Each hit must be justified or replaced
     - `assess()`, `refine()`, `generate()` raising NotImplementedError is expected and documented — note as intentional (spec 03 provides implementation)
 
-  - [ ] 6.5 Cross-spec entry point verification
+  - [x] 6.5 Cross-spec entry point verification
     - Verify `Campaign` and `SpecSession` are importable from `speclib`
     - Verify `CampaignError` and `SessionError` are importable from `speclib.errors`
     - Verify `CampaignMetadata`, `SessionState`, `Assessment`, `Question`, `ValidationResult`, `GenerateResult`, `RepairSuggestion` are importable
     - Confirm spec 03 can subclass or wrap `assess()` and `generate()` — verify method signatures match the interface in design.md
 
-  - [ ] 6.V Verify wiring group
-    - [ ] All smoke tests pass: `uv run pytest -q tests/ -k smoke`
-    - [ ] No unjustified stubs remain in speclib/campaign.py or speclib/session.py
-    - [ ] All execution paths from design.md are live
-    - [ ] All existing tests still pass: `uv run pytest -q`
+  - [x] 6.V Verify wiring group
+    - [x] All smoke tests pass: `uv run pytest -q tests/ -k smoke`
+    - [x] No unjustified stubs remain in speclib/campaign.py or speclib/session.py
+    - [x] All execution paths from design.md are live
+    - [x] All existing tests still pass: `uv run pytest -q`
 
 ## Traceability
 
