@@ -2,12 +2,16 @@
 
 **Version:** 1.0
 **Status:** Draft
-**Parent:** Agentic Harness Core PRD v1.0, section 15
 
-This document specifies the deployable components of a af installation:
+This document specifies the deployable components of an af installation:
 the daemon, CLI, runtime engine, MCP bridge, and memory service. It covers
 how they communicate, how state is persisted, and how the system starts,
 stops, and recovers.
+
+The coordination layer (domain model, spec package, agents, orchestration)
+is specified in [coordination-layer.md](coordination-layer.md). The runtime
+layer (containers, worktrees, adapters, agent lifecycle) is specified in
+[runtime-layer.md](runtime-layer.md).
 
 ---
 
@@ -26,9 +30,9 @@ stops, and recovers.
    with scoped identity. The harness (Claude Code, etc.) runs inside the
    container with no direct access to harness state.
 
-4. **Pluggable where the PRD says pluggable.** Memory, issue tracker, web
-   search, and the container runtime are behind interfaces. Everything else
-   is built-in.
+4. **Pluggable where the coordination layer says pluggable.** Memory, issue
+   tracker, web search, and the container runtime are behind interfaces.
+   Everything else is built-in.
 
 ---
 
@@ -54,15 +58,17 @@ The daemon is the coordination service. It owns:
   triggers verification, applies bounce-backs.
 - **Prompt assembly.** Composes the system prompt for each agent from the
   specialist role, Context sources, spec slice, recalled memory, and actor
-  constraints.
+  constraints (see [coordination-layer.md §6.3](coordination-layer.md#63-prompt-assembly)).
 - **Agent memory.** Drives the memory service through `recall` (at prompt
   assembly and behind the MCP tool) and `consolidate` (at session end).
+  See [coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract).
 - **File claims.** Manages the advisory lease table. Enforces atomic
   acquisition and expiry.
 - **Activity log.** Receives events from the MCP bridge, the runtime engine,
   and internal operations. Appends to the operational store.
-- **Coordination API.** Serves the Operator-facing API (section 12.1 of the
-  PRD) over a local socket or TCP.
+- **Coordination API.** Serves the Operator-facing API (see
+  [coordination-layer.md §10.1](coordination-layer.md#101-operator-facing-api))
+  over a local socket or TCP.
 - **MCP bridge API.** Serves the agent-facing API over gRPC, accepting
   connections from MCP bridge instances inside agent containers.
 
@@ -134,7 +140,8 @@ database directly.
 
 ### 3.2 Command structure
 
-Commands mirror the Operator-facing API (section 12.1 of the PRD):
+Commands mirror the Operator-facing API (see
+[coordination-layer.md §10.1](coordination-layer.md#101-operator-facing-api)):
 
 ```
 af workspace create [--origin <path|url>] [--context <id>...] [--campaign <id>]
@@ -195,21 +202,22 @@ The CLI supports PRD authoring through two modes:
 - **Editor integration.** `af spec edit <workspace-id> <spec-id>
   --artifact prd` opens the artifact in `$EDITOR`. On save, the CLI diffs
   against the stored version, constructs a patch, and submits it to the
-  daemon for validation. This gives the Operator a comfortable editing
-  experience for the PRD without bypassing the spec store.
+  daemon for validation.
 
-Agent-assisted PRD authoring (section 10.1, phase 3 of the PRD) works by
-starting a temporary agent with a drafting template, feeding it the
-Operator's brief and attached Contexts, and writing the agent's output into
-the spec store through the normal authoring API.
+Agent-assisted PRD authoring (see
+[coordination-layer.md §8.1](coordination-layer.md#81-the-generic-spec-driven-flow),
+phase 3) works by starting a temporary agent with a drafting template,
+feeding it the Operator's brief and attached Contexts, and writing the
+agent's output through the normal authoring API.
 
 ---
 
 ## 4. The runtime engine
 
-The runtime engine (specified in `runtime-layer_v1.0.md`) runs as a library
-embedded in the daemon, not as a separate process. The daemon calls it to
-create containers, start agents, manage worktrees, and orchestrate sidecars.
+The runtime engine (specified in [runtime-layer.md](runtime-layer.md)) runs
+as a library embedded in the daemon, not as a separate process. The daemon
+calls it to create containers, start agents, manage worktrees, and
+orchestrate sidecars.
 
 This means the daemon process is the only thing the Operator needs to start.
 The container runtime (Podman) must be available on the host, but
@@ -230,8 +238,8 @@ the Operator interacts with it only through the af CLI, never directly.
 
 ## 5. The af MCP bridge
 
-Specified in `runtime-layer_v1.0.md`, section 8. One instance per running
-agent, inside the agent's container.
+Specified in [runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge).
+One instance per running agent, inside the agent's container.
 
 ### 5.1 Daemon connection
 
@@ -288,9 +296,10 @@ dependencies.
 ### 6.2 External mode
 
 The daemon connects to an external memory service over gRPC, using the
-`AgentMemory` interface (section 8.6 of the PRD). The external service owns
-storage, retrieval, and distillation. The daemon passes through `recall` and
-`consolidate` calls.
+`AgentMemory` interface (see
+[coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract)).
+The external service owns storage, retrieval, and distillation. The daemon
+passes through `recall` and `consolidate` calls.
 
 This mode is for deployments that want shared memory across machines, more
 sophisticated retrieval (vector search, re-ranking), or integration with an
@@ -335,14 +344,14 @@ memory:
     implementor/
     verifier/
     ralph/
-  # Worktrees live near the repo, not here — see runtime-layer_v1.0.md section 3.2
+  # Worktrees live near the repo, not here — see runtime-layer.md §3.2
   # Location: <repo-parent>/.af_worktrees/<workspace-id>/
 ```
 
 ### 7.2 Database schema (SQLite)
 
-The operational store tables map directly to the entities in section 11.3
-of the PRD:
+The operational store tables map directly to the entities in
+[coordination-layer.md §9.3](coordination-layer.md#93-operational-store):
 
 - `workspaces` — id, name, status, owner, origin, branch, worktree_path,
   base_branch, remote, campaign_id, created_at, updated_at
@@ -467,8 +476,9 @@ linked into the daemon binary. No IPC.
 ### 8.4 Daemon ↔ Memory service (external mode)
 
 gRPC over TCP. The daemon is the client; the memory service is the server.
-Uses the `AgentMemory` interface from section 8.6 of the PRD, translated to
-protobuf.
+Uses the `AgentMemory` interface from
+[coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract),
+translated to protobuf.
 
 ---
 
@@ -488,14 +498,16 @@ encodes:
 The daemon validates the token on every bridge request. An Implementor
 cannot read another workspace's spec. An Archetype cannot transition another
 agent's subtask. The token is the enforcement mechanism for the actor
-capability model (section 8.4 of the PRD) at the bridge boundary.
+capability model (see
+[coordination-layer.md §6.4](coordination-layer.md#64-specialists-actor-capabilities-and-instruction-precedence))
+at the bridge boundary.
 
 ### 9.2 Container isolation
 
-Detailed in `runtime-layer_v1.0.md`. The key guarantee: an agent container
-sees only its mounted worktree, its agent home directory, and the MCP bridge
-socket. It cannot see the af database, other agents' homes, or the spec
-store on the host filesystem.
+Detailed in [runtime-layer.md](runtime-layer.md). The key guarantee: an
+agent container sees only its mounted worktree, its agent home directory,
+and the MCP bridge socket. It cannot see the af database, other agents'
+homes, or the spec store on the host filesystem.
 
 ### 9.3 Daemon access
 
@@ -532,7 +544,8 @@ registry (analogous to Scion's Hub). Out of scope for this document.
 
 ### 11.1 Purpose
 
-The PRD defines two resolution strategies for Context sources (section 7.10):
+The coordination layer defines two resolution strategies for Context sources
+(see [coordination-layer.md §5.9](coordination-layer.md#59-grounding-the-context)):
 `pinned` (full content in the prompt every turn) and `retrieved` (indexed,
 only relevant chunks pulled in per turn). Pinned sources work for small
 documents but cannot scale to a full repository or a large document set.
@@ -629,24 +642,19 @@ maintained over the embeddings for search.
 
 ### 12.1 Purpose
 
-The PRD (section 3) states the harness "reads CI status and drives PRs but
-does not run pipelines itself." The CI/CD bridge is the read-only adapter
-that fulfills the first half: agents can query pipeline status so the
-Verifier can confirm CI passed as part of the wiring verification gate and
-the PR Shepherd can wait for green CI before marking a PR merge-ready.
+The harness reads CI status and drives PRs but does not run pipelines itself.
+The CI/CD bridge is the read-only adapter that lets agents query pipeline
+status so the Verifier can confirm CI passed as part of the wiring
+verification gate (see
+[coordination-layer.md §7.5](coordination-layer.md#75-verification-gate))
+and the PR Shepherd can wait for green CI before marking a PR merge-ready.
 
 ### 12.2 Interface
 
-Defined in the PRD (section 8.5). The `CIProvider` interface is pluggable,
-the same pattern as `IssueTracker` and `WebSearch`:
-
-```
-interface CIProvider {
-  listRuns(ref: CIRef): Promise<PipelineRun[]>
-  getRun(runId: string): Promise<PipelineRun>
-  getJobLog(jobId: string): Promise<string>
-}
-```
+Defined in the coordination layer (see
+[coordination-layer.md §6.5](coordination-layer.md#65-tools-available-to-agents)).
+The `CIProvider` interface is pluggable, the same pattern as `IssueTracker`
+and `WebSearch`.
 
 ### 12.3 Adapters
 
@@ -698,10 +706,7 @@ delivers a notification through one or more configured channels.
 
 ```
 interface NotificationService {
-  // Register a channel for delivery.
   addChannel(channel: NotificationChannel): void
-
-  // Configure which events trigger notifications.
   setTriggers(triggers: NotificationTrigger[]): void
 }
 
@@ -712,7 +717,7 @@ interface NotificationChannel {
 
 type NotificationTrigger = {
   event: string                 // activity event type or pattern
-  filter?: {                    // optional narrowing
+  filter?: {
     workspaceId?: string
     runId?: string
     campaignId?: string
@@ -749,28 +754,23 @@ servers or CI environments where no interactive notification is possible.
 
 ### 13.4 Default triggers
 
-Out of the box, the notification service fires on:
-
 | Trigger | Priority | When |
 | --- | --- | --- |
-| `spec_ready_for_review` | action_required | A Planner has drafted a spec and it is ready for Operator approval (phase 4). |
-| `run_complete` | info | A spec-driven run completed successfully (all verification passed). |
-| `run_failed` | action_required | A run stopped due to error or unrecoverable verification failure. |
+| `spec_ready_for_review` | action_required | A Planner has drafted a spec ready for Operator approval. |
+| `run_complete` | info | A spec-driven run completed successfully. |
+| `run_failed` | action_required | A run stopped due to error or unrecoverable failure. |
 | `ralph_complete` | info | A Ralph loop exited cleanly (verifier passed). |
 | `ralph_stopped` | action_required | A Ralph loop hit a circuit breaker. |
-| `campaign_workspace_unblocked` | action_required | A Campaign dependency gate cleared; a workspace is ready for PRD authoring. |
+| `campaign_workspace_unblocked` | action_required | A Campaign dependency gate cleared. |
 | `verification_failed` | info | A verification gate failed; the Coordinator will re-delegate. |
-| `agent_stalled` | info | An agent has been stalled for longer than the configured threshold. |
+| `agent_stalled` | info | An agent has been stalled beyond the configured threshold. |
 
 The Operator can add, remove, or modify triggers through configuration.
 
 ### 13.5 Deployment
 
 The notification service runs inside the daemon process as an event
-subscriber — not a separate service. It reads from the activity event
-stream (the same stream the observability API exposes) and evaluates
-triggers. This keeps the deployment model simple: no additional process
-to manage.
+subscriber — not a separate service.
 
 ### 13.6 Configuration
 
@@ -800,15 +800,13 @@ notifications:
 A read-only web frontend for observing system state without the CLI. Shows
 what's happening across workspaces, runs, agents, and Campaigns at a glance.
 The Operator uses it alongside the CLI, not instead of it — all write
-operations (create workspace, approve spec, start run) remain CLI-driven.
+operations remain CLI-driven.
 
 ### 14.2 Architecture
 
 The dashboard is a static single-page application (SPA) served by the daemon
-over its HTTP interface. It consumes the same Operator-facing API (section
-12.1 of the PRD) and observability API (section 12.3) that the CLI uses.
-No additional backend logic — the daemon already serves everything the
-dashboard needs.
+over its HTTP interface. It consumes the same Operator-facing API and
+observability API that the CLI uses. No additional backend logic.
 
 ```
 Browser ──► Daemon HTTP ──► Same API endpoints as CLI
@@ -819,13 +817,13 @@ Browser ──► Daemon HTTP ──► Same API endpoints as CLI
 
 | View | Content |
 | --- | --- |
-| **Home** | List of active workspaces with status, current run, agent count. Campaigns shown as collapsible groups with their dependency graphs. |
-| **Workspace detail** | Workspace state, attached Contexts (with pinned revisions), spec lifecycle, git status, file listing. |
-| **Spec viewer** | Rendered combined view of the spec (PRD, requirements, test spec, tasks). Coverage and traceability tables. Diff against previous spec (for superseded specs). |
-| **Run timeline** | Gantt-style view of a run: phases, agent lifetimes, subtask state transitions, verification outcomes. Clickable for detail. |
-| **Activity stream** | Filterable, scrollable event log. Live updates via SSE. Filter by workspace, run, agent, event type. |
-| **Agent detail** | Agent state (phase, activity), conversation history, tool call log, assigned subtask and its state. |
-| **Campaign graph** | Dependency graph across specs in a Campaign. Node color by workspace status (blocked, active, sealed). Clicking a node navigates to the workspace detail. |
+| **Home** | Active workspaces with status, current run, agent count. Campaigns as collapsible groups with dependency graphs. |
+| **Workspace detail** | State, attached Contexts, spec lifecycle, git status, file listing. |
+| **Spec viewer** | Rendered combined view. Coverage and traceability tables. Diff against previous spec. |
+| **Run timeline** | Gantt-style view: phases, agent lifetimes, subtask transitions, verification outcomes. |
+| **Activity stream** | Filterable, scrollable event log with live SSE updates. |
+| **Agent detail** | State, conversation history, tool call log, assigned subtask. |
+| **Campaign graph** | Dependency graph across specs. Node color by status. |
 
 ### 14.4 Live updates
 
@@ -835,20 +833,15 @@ outcomes, and agent state changes appear without polling.
 
 ### 14.5 Deployment
 
-The daemon serves the dashboard's static assets (HTML, CSS, JS) from a
-built-in directory. No separate web server. The dashboard is available at
+The daemon serves the dashboard's static assets from a built-in directory.
+No separate web server. Available at
 `http://localhost:<daemon-http-port>/` when the daemon is running.
-
-For remote access (when the daemon binds to a network interface), the same
-TLS and authentication requirements as the remote daemon mode apply.
 
 ### 14.6 Scope boundary
 
 The dashboard is read-only. It does not provide forms for creating
-workspaces, authoring specs, or starting runs. Those workflows involve
-validation, editor integration, and multi-step interactions that are better
-served by the CLI. If write support is added later, it routes through the
-same API — the dashboard never bypasses the daemon.
+workspaces, authoring specs, or starting runs. If write support is added
+later, it routes through the same API.
 
 ---
 
@@ -859,5 +852,4 @@ One component remains architecturally anticipated but not specified:
 - **Remote daemon / Hub.** Running the daemon on a remote machine with TLS,
   Operator authentication, and multi-tenant isolation. The gRPC and HTTP
   interfaces already support remote access structurally; what's missing is
-  the auth layer and tenant separation. This is the path to shared
-  deployments and team collaboration.
+  the auth layer and tenant separation.

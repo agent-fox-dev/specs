@@ -2,13 +2,17 @@
 
 **Version:** 1.0
 **Status:** Draft
-**Parent:** Agentic Harness Core PRD v1.0, section 14
 
 This document specifies the runtime layer that sits underneath the af
 coordination layer. It covers container isolation, git worktree management,
 harness adapters, agent lifecycle, templates, sidecar services, and the af
 MCP bridge. The design follows patterns established by Google's Scion project,
 adapted to our requirements.
+
+The coordination layer (domain model, spec package, agents, orchestration)
+is specified in [coordination-layer.md](coordination-layer.md). The services
+architecture (daemon, CLI, storage, deployment) is specified in
+[services-architecture.md](services-architecture.md).
 
 ---
 
@@ -30,7 +34,7 @@ adapted to our requirements.
 4. **The coordination layer drives.** The runtime exposes a narrow API. The
    coordination layer calls it to start/stop agents, provision worktrees, and
    inject configuration. The runtime never calls back into the coordination
-   layer — the af MCP bridge handles that direction (section 8).
+   layer — the af MCP bridge handles that direction (§8).
 
 5. **Portable across container runtimes.** Podman (rootless) is the default.
    Kubernetes is supported through the same container runtime interface.
@@ -102,7 +106,7 @@ designed to accommodate it.
 ## 3. Git worktree management
 
 The runtime manages per-workspace git worktrees. This is the mechanism behind
-section 5.2 of the PRD.
+workspace isolation (see [coordination-layer.md §3.2](coordination-layer.md#32-isolation-through-worktrees)).
 
 ```
 interface WorktreeManager {
@@ -143,7 +147,8 @@ worktree is a full working directory checked out to its branch.
   empty of untracked files (no env files, secrets, or installed
   dependencies carry over from the main checkout).
 - **Remove:** `git worktree remove` plus optional `git branch -d`. The
-  coordination layer decides when to remove (section 5.7 of the PRD);
+  coordination layer decides when to remove (see
+  [coordination-layer.md §3.7](coordination-layer.md#37-workspace-ownership-and-management));
   the runtime executes it.
 
 ---
@@ -349,9 +354,10 @@ gives:
 ## 6. Templates
 
 A template is a blueprint for agent configuration. The coordination layer's
-specialists (section 8.4 of the PRD) map to templates: the specialist defines
-the role semantically (actor capability, tool policy); the template defines
-the configuration mechanically (system prompt file, env vars, MCP servers).
+specialists (see [coordination-layer.md §6.4](coordination-layer.md#64-specialists-actor-capabilities-and-instruction-precedence))
+map to templates: the specialist defines the role semantically (actor
+capability, tool policy); the template defines the configuration
+mechanically (system prompt file, env vars, MCP servers).
 
 ### 6.1 Template structure
 
@@ -531,9 +537,10 @@ The full sequence from workspace creation to a running agent:
    branch and worktree.
 
 2. **Coordination layer** assembles the agent configuration: resolves the
-   specialist to a template, composes the system prompt (section 8.3 of
-   the PRD), gathers MCP server configs (including the af bridge), and
-   collects environment variables (workspace ID, agent ID, run ID, etc.).
+   specialist to a template, composes the system prompt (see
+   [coordination-layer.md §6.3](coordination-layer.md#63-prompt-assembly)),
+   gathers MCP server configs (including the af bridge), and collects
+   environment variables.
 
 3. **Coordination layer** calls `AgentLifecycle.create()` with the assembled
    configuration.
@@ -602,7 +609,8 @@ worktrees:
 ### 11.2 Per-workspace overrides
 
 ```yaml
-# Set via the coordination layer's workspace config (section 5.6 of PRD)
+# Set via the coordination layer's workspace config
+# (see coordination-layer.md §3.6)
 harness: gemini
 template: implementor
 image: af/agent:gemini
@@ -625,16 +633,14 @@ our own thin runtime rather than depend on an external project.
 Key decisions that diverge from "adopt Scion":
 
 - **No Hub or Runtime Broker.** We build for local and single-machine use.
-  Remote execution and multi-user collaboration remain non-goals (PRD
-  section 3).
+  Remote execution and multi-user collaboration remain non-goals.
 - **No agent-to-agent messaging.** Coordination is through the shared store,
   not inter-agent messages.
 - **Thinner agent state model.** We adopt Scion's Phase × Activity pattern
   but with fewer states, since our coordination layer handles the
-  higher-level orchestration state (runs, subtasks, verification).
+  higher-level orchestration state.
 - **Our own harness adapters.** We implement the same set of providers
-  (Claude Code, Gemini CLI, Codex, OpenCode) but with adapters shaped to
-  our needs, not forked from Scion's codebase.
+  but with adapters shaped to our needs.
 - **The af MCP bridge.** Scion has no equivalent. This is our key
   architectural addition: the sidecar that connects the opaque harness to
   the coordination layer's tools and state.
