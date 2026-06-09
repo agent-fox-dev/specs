@@ -158,6 +158,7 @@ af workspace delete <id>
 af spec show <campaign>/<spec> [--artifact <name>] [--rendered]
 af spec validate <campaign>/<spec>
 af spec coverage <campaign>/<spec>
+af spec approve <campaign>/<spec>
 af spec seal <campaign>/<spec>
 af spec supersede <campaign>/<spec> --new-spec <campaign>/<new-spec>
 
@@ -332,9 +333,9 @@ an agent skill.
 Spec creation is a **stateful, session-based process**. A session starts
 with an existing PRD (rough draft or fully fleshed out), uses an agent to
 assess and optionally refine it, then generates the remaining artifacts.
-The session works against a **local working directory** (a user-specified
-path or a temp folder), not the spec store. Only when the spec is finalized
-does the user render it to a target location or register it with the hub.
+The session works against a **local campaign directory**, not the hub's
+spec store. Once a spec is complete, the user pushes it to the hub via
+`af-spec submit`.
 
 ### 7.1 speclib
 
@@ -350,22 +351,46 @@ authoring through the Claude Agent SDK. speclib is used by:
 #### 7.1.1 The session model
 
 Spec creation is stateful. A **session** tracks the lifecycle of authoring
-one spec, from PRD input to finalized package.
+one spec, from PRD input to completed package.
 
 ```python
-class SpecSession:
-    """A stateful authoring session for one spec."""
+class Campaign:
+    """Manages a campaign working directory containing 1..n specs."""
 
     @classmethod
-    def create(
-        cls,
+    def create(cls, path: Path, name: str, description: str) -> "Campaign":
+        """Create a new campaign directory with campaign.yaml."""
+        ...
+
+    @classmethod
+    def open(cls, path: Path) -> "Campaign":
+        """Open an existing campaign directory."""
+        ...
+
+    def new_spec(
+        self,
+        spec_name: str,            # e.g. "data_models" → creates 01_data_models/
         prd: str | Path,           # PRD content or file path
-        work_dir: Path | None,     # local working directory; temp if None
         mode: Literal["interactive", "one-shot"] = "interactive",
-    ) -> "SpecSession": ...
+    ) -> "SpecSession":
+        """Create a new spec within this campaign and return its session."""
+        ...
+
+    def specs(self) -> list[Path]:
+        """List spec directories in this campaign."""
+        ...
+
+    @property
+    def path(self) -> Path: ...
+    @property
+    def metadata(self) -> CampaignMetadata: ...
+
+
+class SpecSession:
+    """A stateful authoring session for one spec within a campaign."""
 
     @classmethod
-    def resume(cls, work_dir: Path) -> "SpecSession": ...
+    def resume(cls, spec_dir: Path) -> "SpecSession": ...
 
     # --- PRD assessment and refinement ---
 
@@ -402,32 +427,26 @@ class SpecSession:
         """Render the spec as markdown."""
         ...
 
-    # --- Finalization ---
-
-    def finalize(self, target: Path) -> Path:
-        """Copy the completed spec package from the working directory
-        to a target location (e.g., a campaign directory in the spec
-        store). Returns the target path."""
-        ...
-
-    def register(self, hub_url: str, campaign: str) -> None:
-        """Register the completed spec with the hub. The hub copies
-        it into the spec store and creates a SpecRef. Requires a
-        running hub."""
-        ...
-
     # --- State ---
 
     @property
     def state(self) -> SessionState: ...
     # SessionState: "init" | "assessing" | "refining" | "prd_accepted"
-    #             | "generating" | "generated" | "finalized"
+    #             | "generating" | "generated"
 
     @property
-    def work_dir(self) -> Path: ...
+    def spec_dir(self) -> Path: ...
 
     @property
     def assessment(self) -> Assessment | None: ...
+
+
+@dataclass
+class CampaignMetadata:
+    name: str
+    description: str
+    created_at: str
+    updated_at: str
 ```
 
 ```python
@@ -469,23 +488,35 @@ class RepairSuggestion:
 
 #### 7.1.2 Session persistence
 
-A session's state is persisted in the working directory as
+A session's state is persisted in the spec's directory as
 `_session.json`. This allows resuming an interrupted session via
-`SpecSession.resume(work_dir)`. The session file tracks: the current
+`SpecSession.resume(spec_dir)`. The session file tracks: the current
 state, the PRD path, assessment history, Q&A history, and which artifacts
 have been generated.
 
-The working directory layout during a session:
+The working directory is a **campaign directory** containing 1..n spec
+subdirectories and a `campaign.yaml`:
 
 ```
-<work_dir>/
-  _session.json                 # session state (speclib-managed)
-  prd.md                        # the PRD (copied or created at init)
-  requirements.json             # generated (once generate() completes)
-  test_spec.json                # generated
-  tasks.json                    # generated
-  architecture.md               # optional, user-provided
+<work_dir>/                         # campaign working directory
+  campaign.yaml                     # campaign metadata (§4.2 of coordination-layer.md)
+  01_data_models/                   # spec (complete or in progress)
+    _session.json                   # session state (speclib-managed)
+    prd.md                          # the PRD (copied or created at init)
+    requirements.json               # generated (once generate() completes)
+    test_spec.json                  # generated
+    tasks.json                      # generated
+    architecture.md                 # optional, user-provided
+  02_auth/                          # another spec in the same campaign
+    _session.json
+    prd.md
+    ...
 ```
+
+`af-spec init` creates the campaign directory and `campaign.yaml`.
+`af-spec new` creates a spec subdirectory within it. Multiple specs can
+be authored in parallel within the same campaign directory. Each spec
+has its own session.
 
 #### 7.1.3 The agent
 
@@ -543,71 +574,89 @@ in Python:
 ### 7.2 af-spec CLI
 
 A separate Python binary wrapping speclib. Does not require the hub to be
-running (except for `approve` and `register`).
+running — except for `submit` (push a spec to the hub) and `import` (pull
+from the hub). The `draft → active` transition (`approve`) is a hub
+operation invoked through the `af` CLI, not `af-spec` (see §7.4).
+
+**Campaign commands:**
 
 ```
-af-spec new <prd-file> [--work-dir <path>] [--one-shot]
-    Create a new session from a PRD. In one-shot mode, assess the PRD,
-    accept it as-is (even with gaps), generate artifacts, and validate
-    — all in one pass. In interactive mode (default), assess and pause
-    for refinement.
+af-spec init <path> --name <name> --description <text>
+    Create a new campaign working directory at <path> with campaign.yaml.
+    If <path> exists and is empty, initialize it in place.
 
-af-spec assess [--work-dir <path>]
-    Run or re-run the PRD assessment. Prints the assessment summary,
-    gaps, and structured questions (if any).
+af-spec import --hub <url> <campaign-slug> [--target <path>]
+    Pull an existing campaign (campaign.yaml + all specs) from the hub's
+    spec store into a local working directory. Useful for context when
+    authoring a new spec that depends on existing ones.
 
-af-spec refine [--work-dir <path>] --answers <file>
+af-spec list [<campaign-dir>]
+    List specs in a campaign directory with their session state.
+```
+
+**Spec authoring commands** (run from within a campaign directory):
+
+```
+af-spec new <prd-file> [--name <spec-name>] [--one-shot]
+    Create a new spec in the campaign from a PRD. The spec directory is
+    named {NN}_{spec-name} (next available number). In one-shot mode,
+    assess → accept → generate → validate in one pass. In interactive
+    mode (default), assess and pause for refinement.
+
+af-spec assess <spec>
+    Run or re-run the PRD assessment for a spec. Prints the assessment
+    summary, gaps, and structured questions (if any). <spec> is the
+    spec directory name (e.g. "01_data_models") or number (e.g. "01").
+
+af-spec refine <spec> --answers <file>
     Submit answers to the agent's questions as a JSON file mapping
     question IDs to answer strings. The agent updates the PRD and
     re-assesses. Repeat until no questions remain.
 
-af-spec accept [--work-dir <path>]
+af-spec accept <spec>
     Accept the PRD in its current state, ending the refinement loop.
 
-af-spec generate [--work-dir <path>]
+af-spec generate <spec>
     Generate the JSON artifacts from the accepted PRD.
 
-af-spec validate [--work-dir <path>]
-    Run schema and cross-file integrity checks on the spec package
-    in the working directory.
+af-spec validate <spec>
+    Run schema and cross-file integrity checks on the spec package.
 
-af-spec render [--work-dir <path>] [--combined]
+af-spec render <spec> [--combined]
     Render the spec as markdown.
 
-af-spec show [--work-dir <path>] [--artifact <name>]
+af-spec show <spec> [--artifact <name>]
     Display an artifact or the session state.
 
-af-spec finalize [--work-dir <path>] --target <path>
-    Copy the completed spec package to a target directory.
-
-af-spec register [--work-dir <path>] --hub <url> --campaign <slug>
-    Register the completed spec with a running hub. The hub copies
-    it into the spec store and creates a SpecRef.
-
-af-spec approve --hub <url> <campaign>/<spec>
-    Transition a spec from draft to active. Computes intent_hash,
-    freezes the package. Requires a running hub because approval is
-    a coordination-layer operation (see §7.4).
-
-af-spec status [--work-dir <path>]
-    Print the current session state and a summary of the spec.
+af-spec status [<spec>]
+    Print the session state. Without <spec>, show all specs in the
+    campaign.
 ```
 
-**Working directory convention.** If `--work-dir` is not specified,
-`af-spec new` creates a temp directory and prints its path. Subsequent
-commands default to the current directory. The working directory is
-self-contained: it holds the session state, the PRD, and the generated
-artifacts.
+**Hub interaction commands:**
+
+```
+af-spec submit --hub <url> [<spec>]
+    Push a completed spec to the hub, adding it to the campaign in the
+    hub's spec store. The hub creates a SpecRef. Without <spec>, submits
+    all completed specs. Requires a running hub.
+```
+
+**Working directory convention.** `af-spec` commands operate relative
+to the current directory, which must be a campaign directory (one that
+contains `campaign.yaml`). The `--campaign-dir` flag can override this.
+The campaign directory is self-contained: it holds campaign metadata,
+spec directories, and session state.
 
 **One-shot mode.** `af-spec new --one-shot` runs the full pipeline in a
 single invocation: assess → accept (regardless of gaps) → generate →
 validate. The user reviews the output with `af-spec show` or
-`af-spec render`, then finalizes. This is for cases where the PRD is
+`af-spec render`, then submits. This is for cases where the PRD is
 known to be complete or where speed matters more than refinement.
 
-**Interactive mode.** The default. `af-spec new` creates the session and
+**Interactive mode.** The default. `af-spec new` creates the spec and
 runs the initial assessment. If the agent has questions, the user answers
-them with `af-spec refine --answers answers.json` and the agent
+them with `af-spec refine <spec> --answers answers.json` and the agent
 re-assesses. The loop continues until the user runs `af-spec accept`.
 Then `af-spec generate` produces the artifacts.
 
@@ -620,22 +669,23 @@ programmatically rather than through the `af-spec` CLI.
 **Interactive mode.** The user asks the agent to create a spec (e.g.,
 "create a spec for feature X from this PRD"). The agent:
 
-1. Creates a `SpecSession` from the PRD.
-2. Runs `assess()` and presents the assessment to the user.
-3. If questions exist, presents them conversationally (mirroring the
+1. Opens the campaign via `Campaign.open()` (or creates one).
+2. Creates a `SpecSession` via `campaign.new_spec()`.
+3. Runs `assess()` and presents the assessment to the user.
+4. If questions exist, presents them conversationally (mirroring the
    structured Q&A pattern). The user answers in natural language; the
    skill maps answers to `Question` IDs and calls `refine()`.
-4. Repeats until the user is satisfied, then calls `accept_prd()`.
-5. Runs `generate()` and presents the rendered spec for review.
-6. On user approval, calls `finalize()` or `register()`.
+5. Repeats until the user is satisfied, then calls `accept_prd()`.
+6. Runs `generate()` and presents the rendered spec for review.
 
 **One-shot mode.** The user provides a PRD and asks for immediate
-generation. The skill calls `SpecSession.create(mode="one-shot")`,
+generation. The skill calls `campaign.new_spec(mode="one-shot")`,
 which runs assess → accept → generate in sequence, then presents the
 result.
 
-The skill does not require the hub to be running for authoring. It calls
-`register()` only when the user explicitly asks to register with the hub.
+The skill does not require the hub to be running for authoring. It
+invokes `af-spec submit` only when the user explicitly asks to push to
+the hub.
 
 ### 7.4 Relationship to the harness
 
@@ -644,14 +694,19 @@ speclib has two roles: **authoring** (creating specs) and **runtime**
 role uses the Claude Agent SDK; the runtime role is pure Python.
 
 - **`af-spec` and the spec skill** handle authoring standalone. They
-  work against a local working directory, produce a spec package, and
-  optionally register it with the hub.
-- **`af-spec approve`** is the one operation that requires the hub. The
-  `draft → active` transition — computing the `intent_hash`, freezing
-  the package, and recording the `SpecRef` — is a coordination-layer
-  operation. The hub performs it because approval has consequences for
-  the operational store (the spec becomes visible to agents and
-  executable against).
+  work against a local campaign directory, produce spec packages, and
+  push them to the hub via `af-spec submit`.
+- **`af-spec submit`** pushes a completed spec to the hub's spec store.
+  The hub creates a SpecRef and makes the spec available for execution.
+  The spec arrives in `draft` status.
+- **`af spec approve`** (the `af` CLI, not `af-spec`) transitions a spec
+  from `draft` to `active` — computing the `intent_hash`, freezing the
+  package, and updating the SpecRef. This is a hub operation because
+  approval has consequences for the operational store (the spec becomes
+  visible to agents and executable against).
+- **`af-spec import`** pulls an existing campaign from the hub into a
+  local working directory. This gives the agent context about existing
+  specs when authoring a new one that depends on them.
 - The **Planner specialist** uses speclib's session model inside the
   harness. This is the harness-mediated alternative: the hub starts a
   Planner agent, the Planner creates a `SpecSession`, and the
@@ -659,7 +714,7 @@ role uses the Claude Agent SDK; the runtime role is pure Python.
   rather than through the CLI.
 - The **hub** uses speclib's non-agent operations (validate, render) at
   execution time. It reads from the spec store filesystem — the same
-  directory that `af-spec finalize` or `af-spec register` writes to.
+  directory that `af-spec submit` writes to.
 - Only specs in `active` status or later are served by the harness API.
   Draft specs are invisible to the harness.
 
@@ -687,7 +742,7 @@ Configuration and data are stored in separate directory trees.
   af.db                            # SQLite database (operational + Context stores)
   specs/                           # Spec store (campaign/spec hierarchy)
     <campaign-slug>/
-      campaign.yaml                # Campaign metadata (goal, shared contexts)
+      campaign.yaml                # Campaign metadata (name, description, timestamps)
       <spec-slug>/
         prd.md
         requirements.json

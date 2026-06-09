@@ -173,7 +173,7 @@ Every workspace is created and managed by the Operator. No agent creates, archiv
 
 - an **origin**: a local repo path, a remote URL, or an empty start;
 - the **Contexts** to attach, with pin mode per Context (pinned by default);
-- optionally, a **Campaign** to register the workspace into, with dependency edges.
+- optionally, a **Campaign** to register the workspace into.
 
 The harness provisions the branch and worktree, runs bootstrap, and transitions to `Active` on success. If registered into a Campaign with unsatisfied dependencies, bootstrap is deferred until the gate clears (§4.5).
 
@@ -193,19 +193,35 @@ A Campaign is a named container that owns a set of specs, a dependency graph acr
 
 A Campaign does not decompose the goal upfront. Spec authoring happens one spec at a time (see §5). The human registers specs into the campaign incrementally — start with spec 01, see what it reveals, register spec 02 with a declared dependency on spec 01.
 
-### 4.2 Campaign goal document
+### 4.2 Campaign metadata
 
-Each Campaign has a short human-authored goal document: a title, a description of the top-level intent, and cross-cutting constraints. Lighter than a spec PRD: no Intent hash, no schema validation, no freeze.
+Each Campaign has a `campaign.yaml` file in its directory containing lightweight metadata:
+
+```yaml
+name: auth-system
+description: "End-to-end authentication and authorization for the platform."
+created_at: "2026-06-09T10:00:00Z"
+updated_at: "2026-06-09T10:00:00Z"
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes | Human-readable campaign name. |
+| `description` | string | yes | The top-level goal: what this campaign aims to achieve and any cross-cutting constraints. |
+| `created_at` | ISO 8601 datetime | yes | When the campaign was created. Immutable. |
+| `updated_at` | ISO 8601 datetime | yes | Last modification timestamp. |
+
+This is lighter than a spec PRD: no Intent hash, no schema validation, no freeze. The campaign directory and `campaign.yaml` are created by `af-spec init` (see [services-architecture.md §7.2](services-architecture.md#72-af-spec-cli)).
 
 ### 4.3 The dependency graph
 
-Dependencies between specs are declared at task-group granularity, reusing the `depends_on_spec` / `from_group` / `to_group` field names from `tasks.json` (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)). The Campaign stores these edges centrally in the `CampaignMember` record (§9), not in any spec's `tasks.json`.
+Dependencies between specs in a campaign are declared inside each spec's `tasks.json`, using the `dependencies` array with `depends_on_spec`, `from_group`, and `to_group` fields (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)). Edges are authored as part of the spec, not stored separately in the campaign.
 
 An edge reads: "spec B's workspace may not activate until spec A's task group N is complete." "Complete" means the group's verification subtask `{N}.V` has passed.
 
 Specs with no declared dependencies are ready immediately. Specs with dependencies stay blocked until their upstream groups clear. Independent specs may run in parallel.
 
-Because a downstream spec is often registered before it is planned, its `to_group` may be unknown at registration; the edge then targets the downstream spec as a whole, recorded as `to_group: 0`. This is a harness-level extension — the sentinel lives only in the Campaign store. The edge resolves to a concrete group once that spec's `tasks.json` exists.
+The hub evaluates the dependency graph at execution time by reading each spec's `tasks.json` dependencies. Because a downstream spec is often authored before its upstream is fully planned, `from_group: 0` serves as a sentinel for "upstream not yet planned" (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)).
 
 ### 4.4 Campaign lifecycle
 
@@ -223,7 +239,7 @@ On activation the harness notifies the Operator, who then authors a PRD for that
 
 ### 4.6 Shared Contexts across a Campaign
 
-A Campaign may declare Contexts that are automatically attached to every workspace registered in it. Each workspace still pins its own revision at run start.
+When a campaign is registered with the hub, the Operator may declare Contexts that are automatically attached to every workspace in that campaign. This is a hub-level configuration, not part of `campaign.yaml` (Contexts are hub entities that live in the Context store). Each workspace still pins its own revision at run start.
 
 ### 4.7 What a Campaign is not
 
@@ -285,7 +301,7 @@ At the `draft` to `active` transition the harness hashes the trimmed Intent sect
 
 A spec is authored once and not changed after that. The spec is composed while in `draft` through speclib's session-based authoring model — either standalone via `af-spec` or through the harness Planner. The human reviews, and the `draft` to `active` transition freezes the package. From that point the declarative content is immutable. When the requirements turn out to be wrong, the response is a new spec that supersedes this one (§8.3), not an in-place edit.
 
-Authoring is a stateful session: the agent assesses the PRD, optionally refines it through structured Q&A iterations with the user, then generates the JSON artifacts. The session works against a local working directory, not the spec store. Only when the spec is finalized does the user move it to the spec store or register it with the hub. The `draft` to `active` transition (`af-spec approve`) is a hub operation — see [services-architecture.md §7.4](services-architecture.md#74-relationship-to-the-harness).
+Authoring is a stateful session: the agent assesses the PRD, optionally refines it through structured Q&A iterations with the user, then generates the JSON artifacts. The session works against a local campaign directory, not the hub's spec store. Once the spec is complete, the user submits it to the hub via `af-spec submit`. The `draft` to `active` transition (`af spec approve`) is a hub operation — see [services-architecture.md §7.4](services-architecture.md#74-relationship-to-the-harness).
 
 Within `draft`, writes are expressed as RFC 6902 JSON Patches validated against each artifact's schema.
 
@@ -675,7 +691,7 @@ Every spec-driven task follows one flow. Spec authoring (phases 1-2) can happen 
 
 **Phase 0: Spec authoring.** Before the harness flow begins, the spec must exist and be approved (`active`). Two paths:
 
-- **Standalone path.** The Operator uses `af-spec` (or the agent skill) to create and approve the spec within a campaign. No hub required. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool).
+- **Standalone path.** The Operator uses `af-spec` (or the agent skill) to author the spec in a local campaign directory, then submits it to the hub via `af-spec submit`. Authoring requires no hub; only submission and approval do. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool).
 - **Harness-mediated path.** The Operator creates a workspace, then starts a Planner run. The Planner uses speclib to draft the spec within the harness, grounded in attached Contexts. The Operator reviews and approves through the harness API.
 
 Both paths produce the same output: an `active`, frozen spec package on the filesystem under the campaign hierarchy.
@@ -760,8 +776,8 @@ The harness persists state across three stores so a process restart resumes clea
 | --- | --- | --- |
 | Workspace | id, name, status, owner, origin, branch, worktree path, base branch, remote, campaign_slug, spec_slug, timestamps | The aggregate root. References the campaign and spec it executes against. `status` follows §3.3. |
 | WorkspaceConfig | workspace id, setup scripts, default provider, default model | Per-workspace overrides (§3.6). |
-| Campaign | id, slug, name, status, goal document, shared Context ids, timestamps | Every spec belongs to a campaign. `status` is `active`, `complete`, or `abandoned` (§4.4). |
-| CampaignMember | campaign id, workspace id, spec_slug, dependency edges | `to_group: 0` is a harness-level sentinel for "downstream spec as a whole" (§4.3). |
+| Campaign | id, slug, name, status, shared Context ids, timestamps | Every spec belongs to a campaign. `campaign.yaml` on the filesystem carries the static metadata (§4.2); the operational store carries execution-time state. `status` is `active`, `complete`, or `abandoned` (§4.4). Shared Context ids are a hub-level configuration (§4.6). |
+| CampaignMember | campaign id, workspace id, spec_slug | Links a workspace to its campaign and spec. Dependency edges live in each spec's `tasks.json` (§4.3), not in this entity. |
 | ContextAttachment | workspace id, context id, pinned revision, pin mode, attached_at | Records which Context revision a workspace is pinned to. |
 
 **Spec lifecycle layer.**
@@ -819,7 +835,7 @@ The API is split by audience. **Operator-facing** operations are for the human c
 **Campaign.**
 
 - Create with goal document and optional shared Contexts.
-- Register a spec with dependency edges.
+- Register a spec (submitted via `af-spec submit`).
 - Query status, dependency graph, blocked/unblocked workspaces.
 - Abandon.
 
