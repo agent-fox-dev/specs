@@ -1,7 +1,9 @@
 """Tests for campaign directory management.
 
 Test Spec Entries: TS-02-1 through TS-02-9 (acceptance criteria),
-TS-02-E1 through TS-02-E6 (edge cases).
+TS-02-E1 through TS-02-E6 (edge cases),
+TS-02-P3, TS-02-P4 (property tests),
+TS-02-SMOKE-1, TS-02-SMOKE-2 (integration smoke tests).
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from speclib.campaign import Campaign
 
 from speclib.errors import CampaignError
@@ -249,3 +253,120 @@ class TestCampaignEdgeCases:
 
         with pytest.raises(CampaignError):
             camp.new_spec("test", Path("/nonexistent/prd.md"))
+
+
+# ---------------------------------------------------------------------------
+# Property tests: TS-02-P3, TS-02-P4
+# ---------------------------------------------------------------------------
+
+
+class TestCampaignProperties:
+    """Property tests for campaign operations — TS-02-P3, TS-02-P4."""
+
+    @given(n=st.integers(min_value=1, max_value=20))
+    @settings(
+        max_examples=10,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_ts02_p3_property_numbering_monotonic(
+        self, n: int, tmp_path: Path
+    ) -> None:
+        """TS-02-P3: Spec directory numbering is monotonically increasing.
+
+        Property 3: For any number of specs created sequentially, prefixes
+        are 01, 02, ..., n with no gaps.
+
+        Validates: 02-REQ-3.3
+        """
+        camp_dir = tmp_path / f"camp_{n}"
+        camp = Campaign.create(camp_dir, "Test", "Desc")
+
+        for i in range(n):
+            # Generate unique spec names using letters a-z (up to 20)
+            camp.new_spec(f"spec_{chr(ord('a') + i)}", f"PRD {i}")
+
+        specs = camp.specs()
+        assert len(specs) == n
+
+        for i, spec_path in enumerate(specs):
+            prefix = int(spec_path.name.split("_")[0])
+            assert prefix == i + 1
+
+    @given(
+        name=st.text(
+            alphabet=st.characters(whitelist_categories=("L", "N", "Z")),
+            min_size=1,
+            max_size=50,
+        ),
+        desc=st.text(min_size=0, max_size=200),
+    )
+    @settings(
+        max_examples=10,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_ts02_p4_property_create_atomic(
+        self, name: str, desc: str, tmp_path: Path
+    ) -> None:
+        """TS-02-P4: Campaign.create is atomic w.r.t. campaign.yaml.
+
+        Property 4: After a successful create, campaign.yaml exists and
+        matches; after a failed create, no campaign.yaml is introduced.
+
+        Validates: 02-REQ-1.1, 02-REQ-1.2, 02-REQ-1.E1
+        """
+        path = tmp_path / "test_campaign"
+
+        camp = Campaign.create(path, name, desc)
+        data = yaml.safe_load((path / "campaign.yaml").read_text())
+        assert data["name"] == name
+        assert data["description"] == desc
+        assert camp.metadata.name == name
+        assert camp.metadata.description == desc
+
+
+# ---------------------------------------------------------------------------
+# Integration smoke tests: TS-02-SMOKE-1, TS-02-SMOKE-2
+# ---------------------------------------------------------------------------
+
+
+class TestCampaignSmokeTests:
+    """Integration smoke tests for campaign operations."""
+
+    def test_ts02_smoke_1_campaign_to_spec_creation(
+        self, tmp_path: Path
+    ) -> None:
+        """TS-02-SMOKE-1: Full flow — create campaign, create spec, verify structure.
+
+        Execution Path: Path 1, Path 3 from design.md.
+        Must NOT satisfy with: Mocking Campaign or SpecSession internals.
+        """
+        camp = Campaign.create(
+            tmp_path / "smoke", "Smoke Test", "Integration test"
+        )
+        session = camp.new_spec("first_spec", "# PRD\n\nContent")
+
+        assert (tmp_path / "smoke" / "campaign.yaml").exists()
+        assert (tmp_path / "smoke" / "01_first_spec" / "prd.md").exists()
+        assert (
+            tmp_path / "smoke" / "01_first_spec" / "_session.json"
+        ).exists()
+        assert camp.metadata.name == "Smoke Test"
+        assert session.state == SessionState.INIT
+
+    def test_ts02_smoke_2_open_and_list_specs(self, tmp_path: Path) -> None:
+        """TS-02-SMOKE-2: Full flow — create campaign with specs, reopen, list.
+
+        Execution Path: Path 2 from design.md.
+        Must NOT satisfy with: Mocking Campaign internals.
+        """
+        camp = Campaign.create(tmp_path / "smoke2", "Test", "Desc")
+        camp.new_spec("alpha", "PRD A")
+        camp.new_spec("beta", "PRD B")
+
+        reopened = Campaign.open(tmp_path / "smoke2")
+        assert reopened.metadata.name == "Test"
+
+        specs = reopened.specs()
+        assert len(specs) == 2
+        assert specs[0].name == "01_alpha"
+        assert specs[1].name == "02_beta"

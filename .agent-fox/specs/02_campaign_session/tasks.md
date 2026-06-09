@@ -51,8 +51,8 @@ structure and error hierarchy (`SpeclibError`).
     - [x] All spec tests FAIL (red) — no implementation yet
     - [x] No linter warnings introduced: `uv run ruff check tests/`
 
-- [ ] 2. Write failing spec tests — properties and smoke tests
-  - [ ] 2.1 Translate property tests
+- [x] 2. Write failing spec tests — properties and smoke tests
+  - [x] 2.1 Translate property tests
     - `test_property_state_machine_total` (TS-02-P1) — hypothesis over states and methods
     - `test_property_persistence_idempotent` (TS-02-P2)
     - `test_property_numbering_monotonic` (TS-02-P3)
@@ -61,7 +61,7 @@ structure and error hierarchy (`SpeclibError`).
     - `test_property_accept_prd_states` (TS-02-P6)
     - _Test Spec: TS-02-P1 through TS-02-P6_
 
-  - [ ] 2.2 Write integration smoke tests
+  - [x] 2.2 Write integration smoke tests
     - `test_smoke_campaign_to_spec_creation` (TS-02-SMOKE-1)
     - `test_smoke_open_and_list_specs` (TS-02-SMOKE-2)
     - `test_smoke_session_lifecycle` (TS-02-SMOKE-3)
@@ -69,10 +69,10 @@ structure and error hierarchy (`SpeclibError`).
     - `test_smoke_validate_and_render` (TS-02-SMOKE-5)
     - _Test Spec: TS-02-SMOKE-1 through TS-02-SMOKE-5_
 
-  - [ ] 2.V Verify task group 2
-    - [ ] All property and smoke tests exist and are syntactically valid
-    - [ ] All spec tests FAIL (red) — no implementation yet
-    - [ ] No linter warnings introduced: `uv run ruff check tests/`
+  - [x] 2.V Verify task group 2
+    - [x] All property and smoke tests exist and are syntactically valid
+    - [x] All spec tests FAIL (red) — no implementation yet
+    - [x] No linter warnings introduced: `uv run ruff check tests/`
 
 - [ ] 3. Implement error types and data models
   - [ ] 3.1 Add CampaignError and SessionError to speclib/errors.py

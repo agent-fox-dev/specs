@@ -1,7 +1,9 @@
 """Tests for spec authoring session state machine and persistence.
 
 Test Spec Entries: TS-02-10 through TS-02-19 (acceptance criteria),
-TS-02-E7 through TS-02-E11 (edge cases).
+TS-02-E7 through TS-02-E11 (edge cases),
+TS-02-P1, TS-02-P2, TS-02-P5, TS-02-P6 (property tests),
+TS-02-SMOKE-3 through TS-02-SMOKE-5 (integration smoke tests).
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from speclib.campaign import Campaign
 
 from speclib.errors import SessionError
@@ -376,3 +380,273 @@ class TestSessionEdgeCases:
             session.render()
         error_msg = str(exc_info.value)
         assert "requirements.md" in error_msg
+
+
+# ---------------------------------------------------------------------------
+# Property tests: TS-02-P1, TS-02-P2, TS-02-P5, TS-02-P6
+# ---------------------------------------------------------------------------
+
+# Legal transitions: (source_state, method_name) -> target_state
+_LEGAL_TRANSITIONS: dict[tuple[str, str], str] = {
+    ("init", "assess"): "assessing",
+    ("assessing", "refine"): "refining",
+    ("assessing", "accept_prd"): "prd_accepted",
+    ("refining", "assess"): "assessing",
+    ("refining", "accept_prd"): "prd_accepted",
+    ("prd_accepted", "generate"): "generating",
+}
+
+# All four required artifacts for validate/render
+_REQUIRED_ARTIFACTS = frozenset(
+    {"prd.md", "requirements.md", "design.md", "test_spec.md"}
+)
+
+
+class TestSessionProperties:
+    """Property tests for session state machine.
+
+    Covers TS-02-P1, TS-02-P2, TS-02-P5, TS-02-P6.
+    """
+
+    def test_ts02_p1_property_state_machine_total(
+        self, tmp_path: Path
+    ) -> None:
+        """TS-02-P1: State machine transitions are total and exclusive.
+
+        Property 1: For any session state and method call, the result is
+        either a successful transition to a defined target state or a
+        SessionError. No other outcome (excluding NotImplementedError for
+        stubs).
+
+        Validates: 02-REQ-4.2, 02-REQ-4.3
+        """
+        methods = ["assess", "refine", "accept_prd", "generate"]
+
+        for state in SessionState:
+            for method_name in methods:
+                session = _create_session(tmp_path, state)
+                key = (state.value, method_name)
+
+                if key in _LEGAL_TRANSITIONS:
+                    # Legal transition — may raise NotImplementedError
+                    # for stub methods, but state check should pass
+                    try:
+                        if method_name == "refine":
+                            getattr(session, method_name)({})
+                        else:
+                            getattr(session, method_name)()
+                        # If it didn't raise, verify target state
+                        expected = _LEGAL_TRANSITIONS[key]
+                        assert session.state == SessionState(expected), (
+                            f"Expected state {expected} after "
+                            f"{method_name}() from {state.value}, "
+                            f"got {session.state.value}"
+                        )
+                    except NotImplementedError:
+                        pass  # Stub — state check passed
+                else:
+                    # Illegal transition — must raise SessionError
+                    with pytest.raises(SessionError):
+                        if method_name == "refine":
+                            getattr(session, method_name)({})
+                        else:
+                            getattr(session, method_name)()
+
+    def test_ts02_p2_property_persistence_idempotent(
+        self, tmp_path: Path
+    ) -> None:
+        """TS-02-P2: Session persistence is idempotent on resume.
+
+        Property 2: For any session that has undergone valid transitions,
+        persisting and resuming produces an equivalent session.
+
+        Validates: 02-REQ-5.1, 02-REQ-5.2
+        """
+        # Test various reachable states via non-stub transitions
+        # Only accept_prd is non-stub, so reachable persisted states are:
+        # init (from creation), assessing (set directly), prd_accepted (via accept_prd)
+        reachable_states = [
+            SessionState.INIT,
+            SessionState.ASSESSING,
+            SessionState.REFINING,
+            SessionState.PRD_ACCEPTED,
+            SessionState.GENERATING,
+            SessionState.GENERATED,
+        ]
+
+        for state in reachable_states:
+            session = _create_session(tmp_path, state)
+            original_state = session.state
+            original_dir = session.spec_dir
+
+            resumed = SpecSession.resume(session.spec_dir)
+
+            assert resumed.state == original_state, (
+                f"Resumed state {resumed.state} != original {original_state}"
+            )
+            assert resumed.spec_dir == original_dir
+
+    @given(
+        subset_bits=st.integers(min_value=0, max_value=14),
+    )
+    @settings(
+        max_examples=15,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
+    def test_ts02_p5_property_artifacts_required(
+        self, subset_bits: int, tmp_path: Path
+    ) -> None:
+        """TS-02-P5: validate() and render() require all four artifacts.
+
+        Property 5: For any strict subset of the four required artifacts,
+        validate() and render() raise SessionError.
+
+        Validates: 02-REQ-6.1, 02-REQ-6.E1
+        """
+        all_artifacts = sorted(_REQUIRED_ARTIFACTS)
+        # Generate a subset from bits (0-14 maps to all strict subsets
+        # since 15 = full set)
+        subset = {
+            a for i, a in enumerate(all_artifacts) if subset_bits & (1 << i)
+        }
+
+        # Skip the full set — that's not a strict subset
+        if subset == _REQUIRED_ARTIFACTS:
+            return
+
+        # Create session with only the selected artifacts
+        camp_dir = tmp_path / f"art_{subset_bits}"
+        if not (camp_dir / "campaign.yaml").exists():
+            Campaign.create(camp_dir, "Test", "Desc")
+        camp = Campaign.open(camp_dir)
+        session = camp.new_spec(f"s{subset_bits}", "PRD content")
+
+        # prd.md is always created by new_spec, add the rest from subset
+        for artifact in subset:
+            if artifact != "prd.md":
+                (session.spec_dir / artifact).write_text(f"# {artifact}")
+
+        missing = _REQUIRED_ARTIFACTS - subset - {"prd.md"}
+
+        if missing or "prd.md" not in subset:
+            # Not all artifacts present — should raise SessionError
+            actual_missing = _REQUIRED_ARTIFACTS - (subset | {"prd.md"})
+            if actual_missing:
+                with pytest.raises(SessionError) as exc_info:
+                    session.validate()
+                error_msg = str(exc_info.value)
+                for name in actual_missing:
+                    assert name in error_msg
+
+                with pytest.raises(SessionError):
+                    session.render()
+
+    def test_ts02_p6_property_accept_prd_states(
+        self, tmp_path: Path
+    ) -> None:
+        """TS-02-P6: accept_prd() is only callable from assessing or refining.
+
+        Property 6: accept_prd() succeeds only from assessing or refining;
+        all other states raise SessionError.
+
+        Validates: 02-REQ-4.4
+        """
+        for state in SessionState:
+            session = _create_session(tmp_path, state)
+            if state in {SessionState.ASSESSING, SessionState.REFINING}:
+                session.accept_prd()
+                assert session.state == SessionState.PRD_ACCEPTED
+            else:
+                with pytest.raises(SessionError):
+                    session.accept_prd()
+
+
+# ---------------------------------------------------------------------------
+# Integration smoke tests: TS-02-SMOKE-3 through TS-02-SMOKE-5
+# ---------------------------------------------------------------------------
+
+
+class TestSessionSmokeTests:
+    """Integration smoke tests for session operations."""
+
+    def test_ts02_smoke_3_session_lifecycle(self, tmp_path: Path) -> None:
+        """TS-02-SMOKE-3: Full lifecycle through accept_prd.
+
+        Execution Path: Path 4 from design.md.
+        Must NOT satisfy with: Mocking SpecSession or its persistence layer.
+        """
+        camp = Campaign.create(tmp_path / "smoke3", "Test", "Desc")
+        session = camp.new_spec("lifecycle", "PRD content")
+
+        # Simulate assess having run (set state directly for test)
+        session_file = session.spec_dir / "_session.json"
+        data = json.loads(session_file.read_text())
+        data["state"] = SessionState.ASSESSING.value
+        session_file.write_text(json.dumps(data))
+        session = SpecSession.resume(session.spec_dir)
+
+        session.accept_prd()
+        assert session.state == SessionState.PRD_ACCEPTED
+
+        resumed = SpecSession.resume(session.spec_dir)
+        assert resumed.state == SessionState.PRD_ACCEPTED
+
+    def test_ts02_smoke_4_session_resume(self, tmp_path: Path) -> None:
+        """TS-02-SMOKE-4: Create session, transition states, resume.
+
+        Execution Path: Path 5 from design.md.
+        Must NOT satisfy with: Mocking SpecSession persistence.
+        """
+        camp = Campaign.create(tmp_path / "smoke4", "Test", "Desc")
+        session = camp.new_spec("resume_test", "PRD")
+
+        # Set to assessing state directly, then accept_prd
+        session_file = session.spec_dir / "_session.json"
+        data = json.loads(session_file.read_text())
+        data["state"] = SessionState.ASSESSING.value
+        session_file.write_text(json.dumps(data))
+        session = SpecSession.resume(session.spec_dir)
+
+        session.accept_prd()
+        assert session.state == SessionState.PRD_ACCEPTED
+        original_dir = session.spec_dir
+
+        resumed = SpecSession.resume(original_dir)
+        assert resumed.state == SessionState.PRD_ACCEPTED
+        assert resumed.spec_dir == original_dir
+
+    def test_ts02_smoke_5_validate_and_render(self, tmp_path: Path) -> None:
+        """TS-02-SMOKE-5: Validation and rendering end-to-end.
+
+        Execution Path: Path 6 from design.md.
+        Must NOT satisfy with: Mocking validate/render methods themselves
+        (afspec internals may be mocked).
+        """
+        session = _create_session_with_all_artifacts(tmp_path)
+
+        # Mock afspec at the boundary — real session logic, mocked afspec
+        mock_spec = MagicMock()
+        mock_validation = ValidationResult(
+            valid=True,
+            schema_errors=[],
+            integrity_errors=[],
+            repair_suggestions=[],
+        )
+
+        with patch("speclib.session.afspec") as mock_afspec:
+            mock_afspec.load_spec.return_value = mock_spec
+            mock_afspec.validate.return_value = mock_validation
+            mock_afspec.render_combined.return_value = "# Combined Output"
+            mock_afspec.render_individual.return_value = {
+                "prd": "# PRD",
+                "requirements": "# Requirements",
+            }
+
+            result = session.validate()
+            assert isinstance(result, ValidationResult)
+
+            combined = session.render(combined=True)
+            assert isinstance(combined, str)
+
+            individual = session.render(combined=False)
+            assert isinstance(individual, dict)
