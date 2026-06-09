@@ -146,10 +146,10 @@ class Campaign:
             raise CampaignError(msg)
 
         metadata = CampaignMetadata(
-            name=data["name"],
-            description=data["description"],
-            created_at=data["created_at"],
-            updated_at=data["updated_at"],
+            name=data.get("name", path.name),
+            description=data.get("description", ""),
+            created_at=data.get("created_at", ""),
+            updated_at=data.get("updated_at", ""),
         )
 
         return Campaign(path, metadata)

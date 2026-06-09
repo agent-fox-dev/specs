@@ -130,41 +130,41 @@ wiring verification.
     - [x] All spec tests FAIL (red) — CLI commands are stubs
     - [x] No linter warnings introduced: `uv run ruff check tests/test_cli.py`
 
-- [ ] 3. Implement CLI shared infrastructure
-  - [ ] 3.1 Implement main Click group and context
+- [x] 3. Implement CLI shared infrastructure
+  - [x] 3.1 Implement main Click group and context
     - `@click.group()` decorator on `main()`
     - `--campaign-dir` / `-C` option on the group, defaults to None (uses CWD)
     - Store resolved campaign_dir in `ctx.obj`
     - _Requirements: 04-REQ-CC.1, 04-REQ-CC.2_
 
-  - [ ] 3.2 Implement resolve_campaign helper
+  - [x] 3.2 Implement resolve_campaign helper
     - Open `Campaign` from context's campaign_dir
     - Catch `CampaignError`, print user-friendly message with `--campaign-dir` hint
     - Call `sys.exit(1)` on campaign errors
     - _Requirements: 04-REQ-CC.3_
 
-  - [ ] 3.3 Implement resolve_spec helper
+  - [x] 3.3 Implement resolve_spec helper
     - Scan `campaign.specs()` for directory matching by full name or numeric prefix
     - On no match: list available specs and call `sys.exit(1)`
     - _Requirements: 04-REQ-CC.4, 04-REQ-CC.5_
 
-  - [ ] 3.4 Implement error handling wrapper
+  - [x] 3.4 Implement error handling wrapper
     - Try/except in each command or shared decorator
     - CampaignError, SessionError → stderr + exit 1
     - Other exceptions → stderr + exit 2
     - _Requirements: 04-REQ-CC.6_
 
-  - [ ] 3.5 Implement output formatting helpers
+  - [x] 3.5 Implement output formatting helpers
     - `format_table(headers, rows)` — plain text table (Rich if available)
     - `format_assessment(assessment)` — quality/gaps/questions sections
     - `format_validation_errors(errors)` — file/path/message table
     - _Requirements: 04-REQ-2.1, 04-REQ-4.2, 04-REQ-8.4_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Cross-cutting tests pass (TS-04-45, TS-04-46, TS-04-47, TS-04-48, TS-04-49, TS-04-50, TS-04-51)
-    - [ ] Property tests P1, P2, P3 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check speclib/cli.py`
+  - [x] 3.V Verify task group 3
+    - [x] Cross-cutting tests pass (TS-04-45, TS-04-46, TS-04-47, TS-04-48, TS-04-49, TS-04-50, TS-04-51)
+    - [x] Property tests P1, P2, P3 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check speclib/cli.py`
 
 - [ ] 4. Implement campaign commands
   - [ ] 4.1 Implement init command
