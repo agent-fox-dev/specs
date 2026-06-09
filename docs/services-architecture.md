@@ -323,90 +323,343 @@ memory:
 ## 7. The spec creation tool
 
 The spec creation tool is a standalone component for authoring spec packages.
-It consists of three parts: a shared library, a CLI, and an agent skill. It
-works independently of the harness — no hub required.
+It is implemented in Python, built on the
+[Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/agent-sdk),
+and works independently of the harness — no hub required for authoring. It
+consists of three parts: a shared library (speclib), a CLI (`af-spec`), and
+an agent skill.
+
+Spec creation is a **stateful, session-based process**. A session starts
+with an existing PRD (rough draft or fully fleshed out), uses an agent to
+assess and optionally refine it, then generates the remaining artifacts.
+The session works against a **local working directory** (a user-specified
+path or a temp folder), not the spec store. Only when the spec is finalized
+does the user render it to a target location or register it with the hub.
 
 ### 7.1 speclib
 
-The core library. Implements the [Spec Format Specification](../spec-format_v1.2.md):
-creates, validates, renders, and manages spec packages on the filesystem.
-speclib is the single implementation shared by:
+The core Python library. Implements the
+[Spec Format Specification](../spec-format_v1.2.md) and drives spec
+authoring through the Claude Agent SDK. speclib is used by:
 
 - the `af-spec` CLI (standalone authoring),
 - the Planner specialist inside the harness (harness-mediated authoring),
-- the harness itself (validation, rendering, and prompt assembly at execution time).
+- the harness itself (validation, rendering, and prompt assembly at
+  execution time — these do not require the Agent SDK).
 
-Key operations:
+#### 7.1.1 The session model
 
-- **Bootstrap** — create the four required artifacts sequentially, deferring
-  cross-artifact validation until all four exist.
-- **Patch** — apply RFC 6902 JSON Patches to artifacts, validated against
-  schema and cross-file integrity rules on every write.
-- **Repair** — auto-fix near-miss structural errors before the commit gate;
-  surface anything less than obvious as a proposed patch.
-- **Validate** — run schema validation and cross-file integrity checks.
-  Standalone `validate()` for CI and pre-commit hooks.
-- **Render** — deterministic markdown rendering, per-file or combined view.
-- **Lifecycle** — enforce the state machine (`draft → active → sealed /
-  superseded`), hash the Intent section at `draft → active`, verify the
-  hash on every load.
+Spec creation is stateful. A **session** tracks the lifecycle of authoring
+one spec, from PRD input to finalized package.
 
-speclib reads and writes directly to the spec store filesystem:
-`<data_dir>/specs/<campaign-slug>/<spec-slug>/`.
+```python
+class SpecSession:
+    """A stateful authoring session for one spec."""
+
+    @classmethod
+    def create(
+        cls,
+        prd: str | Path,           # PRD content or file path
+        work_dir: Path | None,     # local working directory; temp if None
+        mode: Literal["interactive", "one-shot"] = "interactive",
+    ) -> "SpecSession": ...
+
+    @classmethod
+    def resume(cls, work_dir: Path) -> "SpecSession": ...
+
+    # --- PRD assessment and refinement ---
+
+    def assess(self) -> Assessment:
+        """Agent analyzes the PRD. Returns an assessment with quality
+        score, identified gaps, and structured questions (if any)."""
+        ...
+
+    def refine(self, answers: dict[str, str]) -> Assessment:
+        """Submit answers to the agent's questions. The agent updates
+        the PRD and re-assesses. Returns a new assessment. Repeats
+        until no questions remain or the user accepts."""
+        ...
+
+    def accept_prd(self) -> None:
+        """Mark the PRD as accepted, ending the refinement loop."""
+        ...
+
+    # --- Artifact generation ---
+
+    def generate(self) -> GenerateResult:
+        """Agent generates requirements.json, test_spec.json, and
+        tasks.json from the accepted PRD. Validates the full package
+        on completion. Requires an accepted PRD."""
+        ...
+
+    # --- Validation and rendering ---
+
+    def validate(self) -> ValidationResult:
+        """Run schema validation and cross-file integrity checks."""
+        ...
+
+    def render(self, combined: bool = False) -> str:
+        """Render the spec as markdown."""
+        ...
+
+    # --- Finalization ---
+
+    def finalize(self, target: Path) -> Path:
+        """Copy the completed spec package from the working directory
+        to a target location (e.g., a campaign directory in the spec
+        store). Returns the target path."""
+        ...
+
+    def register(self, hub_url: str, campaign: str) -> None:
+        """Register the completed spec with the hub. The hub copies
+        it into the spec store and creates a SpecRef. Requires a
+        running hub."""
+        ...
+
+    # --- State ---
+
+    @property
+    def state(self) -> SessionState: ...
+    # SessionState: "init" | "assessing" | "refining" | "prd_accepted"
+    #             | "generating" | "generated" | "finalized"
+
+    @property
+    def work_dir(self) -> Path: ...
+
+    @property
+    def assessment(self) -> Assessment | None: ...
+```
+
+```python
+@dataclass
+class Assessment:
+    quality: Literal["ready", "needs_refinement", "incomplete"]
+    summary: str                        # agent's assessment of the PRD
+    gaps: list[str]                     # identified gaps or weaknesses
+    questions: list[Question]           # structured questions for the user
+
+@dataclass
+class Question:
+    id: str
+    text: str                           # the question
+    context: str                        # why the agent is asking
+    options: list[str] | None           # suggested answers, if applicable
+    required: bool
+
+@dataclass
+class GenerateResult:
+    artifacts: dict[str, Path]          # artifact name → file path
+    validation: ValidationResult
+    warnings: list[str]
+
+@dataclass
+class ValidationResult:
+    valid: bool
+    schema_errors: list[str]
+    integrity_errors: list[str]
+    repair_suggestions: list[RepairSuggestion]
+
+@dataclass
+class RepairSuggestion:
+    artifact: str                       # which file
+    description: str                    # what's wrong
+    patch: dict                         # RFC 6902 JSON Patch to apply
+    auto_fixable: bool                  # True if speclib can fix it silently
+```
+
+#### 7.1.2 Session persistence
+
+A session's state is persisted in the working directory as
+`_session.json`. This allows resuming an interrupted session via
+`SpecSession.resume(work_dir)`. The session file tracks: the current
+state, the PRD path, assessment history, Q&A history, and which artifacts
+have been generated.
+
+The working directory layout during a session:
+
+```
+<work_dir>/
+  _session.json                 # session state (speclib-managed)
+  prd.md                        # the PRD (copied or created at init)
+  requirements.json             # generated (once generate() completes)
+  test_spec.json                # generated
+  tasks.json                    # generated
+  architecture.md               # optional, user-provided
+```
+
+#### 7.1.3 The agent
+
+speclib uses the Claude Agent SDK to drive a Claude model for two
+operations: PRD assessment/refinement and artifact generation.
+
+**PRD assessment.** The agent reads the PRD, evaluates it against the
+structure expected by the format spec (Intent section, goals, non-goals,
+background), and produces an `Assessment`. In interactive mode, if the
+assessment identifies gaps, the agent formulates structured `Question`
+objects — specific, answerable questions with context and optional
+suggested answers. This mirrors the request/response pattern of the
+harness's `AskUserQuestion` tool: the agent asks, the user answers, the
+agent incorporates and re-assesses.
+
+**Artifact generation.** Once the PRD is accepted, the agent generates
+the three JSON artifacts in sequence: `requirements.json` first (EARS
+criteria, correctness properties, execution paths, error handling), then
+`test_spec.json` (derived from requirements), then `tasks.json` (task
+groups, subtasks, traceability). Each artifact is validated against its
+schema as it is generated. Cross-file integrity runs after all three
+exist.
+
+**Configuration.** The agent uses `ANTHROPIC_API_KEY` for authentication.
+The model is configurable via `AF_SPEC_MODEL` (default: the latest Claude
+Sonnet). These are read from environment variables or from
+`~/.af/settings.yaml` under a `spec_tool` key:
+
+```yaml
+# ~/.af/settings.yaml
+spec_tool:
+  model: claude-sonnet-4-6       # default model for spec generation
+```
+
+#### 7.1.4 Non-agent operations
+
+Validation, rendering, lifecycle transitions, and the repair pass do not
+use the Agent SDK. These are deterministic operations implemented directly
+in Python:
+
+- **Validate** — JSON Schema validation per artifact, then cross-file
+  integrity checks. See [spec-format_v1.2.md §10](../spec-format_v1.2.md#10-validation).
+- **Render** — deterministic markdown output from JSON artifacts.
+  See [spec-format_v1.2.md §11](../spec-format_v1.2.md#11-rendering).
+- **Repair** — auto-fix near-miss structural errors (empty required fields
+  with inferable values, EARS field name mismatches, IDs one transform from
+  valid). Returns `RepairSuggestion` objects: auto-fixable repairs are
+  applied silently and logged; non-obvious repairs are surfaced for user
+  review.
+- **Lifecycle** — enforce the state machine defined in
+  [spec-format_v1.2.md §9](../spec-format_v1.2.md#9-lifecycle). The
+  `draft → active` transition (Intent hashing, freeze) is performed by
+  the hub, not by speclib standalone (see §7.4).
 
 ### 7.2 af-spec CLI
 
-A separate binary wrapping speclib. Does not require the hub to be running.
+A separate Python binary wrapping speclib. Does not require the hub to be
+running (except for `approve` and `register`).
 
 ```
-af-spec init <campaign> <spec-name>       # create campaign dir (if new) + scaffold spec
-af-spec draft <campaign>/<spec> [--prd <file>]  # author/refine the PRD ($EDITOR or file)
-af-spec generate <campaign>/<spec>        # generate JSON artifacts from the PRD
-af-spec validate <campaign>/<spec>        # run schema + cross-file integrity checks
-af-spec approve <campaign>/<spec>         # draft → active; hash Intent; freeze
-af-spec render <campaign>/<spec> [--combined]   # render markdown view
-af-spec list [<campaign>]                 # list campaigns or specs within a campaign
-af-spec show <campaign>/<spec> [--artifact <name>]  # display an artifact
+af-spec new <prd-file> [--work-dir <path>] [--one-shot]
+    Create a new session from a PRD. In one-shot mode, assess the PRD,
+    accept it as-is (even with gaps), generate artifacts, and validate
+    — all in one pass. In interactive mode (default), assess and pause
+    for refinement.
+
+af-spec assess [--work-dir <path>]
+    Run or re-run the PRD assessment. Prints the assessment summary,
+    gaps, and structured questions (if any).
+
+af-spec refine [--work-dir <path>] --answers <file>
+    Submit answers to the agent's questions as a JSON file mapping
+    question IDs to answer strings. The agent updates the PRD and
+    re-assesses. Repeat until no questions remain.
+
+af-spec accept [--work-dir <path>]
+    Accept the PRD in its current state, ending the refinement loop.
+
+af-spec generate [--work-dir <path>]
+    Generate the JSON artifacts from the accepted PRD.
+
+af-spec validate [--work-dir <path>]
+    Run schema and cross-file integrity checks on the spec package
+    in the working directory.
+
+af-spec render [--work-dir <path>] [--combined]
+    Render the spec as markdown.
+
+af-spec show [--work-dir <path>] [--artifact <name>]
+    Display an artifact or the session state.
+
+af-spec finalize [--work-dir <path>] --target <path>
+    Copy the completed spec package to a target directory.
+
+af-spec register [--work-dir <path>] --hub <url> --campaign <slug>
+    Register the completed spec with a running hub. The hub copies
+    it into the spec store and creates a SpecRef.
+
+af-spec approve --hub <url> <campaign>/<spec>
+    Transition a spec from draft to active. Computes intent_hash,
+    freezes the package. Requires a running hub because approval is
+    a coordination-layer operation (see §7.4).
+
+af-spec status [--work-dir <path>]
+    Print the current session state and a summary of the spec.
 ```
 
-`af-spec init` creates the campaign directory and `campaign.yaml` if the
-campaign does not yet exist, then scaffolds the spec directory with empty
-artifact files in bootstrap mode.
+**Working directory convention.** If `--work-dir` is not specified,
+`af-spec new` creates a temp directory and prints its path. Subsequent
+commands default to the current directory. The working directory is
+self-contained: it holds the session state, the PRD, and the generated
+artifacts.
 
-`af-spec generate` is the one-shot path: given a PRD, it uses an LLM
-(configured via `AF_SPEC_PROVIDER` or `~/.af/settings.yaml`) to generate
-`requirements.json`, `test_spec.json`, and `tasks.json` in a single pass.
-The generated artifacts are validated before being written.
+**One-shot mode.** `af-spec new --one-shot` runs the full pipeline in a
+single invocation: assess → accept (regardless of gaps) → generate →
+validate. The user reviews the output with `af-spec show` or
+`af-spec render`, then finalizes. This is for cases where the PRD is
+known to be complete or where speed matters more than refinement.
+
+**Interactive mode.** The default. `af-spec new` creates the session and
+runs the initial assessment. If the agent has questions, the user answers
+them with `af-spec refine --answers answers.json` and the agent
+re-assesses. The loop continues until the user runs `af-spec accept`.
+Then `af-spec generate` produces the artifacts.
 
 ### 7.3 Spec skill
 
-An agent skill that exposes speclib capabilities to agent CLIs (Claude Code,
-Gemini CLI, etc.). Two modes:
+An agent skill that exposes speclib capabilities to agent CLIs (Claude
+Code, Gemini CLI, etc.). The skill drives speclib's session model
+programmatically rather than through the `af-spec` CLI.
 
-- **Interactive.** The user and agent refine the PRD conversationally. The
-  agent asks clarifying questions, proposes goals and non-goals, and
-  iterates on the narrative until the user is satisfied. Once the PRD is
-  approved, the agent generates the JSON artifacts via speclib and presents
-  the rendered spec for review.
+**Interactive mode.** The user asks the agent to create a spec (e.g.,
+"create a spec for feature X from this PRD"). The agent:
 
-- **One-shot.** The agent receives a PRD (as a file path or inline text)
-  and generates the full spec package via speclib without further
-  interaction. The user reviews the output and approves or requests
-  changes.
+1. Creates a `SpecSession` from the PRD.
+2. Runs `assess()` and presents the assessment to the user.
+3. If questions exist, presents them conversationally (mirroring the
+   structured Q&A pattern). The user answers in natural language; the
+   skill maps answers to `Question` IDs and calls `refine()`.
+4. Repeats until the user is satisfied, then calls `accept_prd()`.
+5. Runs `generate()` and presents the rendered spec for review.
+6. On user approval, calls `finalize()` or `register()`.
 
-The skill invokes `af-spec` commands under the hood. It does not require the
-hub to be running.
+**One-shot mode.** The user provides a PRD and asks for immediate
+generation. The skill calls `SpecSession.create(mode="one-shot")`,
+which runs assess → accept → generate in sequence, then presents the
+result.
+
+The skill does not require the hub to be running for authoring. It calls
+`register()` only when the user explicitly asks to register with the hub.
 
 ### 7.4 Relationship to the harness
 
-The harness is a consumer of speclib, not its owner:
+speclib has two roles: **authoring** (creating specs) and **runtime**
+(validation, rendering, prompt assembly for the hub). Only the authoring
+role uses the Claude Agent SDK; the runtime role is pure Python.
 
-- The **Planner specialist** uses speclib to author specs within a
-  harness-mediated workflow. This is the alternative to standalone authoring
-  for Operators who prefer the hub-integrated path.
-- The **hub** uses speclib at execution time for spec validation, rendering,
-  and prompt assembly. It reads from the same filesystem store that
-  `af-spec` writes to.
+- **`af-spec` and the spec skill** handle authoring standalone. They
+  work against a local working directory, produce a spec package, and
+  optionally register it with the hub.
+- **`af-spec approve`** is the one operation that requires the hub. The
+  `draft → active` transition — computing the `intent_hash`, freezing
+  the package, and recording the `SpecRef` — is a coordination-layer
+  operation. The hub performs it because approval has consequences for
+  the operational store (the spec becomes visible to agents and
+  executable against).
+- The **Planner specialist** uses speclib's session model inside the
+  harness. This is the harness-mediated alternative: the hub starts a
+  Planner agent, the Planner creates a `SpecSession`, and the
+  interactive refinement loop runs through the hub's message channel
+  rather than through the CLI.
+- The **hub** uses speclib's non-agent operations (validate, render) at
+  execution time. It reads from the spec store filesystem — the same
+  directory that `af-spec finalize` or `af-spec register` writes to.
 - Only specs in `active` status or later are served by the harness API.
   Draft specs are invisible to the harness.
 

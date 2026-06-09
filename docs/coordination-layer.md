@@ -283,9 +283,11 @@ At the `draft` to `active` transition the harness hashes the trimmed Intent sect
 
 ### 5.4 The write contract: author once, then freeze
 
-A spec is authored once and not changed after that. The spec is composed while in `draft` — either through the standalone `af-spec` tool or through the harness Planner (both backed by speclib) — the human reviews, and the `draft` to `active` transition freezes the package. From that point the declarative content is immutable. When the requirements turn out to be wrong, the response is a new spec that supersedes this one (§8.3), not an in-place edit.
+A spec is authored once and not changed after that. The spec is composed while in `draft` through speclib's session-based authoring model — either standalone via `af-spec` or through the harness Planner. The human reviews, and the `draft` to `active` transition freezes the package. From that point the declarative content is immutable. When the requirements turn out to be wrong, the response is a new spec that supersedes this one (§8.3), not an in-place edit.
 
-Authoring writes happen only in `draft` and go through speclib. The package is composed as a unit and validated whole. Within `draft`, writes are expressed as RFC 6902 JSON Patches validated against each artifact's schema.
+Authoring is a stateful session: the agent assesses the PRD, optionally refines it through structured Q&A iterations with the user, then generates the JSON artifacts. The session works against a local working directory, not the spec store. Only when the spec is finalized does the user move it to the spec store or register it with the hub. The `draft` to `active` transition (`af-spec approve`) is a hub operation — see [services-architecture.md §7.4](services-architecture.md#74-relationship-to-the-harness).
+
+Within `draft`, writes are expressed as RFC 6902 JSON Patches validated against each artifact's schema.
 
 Execution state is not spec state. Subtask progress lives in the operational store (§9), not in the frozen `tasks.json`.
 

@@ -606,6 +606,9 @@ defaults:
 worktrees:
   prefix: af                # branch prefix: af/<workspace-name>
   location: ../.af_worktrees  # relative to repo root
+
+spec_tool:
+  model: claude-sonnet-4-6  # model for PRD assessment and artifact generation
 ```
 
 ### 11.2 Per-workspace overrides
