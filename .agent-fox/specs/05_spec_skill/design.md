@@ -52,7 +52,7 @@ graph TD
 1. User provides PRD and asks for immediate generation
 2. Agent reads skill file, follows one-shot workflow
 3. Agent runs `af-spec init <campaign-dir>` if needed
-4. Agent runs `af-spec new --mode one-shot --prd <path> <spec-name>`
+4. Agent runs `af-spec new <prd-file> --one-shot --name <spec-name>`
 5. Agent presents the final generated spec for review
 
 ### Path 3: Skill installation

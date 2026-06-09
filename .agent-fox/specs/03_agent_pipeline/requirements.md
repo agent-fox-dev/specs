@@ -69,6 +69,7 @@ of agent operations into the SpecSession lifecycle.
 5. [03-REQ-3.5] IF an artifact fails schema validation, THEN `generate_artifacts` SHALL raise an `AgentError` identifying the artifact name and the validation errors.
 6. [03-REQ-3.6] THE generation prompt for `test_spec.json` SHALL include the generated `requirements.json` content so the agent can reference requirement IDs.
 7. [03-REQ-3.7] THE generation prompt for `tasks.json` SHALL include both the generated `requirements.json` and `test_spec.json` content so the agent can reference requirement and test IDs.
+8. [03-REQ-3.8] THE generation prompt for `requirements.json` SHALL instruct the agent to populate the `glossary` field with definitions for all domain-specific terms used in backtick-delimited references within acceptance criteria, edge cases, and correctness properties.
 
 #### Edge Cases
 1. [03-REQ-3.E1] IF `prd_text` is empty or contains only whitespace, THEN `generate_artifacts` SHALL raise an `AgentError` without making any API calls.
@@ -80,7 +81,7 @@ of agent operations into the SpecSession lifecycle.
 **User Story:** As a developer, I want prompt templates to be centralized and parameterizable, so that they can be maintained and tuned independently of the agent logic.
 
 #### Acceptance Criteria
-1. [03-REQ-4.1] THE `speclib/prompts.py` module SHALL define a function or template for the assessment system prompt that instructs the model to evaluate PRD quality against spec-format expectations (Intent, Goals, Non-Goals, Background sections).
+1. [03-REQ-4.1] THE `speclib/prompts.py` module SHALL define a function or template for the assessment system prompt that instructs the model to evaluate PRD quality against spec-format expectations, explicitly checking for presence and quality of the Intent section (required), Goals section, Non-Goals section, and Background section.
 2. [03-REQ-4.2] THE `speclib/prompts.py` module SHALL define a function or template for the refinement system prompt that instructs the model to incorporate answers, update the PRD, and re-assess.
 3. [03-REQ-4.3] THE `speclib/prompts.py` module SHALL define a function or template for the generation system prompt that instructs the model to produce a single artifact at a time in the correct JSON schema.
 4. [03-REQ-4.4] THE `speclib/tools.py` module SHALL define tool definitions (JSON-compatible dicts) for: `submit_assessment`, `submit_prd_update`, and `submit_artifact`.

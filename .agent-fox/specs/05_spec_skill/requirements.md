@@ -50,7 +50,7 @@ authoring workflows using `af-spec` CLI commands.
 **User Story:** As an agent CLI user, I want the skill to support immediate spec generation from a PRD, so that I can get a complete spec without interactive steps.
 
 #### Acceptance Criteria
-1. [05-REQ-3.1] THE skill file SHALL describe the one-shot workflow as a single invocation: `af-spec new --mode one-shot --prd <path>` followed by automatic assess, accept, and generate.
+1. [05-REQ-3.1] THE skill file SHALL describe the one-shot workflow as a single invocation: `af-spec new <prd-file> --one-shot` followed by automatic assess, accept, and generate.
 2. [05-REQ-3.2] THE skill file SHALL instruct the agent to present the final generated spec to the user for review after one-shot generation completes.
 
 #### Edge Cases

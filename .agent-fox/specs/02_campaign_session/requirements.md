@@ -64,9 +64,9 @@ structure and track the stateful lifecycle of authoring a single spec.
 
 #### Acceptance Criteria
 1. [02-REQ-4.1] THE session SHALL support the following states: `init`, `assessing`, `refining`, `prd_accepted`, `generating`, `generated`.
-2. [02-REQ-4.2] THE session SHALL enforce these legal transitions: `init→assessing`, `assessing→refining`, `assessing→prd_accepted`, `refining→assessing`, `refining→prd_accepted`, `prd_accepted→generating`, `generating→generated`.
+2. [02-REQ-4.2] THE session SHALL enforce these legal transitions: `init→assessing`, `init→prd_accepted` (one-shot mode), `assessing→refining`, `assessing→prd_accepted`, `refining→assessing`, `refining→prd_accepted`, `prd_accepted→generating`, `generating→generated`.
 3. [02-REQ-4.3] IF a method is called that requires a state the session is not in, THEN THE system SHALL raise a `SessionError` naming the current state and the required state.
-4. [02-REQ-4.4] WHEN `accept_prd()` is called while the session is in `assessing` or `refining` state, THE system SHALL transition the state to `prd_accepted`.
+4. [02-REQ-4.4] WHEN `accept_prd()` is called while the session is in `init`, `assessing`, or `refining` state, THE system SHALL transition the state to `prd_accepted`.
 
 #### Edge Cases
 1. [02-REQ-4.E1] IF `generate()` is called when the session is not in `prd_accepted` state, THEN THE system SHALL raise a `SessionError`.

@@ -210,13 +210,12 @@ ASSERT "ask" in content or "prompt" in content or "user" in content
 
 **Expected:**
 - Contains a section about one-shot mode
-- Mentions `--mode one-shot`
+- Mentions `--one-shot` flag
 
 **Assertion pseudocode:**
 ```
 content = SKILL_FILE_PATH.read_text()
-ASSERT "one-shot" in content.lower() or "one_shot" in content.lower()
-ASSERT "--mode" in content
+ASSERT "--one-shot" in content
 ```
 
 ### TS-05-10: One-shot result presentation
