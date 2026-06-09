@@ -50,7 +50,7 @@ The hub is the coordination service. It owns:
   instructions, and revisions. Serves Context reads to the MCP bridge.
   Accepts Context edits from the CLI (Operator actions).
 - **Operational store.** Persists workspace state, campaigns, runs, agents,
-  subtask execution, verification outcomes, file claims, messages, and the
+  subtask execution, verification outcomes, messages, and the
   activity log.
 - **Spec lifecycle.** Enforces the state machine (`draft → active → sealed /
   superseded`), intent hashing, and the freeze contract.
@@ -63,8 +63,6 @@ The hub is the coordination service. It owns:
 - **Agent memory.** Drives the memory service through `recall` (at prompt
   assembly and behind the MCP tool) and `consolidate` (at session end).
   See [coordination-layer.md §6.6](coordination-layer.md#66-the-agent-memory-contract).
-- **File claims.** Manages the advisory lease table. Enforces atomic
-  acquisition and expiry.
 - **Activity log.** Receives events from the MCP bridge, the runtime engine,
   and internal operations. Appends to the operational store.
 - **Coordination API.** Serves the Operator-facing API (see
@@ -126,8 +124,6 @@ ensures the database is consistent after a crash. On restart, the hub:
 4. Reconciles: agents still running reconnect through the bridge; agents
    that exited while the hub was down are transitioned to `stopped` or
    `error` based on exit code.
-5. File claims held by dead agents are expired.
-
 No data is lost. The activity log may have a gap (events that occurred
 between hub crash and restart are lost if the bridge couldn't reach the
 hub), but the operational store state is consistent.
@@ -787,8 +783,6 @@ The operational store tables map directly to the entities in
   assigned_agent_id, state, drop_rationale, started_at, completed_at
 - `verification_outcomes` — workspace_id, spec_id, run_id, group_id,
   verification_subtask_id, check_id, result, detail, recorded_at
-- `file_claims` — workspace_id, file_path, holder_agent_id, run_id,
-  acquired_at, lease_expiry, state
 - `managed_scripts` — workspace_id, agent_id, run_id, command, pid, status,
   started_at, stopped_at
 - `messages` — id, agent_id, role, content, parent_message_id, created_at
@@ -855,10 +849,6 @@ service AfBridge {
 
   // Subtask state
   rpc TransitionSubtask(TransitionRequest) returns (TransitionResponse);
-
-  // File claims
-  rpc ClaimFile(ClaimRequest) returns (ClaimResponse);
-  rpc ReleaseClaim(ReleaseRequest) returns (ReleaseResponse);
 
   // Activity logging
   rpc LogEvent(LogEventRequest) returns (LogEventResponse);

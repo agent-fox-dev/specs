@@ -460,8 +460,8 @@ harness (Claude Code, Gemini CLI, etc.) can call.
 The runtime treats the harness as opaque — it does not intercept tool calls
 or sit in the model's reasoning loop. But the coordination layer needs to
 extend the agent's tool set with capabilities the harness doesn't natively
-have (spec read, Context search, memory recall, subtask state transitions,
-file claims). The MCP bridge resolves this: it's an MCP server the harness
+have (spec read, Context search, memory recall, subtask state transitions).
+The MCP bridge resolves this: it's an MCP server the harness
 connects to, indistinguishable from any other MCP tool. The coordination
 layer's tools appear to the agent as standard MCP tools.
 
@@ -470,11 +470,10 @@ layer's tools appear to the agent as standard MCP tools.
 | Tool | Description | Direction |
 | --- | --- | --- |
 | `af_spec_read` | Fetch spec artifacts, rendered views, traceability, coverage. | Agent → af service |
-| `af_context_search` | Search retrieved sources in attached Contexts. | Agent → af service |
-| `af_context_get` | Fetch a pinned source from an attached Context. | Agent → af service |
+| `af_context_search` | Search retrieved sources in attached Contexts. Params: `query`, optional `context_id`, `source_id`, `max_results`. Returns ranked chunks. | Agent → af service |
+| `af_context_get` | Fetch a pinned source from an attached Context in full. Params: `context_id`, `source_id`. | Agent → af service |
 | `af_memory_recall` | Search agent memory for relevant learnings. | Agent → af service |
 | `af_subtask_state` | Transition the agent's own subtask state. | Agent → af service |
-| `af_file_claim` | Claim, renew, release an advisory file lease. | Agent → af service |
 | `af_ci_status` | Query CI pipeline runs, job results, and logs. | Agent → af service |
 | `af_issues` | Read, search, create, comment on, update issues through the tracker-agnostic interface. | Agent → af service |
 | `af_web_search` | Search and fetch public web content through the provider-agnostic interface. | Agent → af service |
@@ -508,7 +507,7 @@ layer's tools appear to the agent as standard MCP tools.
 
 The bridge communicates with the af coordination service on the host via
 gRPC or HTTP. The coordination service is the source of truth for spec
-content, Context data, memory, subtask state, and file claims. The bridge
+content, Context data, memory, and subtask state. The bridge
 is stateless — it proxies requests and returns responses.
 
 ### 8.4 Authentication and scoping

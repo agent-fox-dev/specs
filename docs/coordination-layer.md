@@ -213,6 +213,8 @@ updated_at: "2026-06-09T10:00:00Z"
 
 This is lighter than a spec PRD: no Intent hash, no schema validation, no freeze. The campaign directory and `campaign.yaml` are created by `af-spec init` (see [services-architecture.md §7.2](services-architecture.md#72-af-spec-cli)).
 
+**Filesystem vs. hub.** `campaign.yaml` on the filesystem is the authoring-time copy, created and edited by `af-spec`. When a spec is submitted to the hub (`af-spec submit`), the hub reads `campaign.yaml` and replicates its fields into the operational store's `Campaign` table. The hub supplements this with execution-time state that only the hub manages: campaign status (`active`/`complete`/`abandoned`), shared Context ids, and workspace bindings. The hub's operational store is the source of truth for campaign state at execution time; the filesystem copy is the source of truth during authoring.
+
 ### 4.3 The dependency graph
 
 Dependencies between specs in a campaign are declared inside each spec's `tasks.json`, using the `dependencies` array with `depends_on_spec`, `from_group`, and `to_group` fields (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)). Edges are authored as part of the spec, not stored separately in the campaign.
@@ -222,6 +224,8 @@ An edge reads: "spec B's workspace may not activate until spec A's task group N 
 Specs with no declared dependencies are ready immediately. Specs with dependencies stay blocked until their upstream groups clear. Independent specs may run in parallel.
 
 The hub evaluates the dependency graph at execution time by reading each spec's `tasks.json` dependencies. Because a downstream spec is often authored before its upstream is fully planned, `from_group: 0` serves as a sentinel for "upstream not yet planned" (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)).
+
+**Sentinel handling at runtime.** When the hub encounters a `from_group: 0` edge, it treats the entire upstream spec as the dependency — the downstream workspace's bootstrap is deferred until the upstream spec is `sealed` (all task groups complete). Once the upstream spec's `tasks.json` exists with concrete groups, the sentinel resolves to the actual group but remains a whole-spec gate until the edge is updated. An unresolved sentinel never silently passes; the workspace stays in `Created` until the gate clears.
 
 ### 4.4 Campaign lifecycle
 
@@ -295,7 +299,14 @@ The spec carries its own lifecycle in `prd.md` frontmatter, separate from the wo
 
 Both `superseded` and `archived` are terminal. A `superseded` spec was replaced; an `archived` spec completed normally. See [spec-format_v1.2.md §9](../spec-format_v1.2.md#9-lifecycle) for full lifecycle and transition details.
 
-At the `draft` to `active` transition the harness hashes the trimmed Intent section into `intent_hash`. The harness recomputes and checks that hash whenever it loads the spec, reporting a mismatch rather than trusting the file.
+At the `draft` to `active` transition the harness computes `intent_hash`:
+
+1. Extract the markdown body following the `## Intent` heading, up to (but not including) the next heading at the same or higher level (`##` or `#`).
+2. Trim leading and trailing whitespace from the extracted text.
+3. Compute the SHA-256 hex digest of the resulting string.
+4. Store the digest in `prd.md` frontmatter as `intent_hash`.
+
+The harness recomputes and checks this hash whenever it loads the spec (on workspace open, on render, and in standalone `validate()`), reporting a mismatch rather than trusting the file.
 
 ### 5.4 The write contract: author once, then freeze
 
@@ -329,9 +340,17 @@ The harness provides spec content through two channels:
 
 - **Prompt assembly (§6.3).** Before each turn the harness renders the spec slice relevant to the agent's current work and includes it in the system prompt. For a worker Archetype this is its assigned subtask plus the requirements and test specs that subtask traces to.
 
-- **Spec read tool.** A read-only tool that lets an agent query the spec package on demand: fetch a single artifact, the rendered combined view, or traceability and coverage. Supplements prompt assembly for cases where an agent needs a part of the spec outside its assembled slice.
+- **Spec read tool.** A read-only tool that lets an agent query the spec package on demand. It draws from two sources: the **frozen spec artifacts** on the filesystem (the plan) and the **operational store** (live execution state). The tool merges these to present the correct current state. It accepts a `what` parameter:
 
-There is no spec-write tool. The write path runs through the harness's authoring API (§10.1), available to the Planner during `draft`.
+  | `what` | Returns |
+  | --- | --- |
+  | `artifact` | A single frozen artifact (`prd`, `requirements`, `test_spec`, `tasks`, `architecture`). |
+  | `rendered` | The combined rendered markdown view. |
+  | `traceability` | The traceability table, with `test_path` merged from the operational store (which tracks live test-to-requirement mappings as tests are written). |
+  | `coverage` | Computed coverage from `test_spec.json`. |
+  | `execution` | Live subtask execution state from the operational store: current state, assigned agent, timestamps, verification outcomes. This is not in the frozen spec. |
+
+There is no spec-write tool. The write path runs through speclib during authoring (via `af-spec` or the Planner).
 
 ### 5.6 The task model
 
@@ -468,11 +487,11 @@ Instruction precedence: harness policy → actor-capability constraints → Cont
 
 | Tool | What it does | Notable constraint |
 | --- | --- | --- |
-| File read/write | Reads and edits files in the worktree. | Confined to the workspace worktree; honors file claims (§7.3). |
-| File claim | Claims, renews, and releases an advisory file lease (§7.3). | Advisory; enforced at the file-write tool, not against exec writes. |
+| File read/write | Reads and edits files in the worktree. | Confined to the workspace worktree. Single agent has exclusive access. |
 | Exec / script | Runs a shell command; long-running ones become managed scripts. | Output streamed to the activity log. |
 | Browser control | Drives a headless browser over CDP. | For end-to-end UI verification. |
-| Context search / get | Reads grounding from attached Contexts. | Read-only against pinned revisions. |
+| Context search | Searches retrieved sources in attached Contexts: `af_context_search(query, context_id?, source_id?, max_results?)`. Returns ranked chunks. | Read-only against pinned revisions. |
+| Context get | Fetches a pinned source in full: `af_context_get(context_id, source_id)`. | Read-only. |
 | Memory recall | Searches agent memory for relevant learnings. | Read-only against the pinned memory revision. |
 | MCP call | Invokes a tool from an MCP server that is a Context source. | Availability follows the attached Contexts. |
 | Git | Stages, commits, opens a PR, reads PR and CI status. | Commits land on the workspace branch only. |
@@ -606,78 +625,64 @@ When a breaker fires, Ralph commits partial progress, records a `loop_stopped` e
 
 ---
 
-## 7. Multi-agent orchestration
+## 7. Orchestration
 
-### 7.1 The coordinator pattern
+### 7.1 Single-agent execution
+
+Each workspace runs **one agent at a time**. The Coordinator reads the frozen spec, works through task groups and subtasks sequentially, implements each subtask, runs verification, and advances state. There is no parallel agent concurrency within a workspace, which eliminates the need for file claims or cross-agent coordination protocols.
+
+The agent has exclusive access to the worktree. It reads its assigned subtask and the requirements and test specs it traces to (via prompt assembly and the spec-read tool), implements the work, commits, and transitions the subtask state. When a subtask is complete, the agent moves to the next one.
 
 ```mermaid
 sequenceDiagram
     participant H as Operator (human)
-    participant S as Spec package (frozen on approval)
+    participant S as Spec package (frozen)
     participant CX as Attached Contexts (pinned, read-only)
-    participant P as Planner
-    participant C as Coordinator
-    participant I as Implementors (parallel, Archetypes)
-    participant V as Verifier (Archetype)
+    participant A as Agent (Coordinator / Implementor / Verifier)
     participant RT as Worktree + operational store
 
-    H->>S: author prd.md (intent, goals, non-goals)
+    H->>S: spec authored and approved (via af-spec or Planner)
     H->>CX: attach Contexts; pin revisions
-    H->>P: request a plan from the PRD
-    P->>CX: read grounding (domain, conventions)
-    P->>S: draft requirements.json, test_spec.json, tasks.json (validated, while draft)
-    P-->>H: present rendered spec
-    H->>S: approve (draft to active; spec frozen; Intent hashed)
-    H->>C: hand off approved spec for execution
-    C->>I: delegate subtasks
-    I->>CX: read grounding for the subtask
-    I->>S: read assigned subtask, requirements, tests
-    I->>RT: implement, commit, transition own subtask state
-    C->>V: request verification
-    V->>RT: run verification + wiring checks; transition subtask state
-    V-->>C: pass / fail per subtask
-    C-->>H: ready for review and merge
+    H->>A: start execution run
+    A->>CX: read grounding (domain, conventions)
+    A->>S: read task groups, subtasks, requirements, tests
+    loop For each task group
+        loop For each subtask
+            A->>RT: implement, commit, transition subtask state
+        end
+        A->>RT: run group verification checks
+    end
+    A->>RT: run wiring verification
+    A-->>H: ready for review and merge
 ```
 
-The human stays in the loop at two points: authoring/approving the spec, and reviewing before merge. The Planner drafts the spec grounded in attached Contexts. Once approved, the Coordinator delegates subtasks, monitors execution state, and drives to completion.
+### 7.2 The shared store
 
-### 7.2 Why coordination is a blackboard
+The spec package and the operational store serve as the coordination medium, even with a single agent. The store has two layers the freeze keeps distinct:
 
-The orchestration is a blackboard model: independent workers coordinate through a shared store rather than calling each other. The store has two layers the freeze keeps distinct:
+- The **spec package** (frozen, read-only during a run) — the plan: what to build, how to verify, in what order.
+- The **operational store** (subtask execution state, verification outcomes) — the progress: what has been done, what passed, what failed.
 
-- The **spec package** (frozen, read-only during a run) — the shared plan.
-- The **operational store** (subtask status, file claims) — where workers write progress.
-
-A worker reads its subtask and the requirements it traces to from the frozen package, does the work, and advances its own subtask state. Workers start, stop, and restart without renegotiating a protocol.
+The agent reads the plan from the frozen spec and writes progress to the operational store. If the agent stops mid-run and resumes (or a new agent continues), the operational store shows exactly where work left off.
 
 Grounding sits outside this loop. Contexts are read-only and pinned, so grounding is a stable input rather than a shared mutable surface.
 
-### 7.3 Concurrency and file claims
+### 7.3 Subtask state transitions
 
-Concurrent writes to runtime state are safe: subtask-state transitions go through the operational store, where the harness serializes them and scopes each to its owning Archetype. The spec artifacts are frozen. The hard case is parallel Implementors editing the same source files in a shared worktree.
+The agent transitions its subtask state as it progresses, ending at `awaiting_verification`. The harness moves it to `done` after verification passes or to `pending_reevaluation` on failure.
 
-The harness coordinates this with an advisory file-claim mechanism:
+The `awaiting_verification` state is a harness extension not present in the format spec's state machine (see [spec-format_v1.2.md §8.3.1](../spec-format_v1.2.md#831-subtask)). The format spec defines `in_progress → done`; the harness inserts `awaiting_verification` between them to gate completion on verification. This is a stricter operating policy, the same pattern as the freeze in §5.4.
 
-- **Granularity.** A claim is on a file path by default; a path prefix or glob covers a wider refactor. Claims are exclusive; reads never need one.
-- **Leases, not holds.** A claim is a lease with a TTL, renewed by heartbeat. It auto-releases when the agent releases it, when its run ends, or when the lease expires.
-- **Yield, don't block.** A claim attempt returns immediately, granted or denied. A denied agent takes other work or is rescheduled.
-- **Deadlock avoidance.** An agent claims files up front or acquires them in canonical path order. Leases are the backstop.
-- **Atomic acquisition.** Taking a claim is a compare-and-set against the claim table.
+### 7.4 Verification gate
 
-Claims are runtime state in the operational store (§9). Every claim and release is an activity-log event.
-
-### 7.4 Subtask delegation and state
-
-When the Coordinator delegates, the harness records the assignment in the operational store and starts the worker. The worker transitions its subtask state as it progresses, ending at `awaiting_verification`. The Coordinator reads subtask state and triggers verification when ready.
-
-### 7.5 Verification gate
-
-An Implementor signals completion by moving its subtask to `awaiting_verification`, not to `done`. The Verifier runs:
+The agent signals subtask completion by moving it to `awaiting_verification`, not to `done`. Verification then runs:
 
 1. The group's verification subtask checks.
 2. The wiring verification group (final group): traces execution paths through production code, confirms return-value propagation, runs smoke tests with real components, audits for unreplaced stubs.
 
-On success the harness transitions the subtask to `done`. On failure it transitions to `pending_reevaluation` (and from there to `pending` if rework is needed). The Verifier reports pass or fail per check; outcomes are recorded in the operational store. Transitioning implementation subtasks on failure is the harness's action, keeping the "own subtask only" rule intact.
+On success the harness transitions the subtask to `done`. On failure it transitions to `pending_reevaluation` (and from there to `pending` if rework is needed). Verification outcomes (pass or fail per check) are recorded in the operational store.
+
+The verification subtask (`{N}.V`) does not follow the subtask state machine. Its execution state (running, passed, failed) lives entirely in the operational store as `VerificationOutcome` records. The spec's `tasks.json` defines only the checks; the harness tracks their outcomes.
 
 Only when the wiring verification passes does the work roll up to "ready for review."
 
@@ -753,7 +758,7 @@ The harness persists state across three stores so a process restart resumes clea
 
 - **Spec store.** Holds the spec artifacts (the four required files plus optional `architecture.md`), organized under campaigns on the filesystem: `<data_dir>/specs/<campaign-slug>/<spec-slug>/`. Source of truth for spec content. Written by speclib (via `af-spec` or the Planner); read by the harness at execution time.
 - **Context store.** Holds Contexts and their sources above the workspace, keyed by Context id and revision.
-- **Operational store.** Holds everything else: workspace and campaign state, agent and run records, subtask execution state, file claims, conversation history, and the activity log.
+- **Operational store.** Holds everything else: workspace and campaign state, agent and run records, subtask execution state, conversation history, and the activity log.
 
 ### 9.1 Spec store
 
@@ -794,7 +799,6 @@ The harness persists state across three stores so a process restart resumes clea
 | Agent | id, workspace id, run id, specialist role, actor capability, provider, model, phase, activity, parent agent id, timestamps | Phase tracks the container lifecycle; activity tracks what the agent is doing within `running`. See [runtime-layer.md §5](runtime-layer.md#5-agent-lifecycle). |
 | SubtaskExecution | workspace id, spec_id, subtask id, run id, assigned agent id, state, drop rationale, timestamps | The live execution state. Transitions are harness-enforced (§5.6). |
 | VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result, detail, recorded_at | One row per check. The Verifier reports; the harness records and transitions accordingly (§7.5). |
-| FileClaim | workspace id, file path/glob, holder agent id, run id, acquired_at, lease expiry, state | Advisory lease (§7.3). Database-backed with atomic acquisition. |
 | ManagedScript | workspace id, agent id, run id, command, pid, status, timestamps | Long-running process tracked for cleanup. |
 
 **Conversation layer.**
@@ -808,13 +812,12 @@ The harness persists state across three stores so a process restart resumes clea
 | Entity | Key fields | Notes |
 | --- | --- | --- |
 | MemoryPin | workspace id, run id, memory scope, pinned revision, recorded_at | Records which memory revision a run read. |
-| ActivityEvent | id, workspace id, run id, agent id, type, payload, timestamp | Append-only event stream. Types: `text`, `thinking`, `tool_call`, `tool_result`, `spec_patch`, `context_pin`, `memory_pin`, `file_claim`, `commit`, `status_change`, `verification_outcome`, `loop_iteration`, `loop_complete`, `loop_stopped`, `script_start`, `script_stop`. |
+| ActivityEvent | id, workspace id, run id, agent id, type, payload, timestamp | Append-only event stream. Types: `text`, `thinking`, `tool_call`, `tool_result`, `spec_patch`, `context_pin`, `memory_pin`, `commit`, `status_change`, `verification_outcome`, `loop_iteration`, `loop_complete`, `loop_stopped`, `script_start`, `script_stop`. |
 
 ### 9.4 Persistence and recovery
 
 All three stores are durable. The `ActivityEvent` stream is the recovery backbone: it records every spec patch, Context and memory pin, subtask transition, verification outcome, and agent action. A run's full history is reconstructable from the event stream alone.
 
-File claims survive hub restarts. Stale claims (held by agents that exited while the hub was down) are expired during crash recovery. See [services-architecture.md §2.4](services-architecture.md#24-crash-recovery).
 
 ---
 
@@ -883,10 +886,6 @@ The API is split by audience. **Operator-facing** operations are for the human c
 - Query subtask execution state and verification outcomes.
 - Force re-delegate a subtask.
 
-**File claims (Operator override).**
-
-- List active claims. Force-release a stuck lease.
-
 **Config.**
 
 - Set global and per-workspace defaults: providers, models, Contexts, memory backend, issue tracker, web search, CI/CD, notifications, setup scripts.
@@ -897,8 +896,7 @@ These operations are exposed as tools during a run (§6.5). Each is scoped to th
 
 | Tool | Operations | Reference |
 | --- | --- | --- |
-| File read/write | Read and edit files. Writes honor file claims. | §6.5, §7.3 |
-| File claim | Claim, renew, release advisory leases. | §7.3 |
+| File read/write | Read and edit files. Single agent has exclusive worktree access. | §6.5 |
 | Exec / script | Run shell commands; long-running → managed scripts. | §6.5 |
 | Browser control | Drive a headless browser over CDP. | §6.5 |
 | Spec read | Fetch artifacts, rendered views, traceability, coverage. Read-only. | §5.5 |
@@ -915,7 +913,7 @@ These operations are exposed as tools during a run (§6.5). Each is scoped to th
 
 Read-only; available to both the Operator and diagnostic tooling.
 
-- **Activity stream.** Subscribe to or page through `ActivityEvent`. Filterable by workspace, run, agent, event type, time range.
+- **Activity stream.** Subscribe to or page through `ActivityEvent` (see §9.3 for event types). Filterable by workspace, run, agent, event type, time range.
 - **Grounding read (debug).** Fetch the full prompt assembled for a given turn, including spec slice, Context content, recalled memory, and composed instructions. Fetch pinned Context and memory revisions for a run.
 - **Run history.** Completed runs with status, duration, circuit breaker state, and summary.
 
