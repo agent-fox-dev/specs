@@ -92,20 +92,20 @@ Groups are ordered so the scaffold exists before tests can import anything.
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings introduced: `uv run ruff check`
 
-- [ ] 3. Implement configuration and auth modules
-  - [ ] 3.1 Implement speclib/config.py
+- [x] 3. Implement configuration and auth modules
+  - [x] 3.1 Implement speclib/config.py
     - `SpecToolConfig` dataclass with defaults
     - `load_config()` function: read YAML, parse spec_tool, apply env var overrides
     - Support for nested `auth` section in YAML
     - _Requirements: 01-REQ-2.1, 01-REQ-2.2, 01-REQ-2.3, 01-REQ-2.4_
 
-  - [ ] 3.2 Implement speclib/auth.py
+  - [x] 3.2 Implement speclib/auth.py
     - `create_client()` function: resolve auth method, create appropriate client
     - `_create_api_key_client()`, `_create_bedrock_client()`, `_create_vertex_client()` helpers
     - Return (client, model_name) tuple
     - _Requirements: 01-REQ-3.1, 01-REQ-3.2, 01-REQ-3.3, 01-REQ-3.4, 01-REQ-3.5_
 
-  - [ ] 3.3 Handle all error conditions
+  - [x] 3.3 Handle all error conditions
     - Invalid YAML → ConfigError
     - Missing spec_tool → defaults
     - Unknown keys → ignore
@@ -114,13 +114,13 @@ Groups are ordered so the scaffold exists before tests can import anything.
     - Missing Vertex project → ConfigError
     - _Requirements: 01-REQ-2.E1, 01-REQ-2.E2, 01-REQ-2.E3, 01-REQ-3.E1, 01-REQ-3.E2, 01-REQ-3.E3_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Config tests pass: `uv run pytest -q tests/test_config.py`
-    - [ ] Auth tests pass: `uv run pytest -q tests/test_auth.py`
-    - [ ] Property tests pass: `uv run pytest -q tests/ -k property`
-    - [ ] Smoke tests pass: `uv run pytest -q tests/ -k smoke`
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
+  - [x] 3.V Verify task group 3
+    - [x] Config tests pass: `uv run pytest -q tests/test_config.py`
+    - [x] Auth tests pass: `uv run pytest -q tests/test_auth.py`
+    - [x] Property tests pass: `uv run pytest -q tests/ -k property`
+    - [x] Smoke tests pass: `uv run pytest -q tests/ -k smoke`
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
 
 - [ ] 4. Checkpoint - Scaffold Complete
   - Ensure all tests pass

@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 
@@ -96,7 +96,6 @@ class TestConfigEdgeCases:
         """
         settings_yaml.write_text(":::bad yaml")
         from speclib.config import load_config
-
         from speclib.errors import ConfigError
 
         with pytest.raises(ConfigError) as exc_info:
@@ -142,6 +141,7 @@ class TestConfigEdgeCases:
 class TestConfigProperties:
     """Property-based tests for configuration."""
 
+    @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
     @given(
         env_model=st.text(
             min_size=1,
@@ -171,6 +171,7 @@ class TestConfigProperties:
         config = load_config()
         assert config.model == env_model
 
+    @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
     @given(iteration=st.integers(min_value=0, max_value=10))
     def test_ts01_p2_defaults_consistent(
         self,

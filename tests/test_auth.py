@@ -147,7 +147,6 @@ class TestClientEdgeCases:
         """
         monkeypatch.setenv("AF_SPEC_AUTH", "invalid_method")
         from speclib.auth import create_client
-
         from speclib.errors import ConfigError
 
         with pytest.raises(ConfigError) as exc_info:
@@ -172,7 +171,6 @@ class TestClientEdgeCases:
         """
         from speclib.auth import create_client
         from speclib.config import SpecToolConfig
-
         from speclib.errors import ConfigError
 
         config = SpecToolConfig(auth_method="api_key", api_key=None)
@@ -193,7 +191,6 @@ class TestClientEdgeCases:
         monkeypatch.setenv("AF_SPEC_AUTH", "vertex")
         # AF_SPEC_VERTEX_PROJECT is not set — clean_env ensures removal
         from speclib.auth import create_client
-
         from speclib.errors import ConfigError
 
         with pytest.raises(ConfigError):
