@@ -90,12 +90,12 @@ These must be implemented before task group 3 of this spec.
     - [x] All spec tests FAIL (red) -- no implementation yet
     - [x] No linter warnings introduced: `uv run ruff check tests/`
 
-- [ ] 3. Implement error type and tool definitions
-  - [ ] 3.1 Add AgentError to speclib/errors.py
+- [x] 3. Implement error type and tool definitions
+  - [x] 3.1 Add AgentError to speclib/errors.py
     - `AgentError(SpeclibError)` with `detail` attribute
     - _Requirements: 03-REQ-5.4_
 
-  - [ ] 3.2 Implement speclib/tools.py
+  - [x] 3.2 Implement speclib/tools.py
     - `SUBMIT_ASSESSMENT_TOOL` constant with full JSON schema
     - `SUBMIT_PRD_UPDATE_TOOL` constant with full JSON schema
     - `SUBMIT_ARTIFACT_TOOL` constant with full JSON schema
@@ -104,11 +104,11 @@ These must be implemented before task group 3 of this spec.
     - `artifact_tool(artifact_name)` function returning `[SUBMIT_ARTIFACT_TOOL]`
     - _Requirements: 03-REQ-4.4, 03-REQ-4.5, 03-REQ-4.6_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] Tool definition tests pass: `uv run pytest -q tests/test_tools.py`
-    - [ ] AgentError test passes: `uv run pytest -q tests/test_agent.py -k test_agent_error`
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings introduced: `uv run ruff check speclib/`
+  - [x] 3.V Verify task group 3
+    - [x] Tool definition tests pass: `uv run pytest -q tests/test_tools.py`
+    - [x] AgentError test passes: `uv run pytest -q tests/test_agent.py -k test_agent_error`
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings introduced: `uv run ruff check speclib/`
 
 - [ ] 4. Implement prompt templates
   - [ ] 4.1 Implement speclib/prompts.py
