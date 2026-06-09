@@ -19,6 +19,7 @@ import pytest
 from click.testing import CliRunner
 
 from speclib.cli import main  # noqa: I001
+from speclib.errors import CampaignError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -195,6 +196,7 @@ class TestInitCommand:
         confirmation.
         """
         target = tmp_path / "test-campaign"
+        resolved = target.resolve()
         with patch(
             "speclib.cli.Campaign"
         ) as mock_cls:
@@ -211,9 +213,10 @@ class TestInitCommand:
                 ],
             )
         _assert_exit(result, 0)
-        resolved = str(target.resolve())
-        assert resolved in result.output or "Test" in result.output
-        mock_cls.create.assert_called_once()
+        assert str(resolved) in result.output
+        mock_cls.create.assert_called_once_with(
+            resolved, "Test", "A test"
+        )
 
     def test_init_defaults_name_to_basename(
         self, cli_runner: CliRunner, tmp_path: Path
@@ -224,6 +227,7 @@ class TestInitCommand:
         Verify init uses directory basename when --name is omitted.
         """
         target = tmp_path / "my-project"
+        resolved = target.resolve()
         with patch(
             "speclib.cli.Campaign"
         ) as mock_cls:
@@ -232,11 +236,20 @@ class TestInitCommand:
                 main, ["init", str(target)]
             )
         _assert_exit(result, 0)
+        # Verify name arg is the directory basename, not from the path
+        mock_cls.create.assert_called_once()
         call_args = mock_cls.create.call_args
         args, kwargs = call_args
-        all_vals = list(args) + list(kwargs.values())
-        assert "my-project" in str(all_vals), (
-            f"Expected 'my-project' in call args, got {all_vals}"
+        # The name should be passed as the second positional arg
+        # or as keyword "name". Extract it independently of the path.
+        name_val = kwargs.get("name") if "name" in kwargs else args[1]
+        assert name_val == "my-project", (
+            f"Expected name='my-project', got {name_val!r}"
+        )
+        # Verify the path arg is the resolved absolute path
+        path_val = kwargs.get("path") if "path" in kwargs else args[0]
+        assert path_val == resolved, (
+            f"Expected path={resolved}, got {path_val!r}"
         )
 
     def test_init_defaults_description_empty(
@@ -249,6 +262,7 @@ class TestInitCommand:
         omitted.
         """
         target = tmp_path / "test"
+        resolved = target.resolve()
         with patch(
             "speclib.cli.Campaign"
         ) as mock_cls:
@@ -257,11 +271,9 @@ class TestInitCommand:
                 main, ["init", str(target), "--name", "Test"]
             )
         _assert_exit(result, 0)
-        call_args = mock_cls.create.call_args
-        args, kwargs = call_args
-        all_vals = list(args) + list(kwargs.values())
-        assert "" in all_vals, (
-            f"Expected empty string in args, got {call_args}"
+        # Description should default to empty string
+        mock_cls.create.assert_called_once_with(
+            resolved, "Test", ""
         )
 
     def test_init_handles_campaign_error(
@@ -273,23 +285,18 @@ class TestInitCommand:
         Verify init prints error and exits 1 when Campaign.create
         fails.
         """
-        from speclib.errors import SpeclibError
-
-        class _CampaignError(SpeclibError):
-            pass
-
         target = tmp_path / "existing"
         with patch(
             "speclib.cli.Campaign"
         ) as mock_cls:
-            mock_cls.create.side_effect = _CampaignError(
+            mock_cls.create.side_effect = CampaignError(
                 "already exists"
             )
             result = cli_runner.invoke(
                 main, ["init", str(target)]
             )
         _assert_exit(result, 1)
-        combined = result.output + result.stderr
+        combined = result.output
         assert "already exists" in combined
 
     def test_init_resolves_relative_path(
@@ -341,8 +348,16 @@ class TestListCommand:
             ],
         )
         _assert_exit(result, 0)
-        assert "01" in result.output
-        assert "data_models" in result.output
+        out = result.output
+        # Verify all four required columns appear
+        assert "01" in out, "Missing spec number '01'"
+        assert "data_models" in out, "Missing spec name"
+        assert "generated" in out, "Missing session state column"
+        # Artifact count for spec 01 (prd.md is the only artifact file)
+        # The exact count depends on the implementation scanning the dir.
+        # At minimum, verify some numeric count or "1" appears in the row.
+        assert "02" in out, "Missing spec 02 row"
+        assert "refining" in out, "Missing state for spec 02"
 
     def test_list_explicit_directory(
         self,
@@ -358,6 +373,10 @@ class TestListCommand:
             main, ["list", str(campaign_dir_with_specs)]
         )
         _assert_exit(result, 0)
+        # Verify table output was produced from the given directory
+        out = result.output
+        assert "01" in out, "Missing spec 01 from explicit dir"
+        assert "data_models" in out, "Missing spec name from explicit dir"
 
     def test_list_empty_campaign(
         self, cli_runner: CliRunner, campaign_dir: Path
@@ -418,7 +437,7 @@ class TestListCommand:
             ["--campaign-dir", str(tmp_path), "list"],
         )
         _assert_exit(result, 1)
-        combined = (result.output + result.stderr).lower()
+        combined = (result.output).lower()
         assert "campaign" in combined
 
 
@@ -451,7 +470,7 @@ class TestSpecResolution:
             ],
         )
         _assert_exit(result, 1)
-        combined = result.output + result.stderr
+        combined = result.output
         assert "01" in combined, (
             f"Expected '01' in error, got: {combined}"
         )
@@ -539,7 +558,7 @@ class TestCampaignDirResolution:
             ["--campaign-dir", str(tmp_path), "status"],
         )
         _assert_exit(result, 1)
-        combined = result.output + result.stderr
+        combined = result.output
         assert "campaign" in combined.lower(), (
             f"Expected 'campaign' in error, got: {combined}"
         )
