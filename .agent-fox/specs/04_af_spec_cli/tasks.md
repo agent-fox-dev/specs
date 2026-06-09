@@ -236,8 +236,8 @@ wiring verification.
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings: `uv run ruff check speclib/cli.py`
 
-- [ ] 6. Implement spec lifecycle commands (generate, validate, render, show, status)
-  - [ ] 6.1 Implement generate command
+- [x] 6. Implement spec lifecycle commands (generate, validate, render, show, status)
+  - [x] 6.1 Implement generate command
     - `@main.command("generate")` with `spec` argument
     - Resolve spec, resume session
     - `asyncio.run(session.generate())` — bridge async
@@ -245,7 +245,7 @@ wiring verification.
     - Handle state and agent errors
     - _Requirements: 04-REQ-7.1, 04-REQ-7.2, 04-REQ-7.3, 04-REQ-7.E1_
 
-  - [ ] 6.2 Implement validate command
+  - [x] 6.2 Implement validate command
     - `@main.command("validate")` with `spec` argument
     - Resolve spec, resume session
     - Call `session.validate()`
@@ -253,7 +253,7 @@ wiring verification.
     - Handle missing artifacts
     - _Requirements: 04-REQ-8.1, 04-REQ-8.2, 04-REQ-8.3, 04-REQ-8.4, 04-REQ-8.E1_
 
-  - [ ] 6.3 Implement render command
+  - [x] 6.3 Implement render command
     - `@main.command("render")` with `spec`, `--combined`
     - Resolve spec, resume session
     - Call `session.render(combined=combined)`
@@ -261,7 +261,7 @@ wiring verification.
     - Handle missing artifacts
     - _Requirements: 04-REQ-9.1, 04-REQ-9.2, 04-REQ-9.3, 04-REQ-9.E1_
 
-  - [ ] 6.4 Implement show command
+  - [x] 6.4 Implement show command
     - `@main.command("show")` with `spec`, `--artifact`
     - Resolve spec
     - If `--artifact`: read file from spec dir, print content
@@ -269,22 +269,22 @@ wiring verification.
     - Handle missing artifact: list available files
     - _Requirements: 04-REQ-10.3, 04-REQ-10.4, 04-REQ-10.5_
 
-  - [ ] 6.5 Implement status command
+  - [x] 6.5 Implement status command
     - `@main.command("status")` with optional `spec` argument
     - Without spec: table of all specs with state (like list)
     - With spec: detailed state (state, mode, assessment count, Q&A count, artifacts)
     - _Requirements: 04-REQ-10.1, 04-REQ-10.2_
 
-  - [ ] 6.V Verify task group 6
-    - [ ] Generate command tests pass (TS-04-29 through TS-04-31)
-    - [ ] Validate command tests pass (TS-04-32 through TS-04-34)
-    - [ ] Render command tests pass (TS-04-35 through TS-04-38)
-    - [ ] Show command tests pass (TS-04-39 through TS-04-43)
-    - [ ] Status command tests pass (TS-04-39, TS-04-40)
-    - [ ] Property test P5 passes for generate
-    - [ ] Smoke tests SMOKE-3 and SMOKE-4 pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check speclib/cli.py`
+  - [x] 6.V Verify task group 6
+    - [x] Generate command tests pass (TS-04-29 through TS-04-31)
+    - [x] Validate command tests pass (TS-04-32 through TS-04-34)
+    - [x] Render command tests pass (TS-04-35 through TS-04-38)
+    - [x] Show command tests pass (TS-04-39 through TS-04-43)
+    - [x] Status command tests pass (TS-04-39, TS-04-40)
+    - [x] Property test P5 passes for generate
+    - [x] Smoke tests SMOKE-3 and SMOKE-4 pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check speclib/cli.py`
 
 - [ ] 7. Wiring verification
 
