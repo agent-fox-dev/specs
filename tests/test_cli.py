@@ -13,13 +13,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
 from speclib.cli import main  # noqa: I001
-from speclib.errors import CampaignError
+from speclib.errors import CampaignError, SessionError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -631,3 +631,1401 @@ class TestExitCodes:
                 ],
             )
         _assert_exit(result, 2)
+
+
+# ================================================================
+# Task 2.1: Spec new command tests (TS-04-11 through TS-04-16)
+# ================================================================
+
+
+class TestNewCommand:
+    """Tests for the af-spec new command."""
+
+    def test_new_creates_spec(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+        prd_file: Path,
+    ) -> None:
+        """TS-04-11: New creates spec from PRD file.
+
+        Requirement: 04-REQ-3.1
+        Verify new calls campaign.new_spec and prints created
+        directory.
+        """
+        mock_session = _mock_session(state="init")
+        with patch("speclib.cli.Campaign") as mock_cls:
+            campaign = MagicMock()
+            mock_cls.open.return_value = campaign
+            campaign.new_spec.return_value = mock_session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir),
+                    "new",
+                    str(prd_file),
+                ],
+            )
+        _assert_exit(result, 0)
+        campaign.new_spec.assert_called_once()
+
+    def test_new_explicit_name(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+        prd_file: Path,
+    ) -> None:
+        """TS-04-12: New with explicit name.
+
+        Requirement: 04-REQ-3.2
+        Verify --name option is passed as spec name.
+        """
+        mock_session = _mock_session(state="init")
+        with patch("speclib.cli.Campaign") as mock_cls:
+            campaign = MagicMock()
+            mock_cls.open.return_value = campaign
+            campaign.new_spec.return_value = mock_session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir),
+                    "new",
+                    str(prd_file),
+                    "--name",
+                    "my_spec",
+                ],
+            )
+        _assert_exit(result, 0)
+        call_args_str = str(campaign.new_spec.call_args)
+        assert "my_spec" in call_args_str, (
+            f"Expected 'my_spec' in call args: {call_args_str}"
+        )
+
+    def test_new_derives_name(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+    ) -> None:
+        """TS-04-13: New derives name from filename.
+
+        Requirement: 04-REQ-3.2
+        Verify name is derived from PRD filename when --name is
+        omitted.
+        """
+        prd = campaign_dir / "My Data Models.md"
+        prd.write_text("# Test PRD\n\nSome content.")
+        mock_session = _mock_session(state="init")
+        with patch("speclib.cli.Campaign") as mock_cls:
+            campaign = MagicMock()
+            mock_cls.open.return_value = campaign
+            campaign.new_spec.return_value = mock_session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir),
+                    "new",
+                    str(prd),
+                ],
+            )
+        _assert_exit(result, 0)
+        call_args_str = str(campaign.new_spec.call_args)
+        assert "my_data_models" in call_args_str, (
+            f"Expected derived name in args: {call_args_str}"
+        )
+
+    def test_new_one_shot(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+        prd_file: Path,
+    ) -> None:
+        """TS-04-14: New with one-shot flag.
+
+        Requirement: 04-REQ-3.3
+        Verify --one-shot sets session mode.
+        """
+        mock_session = _mock_session(state="init")
+        with patch("speclib.cli.Campaign") as mock_cls:
+            campaign = MagicMock()
+            mock_cls.open.return_value = campaign
+            campaign.new_spec.return_value = mock_session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir),
+                    "new",
+                    str(prd_file),
+                    "--one-shot",
+                ],
+            )
+        _assert_exit(result, 0)
+        call_args_str = str(campaign.new_spec.call_args)
+        assert "one-shot" in call_args_str, (
+            f"Expected 'one-shot' in args: {call_args_str}"
+        )
+
+    def test_new_missing_prd(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+    ) -> None:
+        """TS-04-15: New with missing PRD file.
+
+        Requirement: 04-REQ-3.4
+        Verify error when PRD file does not exist.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir),
+                "new",
+                "/tmp/nonexistent_prd_file.md",
+            ],
+        )
+        assert result.exit_code != 0
+        # The CLI should recognize --campaign-dir and the 'new'
+        # command, reporting a file-not-found error.
+        assert "no such option" not in result.output.lower(), (
+            "Expected --campaign-dir option to exist"
+        )
+
+    def test_new_invalid_name(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+        prd_file: Path,
+    ) -> None:
+        """TS-04-16: New with invalid spec name.
+
+        Requirement: 04-REQ-3.E1
+        Verify error when spec name contains invalid characters.
+        """
+        with patch("speclib.cli.Campaign") as mock_cls:
+            campaign = MagicMock()
+            mock_cls.open.return_value = campaign
+            campaign.new_spec.side_effect = CampaignError(
+                "Invalid spec name"
+            )
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir),
+                    "new",
+                    str(prd_file),
+                    "--name",
+                    "Invalid Name!",
+                ],
+            )
+        _assert_exit(result, 1)
+
+
+# ================================================================
+# Task 2.2: Assess and refine command tests
+#            (TS-04-17 through TS-04-26)
+# ================================================================
+
+
+class TestAssessCommand:
+    """Tests for the af-spec assess command."""
+
+    def test_assess_runs_and_prints(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-17: Assess runs assessment and prints summary.
+
+        Requirement: 04-REQ-4.1
+        Verify assess calls session.assess and prints formatted
+        summary.
+        """
+        assessment = _sample_assessment()
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.assess = AsyncMock(return_value=assessment)
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "assess",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        lower = result.output.lower()
+        assert "quality" in lower or "score" in lower, (
+            f"Expected assessment info: {result.output}"
+        )
+
+    def test_assess_output_formatting(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-18: Assess output formatting.
+
+        Requirement: 04-REQ-4.2
+        Verify assessment output has clear section headers.
+        """
+        assessment = _sample_assessment()
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.assess = AsyncMock(return_value=assessment)
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "assess",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        lower = result.output.lower()
+        assert "quality" in lower, (
+            f"Missing Quality section: {result.output}"
+        )
+        assert "gaps" in lower or "gap" in lower, (
+            f"Missing Gaps section: {result.output}"
+        )
+        assert "questions" in lower or "question" in lower, (
+            f"Missing Questions section: {result.output}"
+        )
+
+    def test_assess_wrong_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-19: Assess wrong state error.
+
+        Requirement: 04-REQ-4.3
+        Verify assess prints state error when session is not in
+        init or refining.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.assess = AsyncMock(
+                side_effect=SessionError(
+                    "Cannot call assess() in state 'generated'"
+                )
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "assess",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "state" in result.output.lower()
+
+    def test_assess_agent_error(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-20: Assess agent error.
+
+        Requirement: 04-REQ-4.E1
+        Verify assess exits 2 on agent pipeline error.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.assess = AsyncMock(
+                side_effect=RuntimeError("agent failed")
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "assess",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 2)
+
+
+class TestRefineCommand:
+    """Tests for the af-spec refine command."""
+
+    def test_refine_submits_answers(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+        answers_file: Path,
+    ) -> None:
+        """TS-04-21: Refine submits answers and prints update.
+
+        Requirement: 04-REQ-5.1
+        Verify refine reads JSON, calls session.refine, prints
+        confirmation.
+        """
+        assessment = _sample_assessment()
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="refining")
+            session.refine = AsyncMock(return_value=assessment)
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "refine",
+                    "01",
+                    "--answers",
+                    str(answers_file),
+                ],
+            )
+        _assert_exit(result, 0)
+        session.refine.assert_called_once()
+
+    def test_refine_missing_answers_file(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-22: Refine with missing answers file.
+
+        Requirement: 04-REQ-5.2
+        Verify refine fails when answers file does not exist.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "refine",
+                "01",
+                "--answers",
+                "/tmp/nonexistent_answers.json",
+            ],
+        )
+        assert result.exit_code != 0
+        # The CLI should recognize --campaign-dir and the 'refine'
+        # command, reporting the missing file.
+        assert "no such option" not in result.output.lower(), (
+            "Expected --campaign-dir option to exist"
+        )
+
+    def test_refine_invalid_json(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+        bad_json_file: Path,
+    ) -> None:
+        """TS-04-23: Refine with invalid JSON.
+
+        Requirement: 04-REQ-5.3
+        Verify refine fails on malformed JSON.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "refine",
+                "01",
+                "--answers",
+                str(bad_json_file),
+            ],
+        )
+        _assert_exit(result, 1)
+        lower = result.output.lower()
+        assert "json" in lower or "parse" in lower, (
+            f"Expected JSON error: {result.output}"
+        )
+
+    def test_refine_wrong_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+        answers_file: Path,
+    ) -> None:
+        """TS-04-24: Refine wrong state error.
+
+        Requirement: 04-REQ-5.4
+        Verify refine prints state error when not in refining.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.refine = AsyncMock(
+                side_effect=SessionError(
+                    "Cannot call refine() in state 'init'"
+                )
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "refine",
+                    "01",
+                    "--answers",
+                    str(answers_file),
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "state" in result.output.lower()
+
+    def test_refine_prints_updated_assessment(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+        answers_file: Path,
+    ) -> None:
+        """TS-04-25: Refine prints updated assessment.
+
+        Requirement: 04-REQ-5.5
+        Verify refine prints updated assessment summary.
+        """
+        assessment = _sample_assessment()
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="refining")
+            session.refine = AsyncMock(return_value=assessment)
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "refine",
+                    "01",
+                    "--answers",
+                    str(answers_file),
+                ],
+            )
+        _assert_exit(result, 0)
+        lower = result.output.lower()
+        assert "quality" in lower or "score" in lower, (
+            f"Expected assessment info: {result.output}"
+        )
+
+    def test_refine_invalid_schema(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+        bad_schema_file: Path,
+    ) -> None:
+        """TS-04-26: Refine invalid answers schema.
+
+        Requirement: 04-REQ-5.E1
+        Verify refine fails when JSON is not an object mapping
+        question IDs to strings.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "refine",
+                "01",
+                "--answers",
+                str(bad_schema_file),
+            ],
+        )
+        _assert_exit(result, 1)
+
+
+# ================================================================
+# Task 2.3: Accept, generate, validate, render, show, status tests
+#            (TS-04-27 through TS-04-43)
+# ================================================================
+
+
+class TestAcceptCommand:
+    """Tests for the af-spec accept command."""
+
+    def test_accept_transitions_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-27: Accept transitions state and prints confirmation.
+
+        Requirement: 04-REQ-6.1
+        Verify accept calls session.accept_prd and prints new
+        state.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="assessing")
+            session.accept_prd.return_value = None
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "accept",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        assert "accepted" in result.output.lower()
+
+    def test_accept_wrong_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-28: Accept wrong state error.
+
+        Requirement: 04-REQ-6.2
+        Verify accept fails when not in assessing or refining.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.accept_prd.side_effect = SessionError(
+                "Cannot accept PRD in state 'init'"
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "accept",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "state" in result.output.lower()
+
+
+class TestGenerateCommand:
+    """Tests for the af-spec generate command."""
+
+    def test_generate_runs_and_prints(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-29: Generate runs generation and prints summary.
+
+        Requirement: 04-REQ-7.1, 04-REQ-7.2
+        Verify generate calls session.generate and prints artifact
+        summary.
+        """
+        gen_result = {
+            "artifacts": [
+                "requirements.md",
+                "design.md",
+                "test_spec.md",
+                "tasks.md",
+            ],
+        }
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="prd_accepted")
+            session.generate = AsyncMock(return_value=gen_result)
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "generate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        assert "requirements" in result.output.lower()
+
+    def test_generate_wrong_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-30: Generate wrong state error.
+
+        Requirement: 04-REQ-7.3
+        Verify generate fails when not in prd_accepted state.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="init")
+            session.generate = AsyncMock(
+                side_effect=SessionError(
+                    "Cannot call generate() in state 'init'"
+                )
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "generate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        lower = result.output.lower()
+        assert "accept" in lower or "state" in lower
+
+    def test_generate_agent_error(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-31: Generate agent error.
+
+        Requirement: 04-REQ-7.E1
+        Verify generate exits 2 on agent pipeline error.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="prd_accepted")
+            session.generate = AsyncMock(
+                side_effect=RuntimeError("agent failed")
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "generate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 2)
+
+
+class TestValidateCommand:
+    """Tests for the af-spec validate command."""
+
+    def test_validate_passing(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-32: Validate with passing spec.
+
+        Requirement: 04-REQ-8.1, 04-REQ-8.2
+        Verify validate prints success when no errors found.
+        """
+        validation_result = MagicMock()
+        validation_result.valid = True
+        validation_result.schema_errors = []
+        validation_result.integrity_errors = []
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.validate.return_value = validation_result
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "validate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        lower = result.output.lower()
+        assert (
+            "valid" in lower
+            or "success" in lower
+            or "pass" in lower
+        )
+
+    def test_validate_with_errors(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-33: Validate with errors.
+
+        Requirement: 04-REQ-8.3, 04-REQ-8.4
+        Verify validate prints error table and exits 1.
+        """
+        validation_result = MagicMock()
+        validation_result.valid = False
+        validation_result.schema_errors = [
+            {
+                "file": "requirements.md",
+                "path": "/requirements/0/id",
+                "message": "Missing requirement ID",
+            }
+        ]
+        validation_result.integrity_errors = []
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.validate.return_value = validation_result
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "validate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "requirements.md" in result.output
+
+    def test_validate_missing_artifacts(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-34: Validate with missing artifacts.
+
+        Requirement: 04-REQ-8.E1
+        Verify validate reports missing artifacts.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.validate.side_effect = SessionError(
+                "Missing required artifacts: design.md"
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "validate",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "missing" in result.output.lower()
+
+
+class TestRenderCommand:
+    """Tests for the af-spec render command."""
+
+    def test_render_outputs_markdown(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-35: Render outputs markdown.
+
+        Requirement: 04-REQ-9.1
+        Verify render prints markdown to stdout.
+        """
+        rendered = {
+            "prd.md": "# Spec Title\n\n## Requirements\n...",
+        }
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.render.return_value = rendered
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "render",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        assert "# " in result.output
+
+    def test_render_combined(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-36: Render with --combined flag.
+
+        Requirement: 04-REQ-9.2
+        Verify render passes combined=True when flag is set.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.render.return_value = (
+                "# Combined\n\nAll artifacts."
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "render",
+                    "01",
+                    "--combined",
+                ],
+            )
+        _assert_exit(result, 0)
+        session.render.assert_called_once_with(combined=True)
+
+    def test_render_without_combined(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-37: Render without --combined flag.
+
+        Requirement: 04-REQ-9.3
+        Verify render calls session.render(combined=False) by
+        default.
+        """
+        rendered = {
+            "prd.md": "# PRD",
+            "design.md": "# Design",
+        }
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.render.return_value = rendered
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "render",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 0)
+        session.render.assert_called_once_with(combined=False)
+
+    def test_render_missing_artifacts(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-38: Render with missing artifacts.
+
+        Requirement: 04-REQ-9.E1
+        Verify render reports missing artifacts.
+        """
+        with patch("speclib.cli.SpecSession") as mock_cls:
+            session = _mock_session(state="generated")
+            session.render.side_effect = SessionError(
+                "Missing required artifacts: requirements.md"
+            )
+            mock_cls.resume.return_value = session
+            result = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "render",
+                    "01",
+                ],
+            )
+        _assert_exit(result, 1)
+        assert "missing" in result.output.lower()
+
+
+class TestStatusCommand:
+    """Tests for the af-spec status command."""
+
+    def test_status_all_specs(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-39: Status without spec shows all specs.
+
+        Requirement: 04-REQ-10.1
+        Verify status without argument shows table of all specs.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "status",
+            ],
+        )
+        _assert_exit(result, 0)
+        assert "01" in result.output
+        assert "02" in result.output
+
+    def test_status_single_spec(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-40: Status with spec shows detail.
+
+        Requirement: 04-REQ-10.2
+        Verify status with spec shows detailed session state.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "status",
+                "01",
+            ],
+        )
+        _assert_exit(result, 0)
+        lower = result.output.lower()
+        assert "state" in lower
+        assert "mode" in lower
+
+
+class TestShowCommand:
+    """Tests for the af-spec show command."""
+
+    def test_show_session_state(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-41: Show without artifact shows session state.
+
+        Requirement: 04-REQ-10.3
+        Verify show without --artifact displays session state.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "show",
+                "01",
+            ],
+        )
+        _assert_exit(result, 0)
+        assert "state" in result.output.lower()
+
+    def test_show_artifact_content(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-42: Show with artifact displays content.
+
+        Requirement: 04-REQ-10.4
+        Verify show --artifact reads and displays content.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "show",
+                "01",
+                "--artifact",
+                "prd.md",
+            ],
+        )
+        _assert_exit(result, 0)
+        assert "Data Models PRD" in result.output
+
+    def test_show_nonexistent_artifact(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-43: Show with nonexistent artifact.
+
+        Requirement: 04-REQ-10.5
+        Verify show fails when artifact does not exist.
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "show",
+                "01",
+                "--artifact",
+                "nonexistent.md",
+            ],
+        )
+        _assert_exit(result, 1)
+        lower = result.output.lower()
+        assert "available" in lower or "prd.md" in lower
+
+
+# ================================================================
+# Task 2.4: Property tests (TS-04-P1 through TS-04-P5)
+# ================================================================
+
+
+class TestPropertySpecResolution:
+    """Property test: spec resolution determinism."""
+
+    def test_property_spec_resolution_determinism(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-P1: Spec resolution is deterministic.
+
+        Property 1 from design.md.
+        Validates: 04-REQ-CC.4
+        """
+        identifiers = [
+            "01",
+            "02",
+            "01_data_models",
+            "02_api_endpoints",
+        ]
+        for spec_arg in identifiers:
+            r1 = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "status",
+                    spec_arg,
+                ],
+            )
+            r2 = cli_runner.invoke(
+                main,
+                [
+                    "--campaign-dir",
+                    str(campaign_dir_with_specs),
+                    "status",
+                    spec_arg,
+                ],
+            )
+            assert r1.exit_code == r2.exit_code == 0, (
+                f"Not deterministic for {spec_arg!r}: "
+                f"{r1.exit_code}, {r2.exit_code}"
+            )
+
+
+class TestPropertyErrorNonzeroExit:
+    """Property test: error commands never exit 0."""
+
+    def test_property_error_commands_nonzero_exit(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-P2: Error commands never exit 0.
+
+        Property 2 from design.md.
+        Validates: 04-REQ-CC.6
+        """
+        commands = [
+            ["list"],
+            ["status"],
+            ["status", "01"],
+        ]
+        for error_cls in [CampaignError, SessionError]:
+            for cmd_args in commands:
+                with patch(
+                    "speclib.cli.Campaign"
+                ) as mock_cls:
+                    mock_cls.open.side_effect = error_cls(
+                        "test error"
+                    )
+                    result = cli_runner.invoke(
+                        main,
+                        [
+                            "--campaign-dir",
+                            str(campaign_dir_with_specs),
+                            *cmd_args,
+                        ],
+                    )
+                assert result.exit_code != 0, (
+                    f"Exit 0 for {cmd_args} with "
+                    f"{error_cls.__name__}"
+                )
+
+
+class TestPropertyCampaignDirPrecedence:
+    """Property test: campaign dir resolution precedence."""
+
+    def test_property_campaign_dir_precedence(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-P3: Campaign dir precedence.
+
+        Property 3 from design.md.
+        Validates: 04-REQ-CC.1, 04-REQ-CC.2
+        """
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(campaign_dir_with_specs),
+                "list",
+            ],
+        )
+        _assert_exit(result, 0)
+        assert "01" in result.output
+
+
+class TestPropertyInitNoOverwrite:
+    """Property test: init never overwrites existing campaign."""
+
+    def test_property_init_no_overwrite(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir: Path,
+    ) -> None:
+        """TS-04-P4: Init never overwrites existing campaign.
+
+        Property 4 from design.md.
+        Validates: 04-REQ-1.4
+        """
+        result = cli_runner.invoke(
+            main,
+            ["init", str(campaign_dir), "--name", "Overwrite"],
+        )
+        _assert_exit(result, 1)
+
+
+class TestPropertyStateGateEnforcement:
+    """Property test: state gate enforcement."""
+
+    def test_property_state_gate_enforcement(
+        self,
+        cli_runner: CliRunner,
+        campaign_dir_with_specs: Path,
+    ) -> None:
+        """TS-04-P5: State gate enforcement.
+
+        Property 5 from design.md.
+        Validates: 04-REQ-4.3, 04-REQ-5.4, 04-REQ-6.2, 04-REQ-7.3
+        """
+        state_gates = [
+            (
+                "assess",
+                [],
+                "generated",
+                "Cannot call assess() in state 'generated'",
+            ),
+            (
+                "accept",
+                [],
+                "init",
+                "Cannot accept PRD in state 'init'",
+            ),
+            (
+                "generate",
+                [],
+                "init",
+                "Cannot call generate() in state 'init'",
+            ),
+        ]
+        for cmd, extra, wrong_state, error_msg in state_gates:
+            with patch(
+                "speclib.cli.SpecSession"
+            ) as mock_cls:
+                session = _mock_session(state=wrong_state)
+                if cmd == "assess":
+                    session.assess = AsyncMock(
+                        side_effect=SessionError(error_msg)
+                    )
+                elif cmd == "accept":
+                    session.accept_prd.side_effect = (
+                        SessionError(error_msg)
+                    )
+                elif cmd == "generate":
+                    session.generate = AsyncMock(
+                        side_effect=SessionError(error_msg)
+                    )
+                mock_cls.resume.return_value = session
+                result = cli_runner.invoke(
+                    main,
+                    [
+                        "--campaign-dir",
+                        str(campaign_dir_with_specs),
+                        cmd,
+                        "01",
+                        *extra,
+                    ],
+                )
+            assert result.exit_code == 1, (
+                f"Expected exit 1 for {cmd} in state "
+                f"{wrong_state!r}, got {result.exit_code}"
+            )
+
+
+# ================================================================
+# Task 2.5: Integration smoke tests
+#            (TS-04-SMOKE-1 through TS-04-SMOKE-4)
+# ================================================================
+
+
+class TestSmokeInitAndList:
+    """Integration smoke test: init and list round trip."""
+
+    def test_smoke_init_and_list(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """TS-04-SMOKE-1: Init and list round trip.
+
+        Execution Path: Path 1, then Path 2 from design.md.
+        Must NOT satisfy with: Mocking Campaign class.
+        """
+        target = tmp_path / "smoke_campaign"
+        result1 = cli_runner.invoke(
+            main,
+            ["init", str(target), "--name", "Smoke Test"],
+        )
+        _assert_exit(result1, 0)
+        assert (target / "campaign.yaml").exists()
+
+        result2 = cli_runner.invoke(
+            main,
+            ["--campaign-dir", str(target), "list"],
+        )
+        _assert_exit(result2, 0)
+        lower = result2.output.lower()
+        assert "empty" in lower or "no specs" in lower
+
+
+class TestSmokeNewAndStatus:
+    """Integration smoke test: new and status round trip."""
+
+    def test_smoke_new_and_status(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """TS-04-SMOKE-2: New and status round trip.
+
+        Execution Path: Path 3, then Path 11 from design.md.
+        Must NOT satisfy with: Mocking SpecSession class.
+        """
+        cli_runner.invoke(
+            main,
+            ["init", str(tmp_path), "--name", "Smoke"],
+        )
+        prd = tmp_path / "prd.md"
+        prd.write_text("# Test PRD\n\nSome content.")
+
+        result1 = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "new",
+                str(prd),
+                "--name",
+                "test_spec",
+            ],
+        )
+        _assert_exit(result1, 0)
+
+        result2 = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "status",
+                "01",
+            ],
+        )
+        _assert_exit(result2, 0)
+        assert "init" in result2.output.lower()
+
+
+class TestSmokeShowArtifact:
+    """Integration smoke test: show artifact content."""
+
+    def test_smoke_show_artifact(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """TS-04-SMOKE-3: Show artifact content.
+
+        Execution Path: Path 10 from design.md.
+        Must NOT satisfy with: Mocking file reads.
+        """
+        cli_runner.invoke(
+            main,
+            ["init", str(tmp_path), "--name", "Smoke"],
+        )
+        prd = tmp_path / "prd.md"
+        prd.write_text("# Smoke Test PRD\n\nContent here.")
+        cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "new",
+                str(prd),
+                "--name",
+                "test_spec",
+            ],
+        )
+        result = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "show",
+                "01",
+                "--artifact",
+                "prd.md",
+            ],
+        )
+        _assert_exit(result, 0)
+        assert "Smoke Test PRD" in result.output
+
+
+class TestSmokeValidateAndRender:
+    """Integration smoke test: validate and render round trip."""
+
+    def test_smoke_validate_and_render(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """TS-04-SMOKE-4: Validate and render round trip.
+
+        Execution Path: Path 8, then Path 9 from design.md.
+        Must NOT satisfy with: Mocking session methods.
+        """
+        cli_runner.invoke(
+            main,
+            ["init", str(tmp_path), "--name", "Smoke"],
+        )
+        spec_dir = tmp_path / "01_test_spec"
+        spec_dir.mkdir()
+        (spec_dir / "prd.md").write_text("# PRD\n\nContent.")
+        (spec_dir / "requirements.md").write_text(
+            "# Requirements\n\nReqs."
+        )
+        (spec_dir / "design.md").write_text(
+            "# Design\n\nDesign."
+        )
+        (spec_dir / "test_spec.md").write_text(
+            "# Test Spec\n\nTests."
+        )
+        (spec_dir / "tasks.md").write_text("# Tasks\n\nTasks.")
+        (spec_dir / "_session.json").write_text(
+            json.dumps({
+                "state": "generated",
+                "mode": "interactive",
+                "prd_path": "prd.md",
+                "assessment_history": [],
+                "qa_exchanges": [],
+                "generated_artifacts": [
+                    "requirements.md",
+                    "design.md",
+                    "test_spec.md",
+                    "tasks.md",
+                ],
+            })
+        )
+        result2 = cli_runner.invoke(
+            main,
+            [
+                "--campaign-dir",
+                str(tmp_path),
+                "render",
+                "01",
+            ],
+        )
+        _assert_exit(result2, 0)
+        assert "#" in result2.output

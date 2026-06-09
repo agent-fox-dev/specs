@@ -67,8 +67,8 @@ wiring verification.
     - [x] All spec tests FAIL (red) — CLI commands are stubs
     - [x] No linter warnings introduced: `uv run ruff check tests/test_cli.py`
 
-- [ ] 2. Write failing spec tests — command and integration tests
-  - [ ] 2.1 Translate spec new command tests
+- [x] 2. Write failing spec tests — command and integration tests
+  - [x] 2.1 Translate spec new command tests
     - `test_new_creates_spec` (TS-04-11)
     - `test_new_explicit_name` (TS-04-12)
     - `test_new_derives_name` (TS-04-13)
@@ -77,7 +77,7 @@ wiring verification.
     - `test_new_invalid_name` (TS-04-16)
     - _Test Spec: TS-04-11 through TS-04-16_
 
-  - [ ] 2.2 Translate assess and refine command tests
+  - [x] 2.2 Translate assess and refine command tests
     - `test_assess_runs_and_prints` (TS-04-17)
     - `test_assess_output_formatting` (TS-04-18)
     - `test_assess_wrong_state` (TS-04-19)
@@ -90,7 +90,7 @@ wiring verification.
     - `test_refine_invalid_schema` (TS-04-26)
     - _Test Spec: TS-04-17 through TS-04-26_
 
-  - [ ] 2.3 Translate accept, generate, validate, render, show, status tests
+  - [x] 2.3 Translate accept, generate, validate, render, show, status tests
     - `test_accept_transitions_state` (TS-04-27)
     - `test_accept_wrong_state` (TS-04-28)
     - `test_generate_runs_and_prints` (TS-04-29)
@@ -110,7 +110,7 @@ wiring verification.
     - `test_show_nonexistent_artifact` (TS-04-43)
     - _Test Spec: TS-04-27 through TS-04-43_
 
-  - [ ] 2.4 Translate property tests
+  - [x] 2.4 Translate property tests
     - `test_property_spec_resolution_determinism` (TS-04-P1)
     - `test_property_error_commands_nonzero_exit` (TS-04-P2)
     - `test_property_campaign_dir_precedence` (TS-04-P3)
@@ -118,17 +118,17 @@ wiring verification.
     - `test_property_state_gate_enforcement` (TS-04-P5)
     - _Test Spec: TS-04-P1 through TS-04-P5_
 
-  - [ ] 2.5 Write integration smoke tests
+  - [x] 2.5 Write integration smoke tests
     - `test_smoke_init_and_list` (TS-04-SMOKE-1)
     - `test_smoke_new_and_status` (TS-04-SMOKE-2)
     - `test_smoke_show_artifact` (TS-04-SMOKE-3)
     - `test_smoke_validate_and_render` (TS-04-SMOKE-4)
     - _Test Spec: TS-04-SMOKE-1 through TS-04-SMOKE-4_
 
-  - [ ] 2.V Verify task group 2
-    - [ ] All command and integration spec tests exist and are syntactically valid
-    - [ ] All spec tests FAIL (red) — CLI commands are stubs
-    - [ ] No linter warnings introduced: `uv run ruff check tests/test_cli.py`
+  - [x] 2.V Verify task group 2
+    - [x] All command and integration spec tests exist and are syntactically valid
+    - [x] All spec tests FAIL (red) — CLI commands are stubs
+    - [x] No linter warnings introduced: `uv run ruff check tests/test_cli.py`
 
 - [ ] 3. Implement CLI shared infrastructure
   - [ ] 3.1 Implement main Click group and context
