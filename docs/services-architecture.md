@@ -42,9 +42,10 @@ layer (containers, worktrees, adapters, agent lifecycle) is specified in
 
 The hub is the coordination service. It owns:
 
-- **Spec store.** Persists spec artifacts on the filesystem. Serves reads to
-  the MCP bridge and the CLI. Accepts writes (JSON Patch) from the CLI during
-  `draft`. Enforces the freeze on `active` specs.
+- **Spec store.** Reads spec artifacts from the filesystem (written by
+  speclib via `af-spec` or the Planner). Serves reads to the MCP bridge
+  and the CLI. Enforces the access gate: only `active` or later specs are
+  served.
 - **Context store.** Persists Context metadata, source descriptors,
   instructions, and revisions. Serves Context reads to the MCP bridge.
   Accepts Context edits from the CLI (Operator actions).
@@ -147,21 +148,18 @@ Commands mirror the Operator-facing API (see
 [coordination-layer.md §10.1](coordination-layer.md#101-operator-facing-api)):
 
 ```
-af workspace create [--origin <path|url>] [--context <id>...] [--campaign <id>]
-af workspace list [--status <status>] [--campaign <id>]
+af workspace create --campaign <slug> --spec <slug> [--origin <path|url>] [--context <id>...]
+af workspace list [--status <status>] [--campaign <slug>]
 af workspace get <id>
 af workspace archive <id>
 af workspace reopen <id>
 af workspace delete <id>
 
-af spec create <workspace-id>
-af spec author <workspace-id> <spec-id> --patch <file>
-af spec approve <workspace-id> <spec-id>
-af spec seal <workspace-id> <spec-id>
-af spec supersede <workspace-id> <spec-id> --new-spec <new-id>
-af spec show <workspace-id> <spec-id> [--artifact <name>] [--rendered]
-af spec validate <workspace-id> <spec-id>
-af spec coverage <workspace-id> <spec-id>
+af spec show <campaign>/<spec> [--artifact <name>] [--rendered]
+af spec validate <campaign>/<spec>
+af spec coverage <campaign>/<spec>
+af spec seal <campaign>/<spec>
+af spec supersede <campaign>/<spec> --new-spec <campaign>/<new-spec>
 
 af context create --name <name> --instruction <text>
 af context list
@@ -171,7 +169,8 @@ af context source remove <context-id> <source-id>
 af context attach <workspace-id> <context-id> [--pin-mode <pinned|live>]
 af context detach <workspace-id> <context-id>
 
-af run start <workspace-id> <spec-id>
+af run start <workspace-id>
+af run start-planner <workspace-id>
 af run start-ralph <workspace-id> --goal <text> --verifier <command>
 af run list <workspace-id>
 af run get <run-id>
@@ -184,9 +183,10 @@ af agent logs <agent-id> [--follow]
 af agent message <agent-id> <text>
 
 af campaign create --goal <file>
-af campaign register <campaign-id> <workspace-id> [--depends-on <spec:group>...]
-af campaign status <campaign-id>
-af campaign abandon <campaign-id>
+af campaign list
+af campaign register <campaign-slug> <spec-slug> [--depends-on <spec:group>...]
+af campaign status <campaign-slug>
+af campaign abandon <campaign-slug>
 
 af activity <workspace-id> [--run <id>] [--agent <id>] [--type <type>...] [--follow]
 
@@ -195,23 +195,22 @@ af hub stop
 af hub status
 ```
 
-### 3.3 PRD authoring
+Spec authoring commands (`init`, `draft`, `generate`, `approve`) are in the
+standalone `af-spec` CLI (§7), not here. The `af` CLI operates on approved
+specs for lifecycle transitions, reads, and validation.
 
-The CLI supports PRD authoring through two modes:
+### 3.3 Spec authoring
 
-- **Direct edit.** `af spec author` applies a JSON Patch to a spec
-  artifact, validated by the hub. For PRD text, the patch replaces the
-  body content.
-- **Editor integration.** `af spec edit <workspace-id> <spec-id>
-  --artifact prd` opens the artifact in `$EDITOR`. On save, the CLI diffs
-  against the stored version, constructs a patch, and submits it to the
-  hub for validation.
+Two paths to create a spec:
 
-Agent-assisted PRD authoring (see
-[coordination-layer.md §8.1](coordination-layer.md#81-the-generic-spec-driven-flow),
-phase 3) works by starting a temporary agent with a drafting template,
-feeding it the Operator's brief and attached Contexts, and writing the
-agent's output through the normal authoring API.
+- **Standalone path.** The Operator uses the `af-spec` CLI (§7) or the
+  agent skill to author and approve a spec. No hub required. This is the
+  primary authoring workflow.
+- **Harness-mediated path.** The Operator starts a Planner run via
+  `af run start-planner`. The Planner uses speclib to draft the spec
+  within the harness, grounded in attached Contexts. The Operator reviews
+  and approves through the harness. See
+  [coordination-layer.md §8.1](coordination-layer.md#81-the-generic-spec-driven-flow).
 
 ---
 
@@ -321,7 +320,99 @@ memory:
 
 ---
 
-## 7. Storage layout
+## 7. The spec creation tool
+
+The spec creation tool is a standalone component for authoring spec packages.
+It consists of three parts: a shared library, a CLI, and an agent skill. It
+works independently of the harness — no hub required.
+
+### 7.1 speclib
+
+The core library. Implements the [Spec Format Specification](../spec-format_v1.2.md):
+creates, validates, renders, and manages spec packages on the filesystem.
+speclib is the single implementation shared by:
+
+- the `af-spec` CLI (standalone authoring),
+- the Planner specialist inside the harness (harness-mediated authoring),
+- the harness itself (validation, rendering, and prompt assembly at execution time).
+
+Key operations:
+
+- **Bootstrap** — create the four required artifacts sequentially, deferring
+  cross-artifact validation until all four exist.
+- **Patch** — apply RFC 6902 JSON Patches to artifacts, validated against
+  schema and cross-file integrity rules on every write.
+- **Repair** — auto-fix near-miss structural errors before the commit gate;
+  surface anything less than obvious as a proposed patch.
+- **Validate** — run schema validation and cross-file integrity checks.
+  Standalone `validate()` for CI and pre-commit hooks.
+- **Render** — deterministic markdown rendering, per-file or combined view.
+- **Lifecycle** — enforce the state machine (`draft → active → sealed /
+  superseded`), hash the Intent section at `draft → active`, verify the
+  hash on every load.
+
+speclib reads and writes directly to the spec store filesystem:
+`<data_dir>/specs/<campaign-slug>/<spec-slug>/`.
+
+### 7.2 af-spec CLI
+
+A separate binary wrapping speclib. Does not require the hub to be running.
+
+```
+af-spec init <campaign> <spec-name>       # create campaign dir (if new) + scaffold spec
+af-spec draft <campaign>/<spec> [--prd <file>]  # author/refine the PRD ($EDITOR or file)
+af-spec generate <campaign>/<spec>        # generate JSON artifacts from the PRD
+af-spec validate <campaign>/<spec>        # run schema + cross-file integrity checks
+af-spec approve <campaign>/<spec>         # draft → active; hash Intent; freeze
+af-spec render <campaign>/<spec> [--combined]   # render markdown view
+af-spec list [<campaign>]                 # list campaigns or specs within a campaign
+af-spec show <campaign>/<spec> [--artifact <name>]  # display an artifact
+```
+
+`af-spec init` creates the campaign directory and `campaign.yaml` if the
+campaign does not yet exist, then scaffolds the spec directory with empty
+artifact files in bootstrap mode.
+
+`af-spec generate` is the one-shot path: given a PRD, it uses an LLM
+(configured via `AF_SPEC_PROVIDER` or `~/.af/settings.yaml`) to generate
+`requirements.json`, `test_spec.json`, and `tasks.json` in a single pass.
+The generated artifacts are validated before being written.
+
+### 7.3 Spec skill
+
+An agent skill that exposes speclib capabilities to agent CLIs (Claude Code,
+Gemini CLI, etc.). Two modes:
+
+- **Interactive.** The user and agent refine the PRD conversationally. The
+  agent asks clarifying questions, proposes goals and non-goals, and
+  iterates on the narrative until the user is satisfied. Once the PRD is
+  approved, the agent generates the JSON artifacts via speclib and presents
+  the rendered spec for review.
+
+- **One-shot.** The agent receives a PRD (as a file path or inline text)
+  and generates the full spec package via speclib without further
+  interaction. The user reviews the output and approves or requests
+  changes.
+
+The skill invokes `af-spec` commands under the hood. It does not require the
+hub to be running.
+
+### 7.4 Relationship to the harness
+
+The harness is a consumer of speclib, not its owner:
+
+- The **Planner specialist** uses speclib to author specs within a
+  harness-mediated workflow. This is the alternative to standalone authoring
+  for Operators who prefer the hub-integrated path.
+- The **hub** uses speclib at execution time for spec validation, rendering,
+  and prompt assembly. It reads from the same filesystem store that
+  `af-spec` writes to.
+- Only specs in `active` status or later are served by the harness API.
+  Draft specs are invisible to the harness.
+
+---
+
+## 8. Storage layout
 
 Configuration and data are stored in separate directory trees.
 
@@ -332,7 +423,7 @@ Configuration and data are stored in separate directory trees.
   `AF_DATA_DIR` env var → `data_dir` key in `~/.af/settings.yaml` →
   default `~/.local/share/af/`.
 
-### 7.1 Filesystem layout
+### 8.1 Filesystem layout
 
 ```
 ~/.af/                             # Config directory (global configuration)
@@ -341,16 +432,17 @@ Configuration and data are stored in separate directory trees.
 <data_dir>/                        # Data directory (default: ~/.local/share/af/)
   hub.sock                         # CLI-to-hub Unix socket
   af.db                            # SQLite database (operational + Context stores)
-  specs/                           # Spec store
-    <workspace-id>/
-      <spec-id>/
+  specs/                           # Spec store (campaign/spec hierarchy)
+    <campaign-slug>/
+      campaign.yaml                # Campaign metadata (goal, shared contexts)
+      <spec-slug>/
         prd.md
         requirements.json
         test_spec.json
         tasks.json
         architecture.md            # optional
       archive/                     # superseded and archived specs
-        <spec-id>/
+        <spec-slug>/
           ...
   templates/                       # Global templates
     planner/
@@ -362,7 +454,7 @@ Configuration and data are stored in separate directory trees.
   # Location: <repo-parent>/.af_worktrees/<workspace-id>/
 ```
 
-### 7.2 Database schema (SQLite)
+### 8.2 Database schema (SQLite)
 
 The operational store tables map directly to the entities in
 [coordination-layer.md §9.3](coordination-layer.md#93-operational-store):
@@ -410,7 +502,7 @@ Memory tables (embedded mode only):
   revision, confidence, recorded_at
 - `learning_embeddings` — learning_id, embedding (blob)
 
-### 7.3 Backup and portability
+### 8.3 Backup and portability
 
 Harness state is split between the config directory (`~/.af/`) and the data
 directory (`<data_dir>`). Backup requires copying both:
@@ -421,9 +513,9 @@ machine's `~/.af/settings.yaml`.
 
 ---
 
-## 8. Communication protocols
+## 9. Communication protocols
 
-### 8.1 CLI ↔ Hub
+### 9.1 CLI ↔ Hub
 
 HTTP/JSON over Unix domain socket. The CLI sends requests; the hub
 responds. For streaming operations (activity follow, agent logs), the hub
@@ -432,7 +524,7 @@ uses server-sent events (SSE) over the same connection.
 The socket path is `<data_dir>/hub.sock` by default, overridable via
 `AF_HUB_SOCK` or `--hub-sock`.
 
-### 8.2 MCP bridge ↔ Hub
+### 9.2 MCP bridge ↔ Hub
 
 gRPC over TCP. The bridge is the client; the hub is the server. Each RPC
 includes the agent token in metadata for authentication and scoping.
@@ -484,12 +576,12 @@ service AfBridge {
 }
 ```
 
-### 8.3 Hub ↔ Runtime engine
+### 9.3 Hub ↔ Runtime engine
 
 In-process function calls. The runtime engine is a Go library (or equivalent)
 linked into the hub binary. No IPC.
 
-### 8.4 Hub ↔ Memory service (external mode)
+### 9.4 Hub ↔ Memory service (external mode)
 
 gRPC over TCP. The hub is the client; the memory service is the server.
 Uses the `AgentMemory` interface from
@@ -498,7 +590,7 @@ translated to protobuf.
 
 ---
 
-## 9. Security and isolation
+## 10. Security and isolation
 
 ### 9.1 Agent identity
 
@@ -533,7 +625,7 @@ is localhost-only by default. No authentication is needed for the CLI socket
 
 ---
 
-## 10. Deployment modes
+## 11. Deployment modes
 
 ### 10.1 Local (default)
 
@@ -556,7 +648,7 @@ registry (analogous to Scion's Hub). Out of scope for this document.
 
 ---
 
-## 11. Context retrieval engine
+## 12. Context retrieval engine
 
 ### 11.1 Purpose
 
@@ -654,7 +746,7 @@ maintained over the embeddings for search.
 
 ---
 
-## 12. CI/CD bridge
+## 13. CI/CD bridge
 
 ### 12.1 Purpose
 
@@ -705,7 +797,7 @@ configuration.
 
 ---
 
-## 13. Notification service
+## 14. Notification service
 
 ### 13.1 Purpose
 
@@ -809,7 +901,7 @@ notifications:
 
 ---
 
-## 14. Web dashboard
+## 15. Web dashboard
 
 ### 14.1 Purpose
 
@@ -861,7 +953,7 @@ later, it routes through the same API.
 
 ---
 
-## 15. Deferred
+## 16. Deferred
 
 One component remains architecturally anticipated but not specified:
 
