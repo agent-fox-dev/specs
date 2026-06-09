@@ -624,27 +624,3 @@ env:
 
 Global settings are the defaults. Per-workspace overrides take precedence.
 Inline overrides at agent creation time take highest precedence.
-
----
-
-## 12. Relationship to the Scion mapping
-
-This runtime layer replaces the option of adopting Scion wholesale. The
-mapping document (`scion-runtime-mapping.md`) remains valid as a
-reference for design decisions and as documentation of why we chose to build
-our own thin runtime rather than depend on an external project.
-
-Key decisions that diverge from "adopt Scion":
-
-- **No Hub or Runtime Broker.** We build for local and single-machine use.
-  Remote execution and multi-user collaboration remain non-goals.
-- **No agent-to-agent messaging.** Coordination is through the shared store,
-  not inter-agent messages.
-- **Thinner agent state model.** We adopt Scion's Phase × Activity pattern
-  but with fewer states, since our coordination layer handles the
-  higher-level orchestration state.
-- **Our own harness adapters.** We implement the same set of providers
-  but with adapters shaped to our needs.
-- **The af MCP bridge.** Scion has no equivalent. This is our key
-  architectural addition: the sidecar that connects the opaque harness to
-  the coordination layer's tools and state.
