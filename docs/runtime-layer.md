@@ -399,7 +399,7 @@ services:
 ### 6.3 Template resolution
 
 Templates are resolved in order: project-level (`.af/templates/`)
-overrides global (`~/.af/templates/`), which overrides built-in defaults.
+overrides global (`<data_dir>/templates/`), which overrides built-in defaults.
 The coordination layer can also pass inline configuration at agent creation
 time, which overrides the template.
 
@@ -593,6 +593,8 @@ over the network.
 
 ```yaml
 # ~/.af/settings.yaml
+data_dir: ~/.local/share/af   # default; override with AF_DATA_DIR env var
+
 runtime:
   backend: podman              # podman | kubernetes
   image: af/agent:latest    # default base image

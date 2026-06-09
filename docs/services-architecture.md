@@ -80,7 +80,7 @@ needs it) and runs until explicitly stopped or until the machine shuts down.
 
 It listens on two interfaces:
 
-- **CLI socket.** A Unix domain socket (default `~/.af/hub.sock`) for
+- **CLI socket.** A Unix domain socket (default `<data_dir>/hub.sock`) for
   CLI-to-hub communication. HTTP/JSON over the socket. Local only; no
   network exposure.
 - **Bridge port.** A TCP port (default `localhost:7400`) for MCP bridge
@@ -91,11 +91,14 @@ It listens on two interfaces:
 ### 2.3 Startup and shutdown
 
 **Startup:**
-1. Open or create the SQLite database (`~/.af/af.db`).
-2. Run schema migrations if needed.
-3. Verify the spec store directory exists (`~/.af/specs/`).
-4. Start listening on the CLI socket and bridge port.
-5. Recover in-flight runs: re-evaluate workspace and agent state against the
+1. Resolve the data directory: `AF_DATA_DIR` env var, then `data_dir` in
+   `~/.af/settings.yaml`, then the default `~/.local/share/af/`. Create it
+   if it does not exist.
+2. Open or create the SQLite database (`<data_dir>/af.db`).
+3. Run schema migrations if needed.
+4. Verify the spec store directory exists (`<data_dir>/specs/`).
+5. Start listening on the CLI socket and bridge port.
+6. Recover in-flight runs: re-evaluate workspace and agent state against the
    runtime engine. Agents that were running when the hub last stopped are
    detected via the container runtime (containers may still be alive) and
    their state is reconciled.
@@ -320,25 +323,36 @@ memory:
 
 ## 7. Storage layout
 
+Configuration and data are stored in separate directory trees.
+
+- **Config directory** (`~/.af/`) — global configuration only. Contains
+  `settings.yaml` and nothing else that changes at runtime.
+- **Data directory** (`<data_dir>`) — all runtime artifacts: the SQLite
+  database, spec store, templates, and the hub socket. Resolved in order:
+  `AF_DATA_DIR` env var → `data_dir` key in `~/.af/settings.yaml` →
+  default `~/.local/share/af/`.
+
 ### 7.1 Filesystem layout
 
 ```
-~/.af/
-  hub.sock                  # CLI-to-hub Unix socket
-  af.db                     # SQLite database (operational + Context stores)
-  settings.yaml                # Global configuration
-  specs/                       # Spec store
+~/.af/                             # Config directory (global configuration)
+  settings.yaml                    # Global configuration
+
+<data_dir>/                        # Data directory (default: ~/.local/share/af/)
+  hub.sock                         # CLI-to-hub Unix socket
+  af.db                            # SQLite database (operational + Context stores)
+  specs/                           # Spec store
     <workspace-id>/
       <spec-id>/
         prd.md
         requirements.json
         test_spec.json
         tasks.json
-        architecture.md        # optional
-      archive/                 # superseded and archived specs
+        architecture.md            # optional
+      archive/                     # superseded and archived specs
         <spec-id>/
           ...
-  templates/                   # Global templates
+  templates/                       # Global templates
     planner/
     coordinator/
     implementor/
@@ -398,10 +412,12 @@ Memory tables (embedded mode only):
 
 ### 7.3 Backup and portability
 
-The entire harness state is in `~/.af/`: one SQLite file, one specs
-directory, and configuration. Backup is `cp -r ~/.af/ <backup-path>`.
-Moving to a new machine is the same copy plus re-creating worktrees (which
-are tied to the local git repo path).
+Harness state is split between the config directory (`~/.af/`) and the data
+directory (`<data_dir>`). Backup requires copying both:
+`cp -r ~/.af/ <backup>/config && cp -r <data_dir> <backup>/data`. Moving
+to a new machine is the same copy plus re-creating worktrees (which are
+tied to the local git repo path) and setting `data_dir` in the new
+machine's `~/.af/settings.yaml`.
 
 ---
 
@@ -413,7 +429,7 @@ HTTP/JSON over Unix domain socket. The CLI sends requests; the hub
 responds. For streaming operations (activity follow, agent logs), the hub
 uses server-sent events (SSE) over the same connection.
 
-The socket path is `~/.af/hub.sock` by default, overridable via
+The socket path is `<data_dir>/hub.sock` by default, overridable via
 `AF_HUB_SOCK` or `--hub-sock`.
 
 ### 8.2 MCP bridge ↔ Hub
