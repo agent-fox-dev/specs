@@ -122,7 +122,7 @@ Groups are ordered so the scaffold exists before tests can import anything.
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings introduced: `uv run ruff check && uv run mypy speclib/`
 
-- [ ] 4. Checkpoint - Scaffold Complete
+- [x] 4. Checkpoint - Scaffold Complete
   - Ensure all tests pass
   - Update `speclib/__init__.py` to export `SpecToolConfig`, `load_config`, `create_client`, `SpeclibError`, `ConfigError`
   - Update `README.md` with installation instructions (uv-only) and configuration docs
