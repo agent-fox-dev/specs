@@ -474,9 +474,7 @@ class TestPropertyPartialArtifacts:
             ),
         ):
             with pytest.raises(AgentError):
-                asyncio.get_event_loop().run_until_complete(
-                    session.generate()
-                )
+                asyncio.run(session.generate())
 
         # Artifacts before failure point should exist on disk
         # (written incrementally by the session during generation)

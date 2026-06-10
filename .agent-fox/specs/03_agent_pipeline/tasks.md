@@ -185,8 +185,8 @@ These must be implemented before task group 3 of this spec.
     - [x] All existing tests still pass: `uv run pytest -q`
     - [x] No linter warnings: `uv run ruff check && uv run mypy speclib/agent.py`
 
-- [ ] 7. Wire agent into SpecSession
-  - [ ] 7.1 Implement SpecSession.assess()
+- [x] 7. Wire agent into SpecSession
+  - [x] 7.1 Implement SpecSession.assess()
     - Create SpecAgent via create_client()
     - Call assess_prd() with PRD text from prd.md
     - Persist Assessment to _session.json (append to assessment_history)
@@ -194,7 +194,7 @@ These must be implemented before task group 3 of this spec.
     - On AgentError: do not transition, persist error, re-raise
     - _Requirements: 03-REQ-6.1, 03-REQ-6.4, 03-REQ-6.5_
 
-  - [ ] 7.2 Implement SpecSession.refine()
+  - [x] 7.2 Implement SpecSession.refine()
     - Create SpecAgent via create_client()
     - Call refine_prd() with PRD text, answers, and last Assessment
     - Update prd.md with returned text
@@ -203,7 +203,7 @@ These must be implemented before task group 3 of this spec.
     - On AgentError: do not transition, persist error, re-raise
     - _Requirements: 03-REQ-6.2, 03-REQ-6.4, 03-REQ-6.5_
 
-  - [ ] 7.3 Implement SpecSession.generate()
+  - [x] 7.3 Implement SpecSession.generate()
     - Create SpecAgent via create_client()
     - Detect existing artifacts (for resume after partial failure)
     - Call generate_artifacts() (or partial generation for missing ones)
@@ -213,12 +213,12 @@ These must be implemented before task group 3 of this spec.
     - On AgentError: keep partial artifacts, stay in "generating", re-raise
     - _Requirements: 03-REQ-6.3, 03-REQ-6.4, 03-REQ-6.E1, 03-REQ-6.E2_
 
-  - [ ] 7.V Verify task group 7
-    - [ ] Session integration tests pass: `uv run pytest -q tests/test_session_agent.py`
-    - [ ] Edge case tests pass: `uv run pytest -q tests/test_session_agent.py -k edge`
-    - [ ] Property tests pass: `uv run pytest -q tests/ -k property`
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check && uv run mypy speclib/`
+  - [x] 7.V Verify task group 7
+    - [x] Session integration tests pass: `uv run pytest -q tests/test_session_agent.py`
+    - [x] Edge case tests pass: `uv run pytest -q tests/test_session_agent.py -k edge`
+    - [x] Property tests pass: `uv run pytest -q tests/ -k property`
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check && uv run mypy speclib/`
 
 - [ ] 8. Wiring verification
 

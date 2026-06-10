@@ -10,9 +10,10 @@ Requirements: 03-REQ-4.1, 03-REQ-4.2, 03-REQ-4.3, 03-REQ-4.E1
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from speclib.session import Assessment
+if TYPE_CHECKING:
+    from speclib.session import Assessment
 
 # ── helpers ──────────────────────────────────────────────────────────
 

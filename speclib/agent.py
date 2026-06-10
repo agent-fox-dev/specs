@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anthropic import (
     APIConnectionError,
@@ -29,8 +29,10 @@ from speclib.prompts import (
     refinement_system_prompt,
     refinement_user_prompt,
 )
-from speclib.session import Assessment, Question
 from speclib.tools import artifact_tool, assessment_tools, refinement_tools
+
+if TYPE_CHECKING:
+    from speclib.session import Assessment
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +174,9 @@ class SpecAgent:
         prd_text: str,
         spec_id: str,
         spec_name: str,
+        *,
+        existing_artifacts: dict[str, Any] | None = None,
+        on_artifact: Any = None,
     ) -> dict[str, Any]:
         """Generate requirements, test_spec, and tasks content.
 
@@ -185,6 +190,13 @@ class SpecAgent:
             prd_text: The accepted PRD markdown text.
             spec_id: The spec identifier.
             spec_name: The spec name.
+            existing_artifacts: Optional dict of previously generated
+                artifacts to skip re-generation.  Used for resuming
+                after partial failures.
+            on_artifact: Optional callback called with
+                ``(artifact_name, content)`` after each artifact is
+                generated and validated.  Used for incremental disk
+                writes.
 
         Returns:
             A dict mapping artifact name (``"requirements"``,
@@ -200,11 +212,17 @@ class SpecAgent:
             raise AgentError("PRD text must not be empty")
 
         artifact_names = ["requirements", "test_spec", "tasks"]
-        results: dict[str, Any] = {}
+        results: dict[str, Any] = (
+            dict(existing_artifacts) if existing_artifacts else {}
+        )
 
         system = generation_system_prompt()
 
         for artifact_name in artifact_names:
+            # Skip already-generated artifacts (03-REQ-6.E2 resume)
+            if artifact_name in results:
+                continue
+
             # Build prompt with prior artifacts as context (03-REQ-3.6, 3.7)
             prior = results if results else None
             user_msg = generation_user_prompt(
@@ -233,6 +251,9 @@ class SpecAgent:
                 ) from exc
 
             results[artifact_name] = content
+
+            if on_artifact is not None:
+                on_artifact(artifact_name, content)
 
         return results
 
@@ -373,6 +394,8 @@ class SpecAgent:
         Raises:
             AgentError: If required fields are missing or invalid.
         """
+        from speclib.session import Assessment, Question  # lazy: avoid circular import
+
         # Validate quality enum (03-REQ-1.2)
         valid_qualities = {"ready", "needs_refinement", "incomplete"}
         quality = tool_input.get("quality")

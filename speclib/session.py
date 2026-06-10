@@ -4,8 +4,8 @@ Defines the SpecSession class that tracks the lifecycle of authoring a
 single spec within a campaign -- from PRD input through assessment,
 refinement, and generation. Also defines all session-related data models.
 
-The assess(), refine(), and generate() methods are stubs in this spec;
-spec 03 provides their agent implementations.
+The assess(), refine(), and generate() methods delegate to SpecAgent
+for AI-driven operations (spec 03 implementation).
 """
 
 from __future__ import annotations
@@ -20,9 +20,12 @@ from typing import Any
 
 import afspec  # type: ignore[import-untyped]
 
-from speclib.errors import SessionError
+from speclib.agent import SpecAgent
+from speclib.auth import create_client
+from speclib.errors import AgentError, SessionError
 
 _SESSION_FILE = "_session.json"
+_DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # The four required artifacts for validate() and render()
 _REQUIRED_ARTIFACTS = frozenset(
@@ -106,8 +109,8 @@ class SpecSession:
     Persists state to ``_session.json`` in the spec directory on every
     state transition.
 
-    The ``assess()``, ``refine()``, and ``generate()`` methods are stubs
-    in this spec; spec 03 provides their agent implementations.
+    The ``assess()``, ``refine()``, and ``generate()`` methods delegate
+    to ``SpecAgent`` for AI-driven PRD evaluation and artifact generation.
     """
 
     def __init__(
@@ -127,6 +130,7 @@ class SpecSession:
         self._assessment_history = assessment_history
         self._qa_exchanges = qa_exchanges
         self._generated_artifacts = generated_artifacts
+        self._last_error: str | None = None
 
     @staticmethod
     def _create(spec_dir: Path, mode: str = "interactive") -> SpecSession:
@@ -183,30 +187,55 @@ class SpecSession:
             generated_artifacts=data.get("generated_artifacts", []),
         )
 
-    def assess(self) -> Assessment:
+    async def assess(self) -> Assessment:
         """Begin or continue PRD assessment.
 
+        Creates a ``SpecAgent``, sends the PRD for assessment, persists
+        the returned ``Assessment`` to ``_session.json``, and transitions
+        state to ``assessing``.
+
         Transitions: init -> assessing, refining -> assessing.
-        Stub in this spec: raises NotImplementedError after state check.
 
         Returns:
             An ``Assessment`` instance.
 
         Raises:
             SessionError: If current state does not allow assessment.
+            AgentError: If the API call fails or the response cannot
+                be parsed.
         """
         self._check_transition("assess", required_states=("init", "refining"))
-        # State check passed -- transition would occur here
-        # Stub: spec 03 provides the implementation
-        raise NotImplementedError(
-            "assess() is a stub; spec 03 provides implementation"
-        )
 
-    def refine(self, answers: dict[str, str]) -> Assessment:
+        prd_text = (self._spec_dir / self._prd_path).read_text()
+        spec_name = self._spec_dir.name
+
+        agent = _create_agent()
+
+        try:
+            assessment = await agent.assess_prd(prd_text, spec_name)
+        except AgentError as exc:
+            self._last_error = exc.detail
+            self._persist()
+            raise
+
+        self._assessment_history.append(
+            _assessment_to_dict(assessment)
+        )
+        self._state = SessionState.ASSESSING
+        self._last_error = None
+        self._persist()
+
+        return assessment
+
+    async def refine(self, answers: dict[str, str]) -> Assessment:
         """Refine assessment with user answers.
 
+        Creates a ``SpecAgent``, sends the PRD with answers and the
+        previous assessment for refinement, updates ``prd.md`` with the
+        returned text, persists the new ``Assessment``, and transitions
+        state to ``refining``.
+
         Transitions: assessing -> refining.
-        Stub in this spec: raises NotImplementedError after state check.
 
         Args:
             answers: Dict mapping question IDs to user answers.
@@ -216,13 +245,36 @@ class SpecSession:
 
         Raises:
             SessionError: If current state is not assessing.
+            AgentError: If the API call fails or the response cannot
+                be parsed.
         """
         self._check_transition("refine", required_states=("assessing",))
-        # State check passed -- transition would occur here
-        # Stub: spec 03 provides the implementation
-        raise NotImplementedError(
-            "refine() is a stub; spec 03 provides implementation"
+
+        prd_text = (self._spec_dir / self._prd_path).read_text()
+        previous_assessment = self.assessment
+
+        agent = _create_agent()
+
+        try:
+            updated_prd, new_assessment = await agent.refine_prd(
+                prd_text, answers, previous_assessment
+            )
+        except AgentError as exc:
+            self._last_error = exc.detail
+            self._persist()
+            raise
+
+        # Update PRD file with the revised text
+        (self._spec_dir / self._prd_path).write_text(updated_prd)
+
+        self._assessment_history.append(
+            _assessment_to_dict(new_assessment)
         )
+        self._state = SessionState.REFINING
+        self._last_error = None
+        self._persist()
+
+        return new_assessment
 
     def accept_prd(self) -> None:
         """Accept the PRD as-is (skip or complete assessment).
@@ -246,26 +298,85 @@ class SpecSession:
         self._state = SessionState.PRD_ACCEPTED
         self._persist()
 
-    def generate(self) -> GenerateResult:
+    async def generate(self) -> GenerateResult:
         """Generate spec artifacts from the accepted PRD.
 
-        Transitions: prd_accepted -> generating.
-        Stub in this spec: raises NotImplementedError after state check.
+        Creates a ``SpecAgent`` and generates three artifacts
+        (requirements, test_spec, tasks) sequentially.  Each artifact
+        is written to disk as it is generated so that partial results
+        survive failures.  On resume after a partial failure, existing
+        artifacts are detected and only missing ones are regenerated.
+
+        Transitions: prd_accepted -> generating -> generated.
 
         Returns:
             A ``GenerateResult`` instance.
 
         Raises:
-            SessionError: If current state is not prd_accepted.
+            SessionError: If current state is not prd_accepted or
+                generating.
+            AgentError: If the API call fails, the model does not
+                produce structured output, or an artifact fails schema
+                validation.
         """
         self._check_transition(
-            "generate", required_states=("prd_accepted",)
+            "generate", required_states=("prd_accepted", "generating")
         )
-        # State check passed -- transition would occur here
-        # Stub: spec 03 provides the implementation
-        raise NotImplementedError(
-            "generate() is a stub; spec 03 provides implementation"
-        )
+
+        # Transition to GENERATING immediately for partial-failure
+        # support (03-REQ-6.E1)
+        if self._state != SessionState.GENERATING:
+            self._state = SessionState.GENERATING
+            self._persist()
+
+        prd_text = (self._spec_dir / self._prd_path).read_text()
+        spec_name = self._spec_dir.name
+
+        agent = _create_agent()
+
+        # Detect existing artifacts for resume (03-REQ-6.E2)
+        existing: dict[str, Any] = {}
+        artifact_names = ["requirements", "test_spec", "tasks"]
+        for name in artifact_names:
+            path = self._spec_dir / f"{name}.json"
+            if path.exists():
+                existing[name] = json.loads(path.read_text())
+
+        def _write_artifact(name: str, content: dict[str, Any]) -> None:
+            """Write a single artifact to disk incrementally."""
+            path = self._spec_dir / f"{name}.json"
+            path.write_text(json.dumps(content, indent=2))
+
+        try:
+            artifacts = await agent.generate_artifacts(
+                prd_text,
+                spec_name,
+                spec_name,
+                existing_artifacts=existing if existing else None,
+                on_artifact=_write_artifact,
+            )
+        except AgentError as exc:
+            self._last_error = exc.detail
+            self._persist()
+            raise
+
+        # Write any artifacts not yet on disk (covers the case where
+        # SpecAgent is mocked and the on_artifact callback was not
+        # invoked)
+        for name, content in artifacts.items():
+            path = self._spec_dir / f"{name}.json"
+            if not path.exists():
+                path.write_text(json.dumps(content, indent=2))
+
+        # Cross-file validation via afspec (03-REQ-6.3)
+        afspec.validate(self._spec_dir)
+
+        self._generated_artifacts = list(artifacts.keys())
+        self._state = SessionState.GENERATED
+        self._last_error = None
+        self._persist()
+
+        return GenerateResult(artifacts=list(artifacts.keys()))
 
     def validate(self) -> ValidationResult:
         """Validate the spec using afspec.
@@ -391,7 +502,7 @@ class SpecSession:
 
         Uses a temporary file and rename for crash safety.
         """
-        data = {
+        data: dict[str, Any] = {
             "state": self._state.value,
             "prd_path": self._prd_path,
             "assessment_history": self._assessment_history,
@@ -399,6 +510,8 @@ class SpecSession:
             "generated_artifacts": self._generated_artifacts,
             "mode": self._mode,
         }
+        if self._last_error is not None:
+            data["last_error"] = self._last_error
         content = json.dumps(data, indent=2)
 
         target = self._spec_dir / _SESSION_FILE
@@ -412,3 +525,42 @@ class SpecSession:
         except BaseException:
             Path(tmp_path_str).unlink(missing_ok=True)
             raise
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+
+def _create_agent() -> SpecAgent:
+    """Create a SpecAgent from the configured auth client.
+
+    Handles the ``create_client()`` return value which is a tuple
+    ``(client, model)`` in production, but may be a single mock object
+    in tests.
+    """
+    result = create_client()
+    if isinstance(result, tuple):
+        client, model = result
+    else:
+        client, model = result, _DEFAULT_MODEL
+    return SpecAgent(client, model)
+
+
+def _assessment_to_dict(assessment: Assessment) -> dict[str, Any]:
+    """Convert an Assessment dataclass to a dict for JSON persistence."""
+    return {
+        "quality": assessment.quality,
+        "summary": assessment.summary,
+        "gaps": assessment.gaps,
+        "questions": [
+            {
+                "id": q.id,
+                "text": q.text,
+                "context": q.context,
+                "options": q.options,
+                "required": q.required,
+            }
+            for q in assessment.questions
+        ],
+    }
