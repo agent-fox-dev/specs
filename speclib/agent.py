@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _BASE_DELAY = 1.0  # seconds
 _MAX_CUMULATIVE_WAIT = 30.0  # seconds
+_DEFAULT_MAX_TOKENS = 16384
 
 
 def validate_artifact(artifact_name: str, content: dict[str, Any]) -> None:
@@ -162,9 +163,17 @@ class SpecAgent:
         updated_prd_text: str = prd_update["updated_prd"]
 
         # Extract new assessment (03-REQ-2.E3)
-        assessment_input = self._extract_tool_call(
-            response, "submit_assessment"
-        )
+        # The model may not produce both tool calls in one response
+        # (e.g. if the updated PRD is large). Fall back to a second
+        # API call for the assessment.
+        try:
+            assessment_input = self._extract_tool_call(
+                response, "submit_assessment"
+            )
+        except AgentError:
+            assessment_input = await self._request_assessment(
+                updated_prd_text, system
+            )
         new_assessment = self._parse_assessment(assessment_input)
 
         return updated_prd_text, new_assessment
@@ -259,11 +268,41 @@ class SpecAgent:
 
     # -- internal methods -------------------------------------------------
 
+    async def _request_assessment(
+        self,
+        prd_text: str,
+        system: str | None,
+    ) -> dict[str, Any]:
+        """Make a separate API call to get an assessment of a PRD.
+
+        Used as a fallback when the refinement response did not include
+        the ``submit_assessment`` tool call alongside the PRD update.
+        """
+        logger.debug(
+            "submit_assessment missing from refinement response; "
+            "making a follow-up API call"
+        )
+        messages: list[dict[str, str]] = [
+            {
+                "role": "user",
+                "content": (
+                    "Assess the following PRD and provide your "
+                    "evaluation using the submit_assessment tool."
+                    f"\n\n{prd_text}"
+                ),
+            },
+        ]
+        tools = assessment_tools()
+        response = await self._call_api(messages, tools, system=system)
+        return self._extract_tool_call(response, "submit_assessment")
+
     async def _call_api(
         self,
         messages: list[dict[str, str]],
         tools: list[dict[str, Any]],
         system: str | None = None,
+        *,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
     ) -> Any:
         """Send messages to the Anthropic API with retry logic.
 
@@ -275,6 +314,7 @@ class SpecAgent:
             messages: The conversation messages to send.
             tools: Tool definitions for structured output.
             system: Optional system prompt.
+            max_tokens: Maximum tokens in the response.
 
         Returns:
             The API response message.
@@ -290,7 +330,7 @@ class SpecAgent:
             try:
                 kwargs: dict[str, Any] = {
                     "model": self._model,
-                    "max_tokens": 4096,
+                    "max_tokens": max_tokens,
                     "messages": messages,
                 }
                 if tools:

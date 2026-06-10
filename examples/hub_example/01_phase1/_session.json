@@ -115,5 +115,6 @@
   ],
   "qa_exchanges": [],
   "generated_artifacts": [],
-  "mode": "interactive"
+  "mode": "interactive",
+  "last_error": "Unrecognized question IDs in answers: answers, questions"
 }

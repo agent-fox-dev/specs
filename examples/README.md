@@ -42,4 +42,6 @@ Questions:
 
 ---
 
-af-spec -C examples/hub_example refine 01_phase1
+af-spec -C examples/hub_example refine 01_phase1 > examples/hub_example/qa1.json
+
+af-spec -C examples/hub_example refine 01_phase1 --answers examples/hub_example/qa1.json

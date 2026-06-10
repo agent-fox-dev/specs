@@ -389,6 +389,12 @@ def refine_cmd(
             )
             sys.exit(1)
 
+        # Accept the question-export format: unwrap the "answers" key.
+        if "answers" in answers_data and isinstance(
+            answers_data["answers"], dict
+        ):
+            answers_data = answers_data["answers"]
+
         assessment: Any = asyncio.run(session.refine(answers_data))  # type: ignore[arg-type]
         click.echo(format_assessment(assessment))
     except (CampaignError, SessionError) as exc:
