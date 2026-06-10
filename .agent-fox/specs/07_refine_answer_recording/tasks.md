@@ -78,32 +78,32 @@ during `SpecSession.refine()`. The change is confined to `speclib/session.py`
     - [x] No linter warnings introduced: `uv run ruff check speclib/ tests/`
     - [x] Requirements 07-REQ-1.*, 07-REQ-2.*, 07-REQ-3.* met
 
-- [ ] 3. Wiring verification
-  - [ ] 3.1 Trace every execution path from design.md end-to-end
+- [x] 3. Wiring verification
+  - [x] 3.1 Trace every execution path from design.md end-to-end
     - Path 1 (refine records answers): verify `refine()` → capture index →
       agent call → append qa_exchange → `_persist()` is live
     - Path 2 (failed refine): verify error path does not append
     - _Requirements: all_
 
-  - [ ] 3.2 Verify return values propagate correctly
+  - [x] 3.2 Verify return values propagate correctly
     - `_utcnow()` return value flows into QA exchange `timestamp`
     - `assessment_index` computed correctly from `_assessment_history` length
     - _Requirements: all_
 
-  - [ ] 3.3 Run the integration smoke tests
+  - [x] 3.3 Run the integration smoke tests
     - TS-07-SMOKE-1 passes with real session
     - _Test Spec: TS-07-SMOKE-1_
 
-  - [ ] 3.4 Stub / dead-code audit
+  - [x] 3.4 Stub / dead-code audit
     - Search `session.py` for stubs, TODOs, NotImplementedError in
       touched methods
     - _Requirements: all_
 
-  - [ ] 3.V Verify wiring group
-    - [ ] All smoke tests pass
-    - [ ] No unjustified stubs remain in touched files
-    - [ ] All execution paths from design.md are live (traceable in code)
-    - [ ] All existing tests still pass: `uv run pytest -q`
+  - [x] 3.V Verify wiring group
+    - [x] All smoke tests pass
+    - [x] No unjustified stubs remain in touched files
+    - [x] All execution paths from design.md are live (traceable in code)
+    - [x] All existing tests still pass: `uv run pytest -q`
 
 ## Traceability
 
