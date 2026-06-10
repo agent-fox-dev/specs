@@ -2591,13 +2591,14 @@ class TestGenerateSpinner:
 
     def test_generate_shows_completion_messages(
         self,
-        cli_runner: CliRunner,
         campaign_dir_with_specs: Path,
     ) -> None:
-        """TS-09-3: Verifies generate shows completion messages.
+        """TS-09-3: Verifies generate shows per-artifact completion on stderr.
 
         Requirement: 09-REQ-1.4
-        Each generated artifact should produce a "Generated ..." line.
+        Each generated artifact should produce a "Generated {name}" line
+        on stderr via spinner.log(), distinct from the pre-existing
+        "Generated artifacts:" summary line on stdout.
         """
         gen_result = {
             "artifacts": [
@@ -2610,7 +2611,8 @@ class TestGenerateSpinner:
             session = _mock_session(state="prd_accepted")
             session.generate = AsyncMock(return_value=gen_result)
             mock_cls.resume.return_value = session
-            result = cli_runner.invoke(
+            runner = CliRunner()
+            result = runner.invoke(
                 main,
                 [
                     "--campaign-dir",
@@ -2619,9 +2621,12 @@ class TestGenerateSpinner:
                     "01",
                 ],
             )
-        combined = result.output
-        assert "Generated" in combined, (
-            f"Expected 'Generated' in output, got: {combined!r}"
+        # Artifact-specific completion messages must appear on stderr
+        # (not the pre-existing "Generated artifacts:" on stdout).
+        stderr_output = result.stderr
+        assert "Generated requirements" in stderr_output, (
+            f"Expected 'Generated requirements' on stderr, "
+            f"got: {stderr_output!r}"
         )
 
 
@@ -2630,21 +2635,22 @@ class TestSpinnerStopsOnSuccess:
 
     def test_spinner_stops_after_success(
         self,
-        cli_runner: CliRunner,
         campaign_dir_with_specs: Path,
     ) -> None:
         """TS-09-4: Verifies spinner is stopped after command completes.
 
         Requirement: 09-REQ-1.5
-        After successful completion, no spinner animation remnants
-        should remain. The exit code should be 0.
+        After successful completion, the spinner line should be cleared.
+        Phase message should appear on stderr as plain text (non-TTY)
+        and no ANSI escape remnants should remain.
         """
         assessment = _sample_assessment()
         with patch("speclib.cli.SpecSession") as mock_cls:
             session = _mock_session(state="init")
             session.assess = AsyncMock(return_value=assessment)
             mock_cls.resume.return_value = session
-            result = cli_runner.invoke(
+            runner = CliRunner()
+            result = runner.invoke(
                 main,
                 [
                     "--campaign-dir",
@@ -2654,6 +2660,16 @@ class TestSpinnerStopsOnSuccess:
                 ],
             )
         _assert_exit(result, 0)
+        # Phase message must have appeared on stderr (proves spinner ran)
+        stderr_output = result.stderr
+        assert "Assessing" in stderr_output, (
+            f"Expected 'Assessing' on stderr: {stderr_output!r}"
+        )
+        # No ANSI escape remnants (spinner line was cleared)
+        assert "\x1b" not in stderr_output, (
+            f"ANSI escape remnants in stderr after completion: "
+            f"{stderr_output!r}"
+        )
 
 
 class TestSpinnerStderrOnly:
@@ -2829,6 +2845,7 @@ class TestQuietSuppressesSpinner:
                     "01",
                 ],
             )
+        _assert_exit(result, 0)
         stderr_output = result.stderr
         assert "Assessing" not in stderr_output, (
             f"Spinner text on stderr in quiet mode: {stderr_output!r}"
@@ -2919,14 +2936,14 @@ class TestSpinnerStopsOnError:
 
     def test_spinner_cleaned_up_on_session_error(
         self,
-        cli_runner: CliRunner,
         campaign_dir_with_specs: Path,
     ) -> None:
         """TS-09-E1: Verifies spinner is cleaned up on command error.
 
         Requirement: 09-REQ-1.E1
         When the command raises SessionError, the spinner should be
-        stopped and the error message should appear.
+        stopped and the error message should appear. No ANSI escape
+        remnants should remain in stderr after cleanup.
         """
         with patch("speclib.cli.SpecSession") as mock_cls:
             session = _mock_session(state="init")
@@ -2934,7 +2951,8 @@ class TestSpinnerStopsOnError:
                 side_effect=SessionError("test assessment error")
             )
             mock_cls.resume.return_value = session
-            result = cli_runner.invoke(
+            runner = CliRunner()
+            result = runner.invoke(
                 main,
                 [
                     "--campaign-dir",
@@ -2945,6 +2963,16 @@ class TestSpinnerStopsOnError:
             )
         assert result.exit_code != 0
         assert "Error" in result.output or "error" in result.output
+        # Spinner must have been started (phase message on stderr)
+        # before the error stopped it
+        assert "Assessing" in result.stderr, (
+            f"Expected spinner phase message on stderr before error, "
+            f"got: {result.stderr!r}"
+        )
+        # No ANSI escape remnants (spinner was cleaned up)
+        assert "\x1b" not in result.stderr, (
+            f"ANSI escape remnants after error: {result.stderr!r}"
+        )
 
 
 class TestQuietSuppressesAllProperty:
@@ -3020,6 +3048,7 @@ class TestQuietSuppressesAllProperty:
                     *resolved_args,
                 ],
             )
+        _assert_exit(result, 0)
         stderr_output = result.stderr
         assert "Assessing" not in stderr_output
         assert "Refining" not in stderr_output
@@ -3082,6 +3111,14 @@ class TestSpinnerStderrOnlyProperty:
             else:
                 resolved_args.append(arg)
 
+        # Map commands to their expected spinner keyword on stderr
+        spinner_keywords = {
+            "assess": "Assessing",
+            "refine": "Refining",
+            "generate": "Generating",
+        }
+        expected_keyword = spinner_keywords[cmd]
+
         with patch("speclib.cli.SpecSession") as mock_cls:
             session = _mock_session(state="init")
             setup_session(session)
@@ -3097,6 +3134,12 @@ class TestSpinnerStderrOnlyProperty:
                     *resolved_args,
                 ],
             )
+        # Spinner text must appear on stderr (positive check)
+        assert expected_keyword in result.stderr, (
+            f"Expected '{expected_keyword}' on stderr, "
+            f"got: {result.stderr!r}"
+        )
+        # Spinner text must NOT appear on stdout
         stdout = result.stdout
         assert "Assessing" not in stdout
         assert "Refining" not in stdout
@@ -3117,7 +3160,6 @@ class TestSpinnerCleanupProperty:
     )
     def test_spinner_exit_called_on_error(
         self,
-        cli_runner: CliRunner,
         campaign_dir_with_specs: Path,
         error_cls: type,
     ) -> None:
@@ -3131,7 +3173,8 @@ class TestSpinnerCleanupProperty:
                 side_effect=error_cls("test error")
             )
             mock_cls.resume.return_value = session
-            result = cli_runner.invoke(
+            runner = CliRunner()
+            result = runner.invoke(
                 main,
                 [
                     "--campaign-dir",
@@ -3143,6 +3186,15 @@ class TestSpinnerCleanupProperty:
         assert result.exit_code != 0
         # Error message should be visible (spinner was cleaned up)
         assert "error" in result.output.lower()
+        # Spinner must have been started before the error
+        assert "Assessing" in result.stderr, (
+            f"Expected spinner phase message on stderr: "
+            f"{result.stderr!r}"
+        )
+        # No ANSI escape remnants (spinner was properly stopped)
+        assert "\x1b" not in result.stderr, (
+            f"ANSI escape remnants after error: {result.stderr!r}"
+        )
 
 
 # ================================================================
@@ -3298,10 +3350,12 @@ class TestQuietModeSmoke:
                     ],
                 )
         _assert_exit(result, 0)
-        # stderr should be empty (no spinner in quiet mode)
+        # stderr must be completely empty in quiet mode — no spinner
+        # text of any kind (not just "Assessing" but also "Refining",
+        # "Generating", or any other phase message).
         stderr_output = result.stderr
-        assert stderr_output == "" or "Assessing" not in stderr_output, (
-            f"Spinner text on stderr in quiet mode: {stderr_output!r}"
+        assert stderr_output == "", (
+            f"Expected empty stderr in quiet mode, got: {stderr_output!r}"
         )
         # stdout should still contain assessment output
         lower = result.output.lower()
