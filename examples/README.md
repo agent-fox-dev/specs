@@ -45,3 +45,14 @@ Questions:
 af-spec -C examples/hub_example refine 01_phase1 > examples/hub_example/qa1.json
 
 af-spec -C examples/hub_example refine 01_phase1 --answers examples/hub_example/qa1.json
+
+--- 
+same as above for qa2.json, qa3.json
+
+---
+
+## Finaize the spec
+
+af-spec -C examples/hub_example accept 01_phase1
+
+af-spec -C examples/hub_example generate 01_phase1
