@@ -9,7 +9,7 @@ resolution-markers = [
 [[package]]
 name = "afspec"
 version = "0.1.0"
-source = { editable = "../speclib-python" }
+source = { editable = "packages/afspec" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
@@ -969,7 +969,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "afspec", editable = "../speclib-python" },
+    { name = "afspec", editable = "packages/afspec" },
     { name = "anthropic", extras = ["vertex", "bedrock"], specifier = ">=0.40.0" },
     { name = "click", specifier = ">=8.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
