@@ -20,6 +20,7 @@ import click
 from speclib.campaign import Campaign
 from speclib.errors import CampaignError, SessionError, SpeclibError
 from speclib.session import SpecSession
+from speclib.ui import StatusSpinner
 
 _SPEC_DIR_RE = re.compile(r"^(\d{2})_(.+)$")
 
@@ -326,10 +327,12 @@ def assess_cmd(ctx: click.Context, spec: str) -> None:
     """Run or re-run PRD assessment."""
     try:
         campaign_dir = ctx.obj["campaign_dir"]
+        quiet = ctx.obj.get("quiet", False)
         campaign = resolve_campaign(campaign_dir)
         spec_dir = resolve_spec(campaign, spec)
         session = SpecSession.resume(spec_dir)
-        assessment: Any = asyncio.run(session.assess())  # type: ignore[arg-type]
+        with StatusSpinner("Assessing PRD...", quiet=quiet):
+            assessment: Any = asyncio.run(session.assess())  # type: ignore[arg-type]
         click.echo(format_assessment(assessment))
     except (CampaignError, SessionError) as exc:
         click.echo(f"Error: {exc}", err=True)
@@ -359,6 +362,7 @@ def refine_cmd(
     """
     try:
         campaign_dir = ctx.obj["campaign_dir"]
+        quiet = ctx.obj.get("quiet", False)
         campaign = resolve_campaign(campaign_dir)
         spec_dir = resolve_spec(campaign, spec)
         session = SpecSession.resume(spec_dir)
@@ -403,7 +407,8 @@ def refine_cmd(
         ):
             answers_data = answers_data["answers"]
 
-        assessment: Any = asyncio.run(session.refine(answers_data))  # type: ignore[arg-type]
+        with StatusSpinner("Refining PRD with answers...", quiet=quiet):
+            assessment: Any = asyncio.run(session.refine(answers_data))  # type: ignore[arg-type]
         click.echo(format_assessment(assessment))
     except (CampaignError, SessionError) as exc:
         click.echo(f"Error: {exc}", err=True)
@@ -445,15 +450,20 @@ def generate_cmd(ctx: click.Context, spec: str) -> None:
     """Generate JSON artifacts from accepted PRD."""
     try:
         campaign_dir = ctx.obj["campaign_dir"]
+        quiet = ctx.obj.get("quiet", False)
         campaign = resolve_campaign(campaign_dir)
         spec_dir = resolve_spec(campaign, spec)
         session = SpecSession.resume(spec_dir)
-        gen_result: Any = asyncio.run(session.generate())  # type: ignore[arg-type]
+        with StatusSpinner("Generating requirements...", quiet=quiet) as spinner:
+            gen_result: Any = asyncio.run(session.generate())  # type: ignore[arg-type]
 
-        if isinstance(gen_result, dict):
-            artifacts = gen_result.get("artifacts", [])
-        else:
-            artifacts = gen_result.artifacts
+            if isinstance(gen_result, dict):
+                artifacts = gen_result.get("artifacts", [])
+            else:
+                artifacts = gen_result.artifacts
+
+            for artifact in artifacts:
+                spinner.log(f"Generated {artifact}")
 
         click.echo("Generated artifacts:")
         for artifact in artifacts:

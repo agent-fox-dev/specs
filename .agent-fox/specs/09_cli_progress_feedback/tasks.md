@@ -86,29 +86,29 @@ self-contained — it wraps Rich's `Live` + `Spinner` behind a context manager.
     - [x] `--quiet` flag tests pass
     - [x] No linter warnings: `uv run ruff check speclib/ tests/`
 
-- [ ] 3. Wire spinner into CLI commands
-  - [ ] 3.1 Add spinner to `assess_cmd`
+- [x] 3. Wire spinner into CLI commands
+  - [x] 3.1 Add spinner to `assess_cmd`
     - Wrap `asyncio.run(session.assess())` in `StatusSpinner` context
     - Message: "Assessing PRD..."
     - _Requirements: 09-REQ-1.1, 09-REQ-1.5_
 
-  - [ ] 3.2 Add spinner to `refine_cmd` (answer submission path)
+  - [x] 3.2 Add spinner to `refine_cmd` (answer submission path)
     - Wrap `asyncio.run(session.refine(...))` in `StatusSpinner` context
     - Message: "Refining PRD with answers..."
     - No spinner for question-export path (it's instant)
     - _Requirements: 09-REQ-1.2_
 
-  - [ ] 3.3 Add spinner to `generate_cmd`
+  - [x] 3.3 Add spinner to `generate_cmd`
     - Create `StatusSpinner` outside the `asyncio.run` call
     - Use `on_artifact` callback to update spinner and log completions
     - Initial message: "Generating requirements..."
     - _Requirements: 09-REQ-1.3, 09-REQ-1.4_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] All CLI spinner tests pass
-    - [ ] All existing tests still pass: `uv run pytest -q`
-    - [ ] No linter warnings: `uv run ruff check speclib/ tests/`
-    - [ ] Requirements 09-REQ-1.*, 09-REQ-2.*, 09-REQ-3.* met
+  - [x] 3.V Verify task group 3
+    - [x] All CLI spinner tests pass
+    - [x] All existing tests still pass: `uv run pytest -q`
+    - [x] No linter warnings: `uv run ruff check speclib/ tests/`
+    - [x] Requirements 09-REQ-1.*, 09-REQ-2.*, 09-REQ-3.* met
 
 - [ ] 4. Wiring verification
   - [ ] 4.1 Trace every execution path from design.md end-to-end
