@@ -80,31 +80,31 @@ plus one test file.
     - [x] No linter warnings introduced: `uv run ruff check speclib/ tests/`
     - [x] Requirements 06-REQ-1.*, 06-REQ-2.* acceptance criteria met
 
-- [ ] 3. Wiring verification
-  - [ ] 3.1 Trace every execution path from design.md end-to-end
+- [x] 3. Wiring verification
+  - [x] 3.1 Trace every execution path from design.md end-to-end
     - Path 1 (question export): verify `refine_cmd` → `SpecSession.resume` →
       `pending_questions()` → JSON output is live
     - Path 2 (answer submission): verify existing flow still works unchanged
     - _Requirements: all_
 
-  - [ ] 3.2 Verify return values propagate correctly
+  - [x] 3.2 Verify return values propagate correctly
     - `pending_questions()` returns `list[dict]` → consumed by `refine_cmd`
       to build JSON output
     - _Requirements: all_
 
-  - [ ] 3.3 Run the integration smoke tests
+  - [x] 3.3 Run the integration smoke tests
     - `TS-06-SMOKE-1` passes with real session, no mocks
     - _Test Spec: TS-06-SMOKE-1_
 
-  - [ ] 3.4 Stub / dead-code audit
+  - [x] 3.4 Stub / dead-code audit
     - Search `session.py` and `cli.py` for stubs, TODOs, NotImplementedError
     - _Requirements: all_
 
-  - [ ] 3.V Verify wiring group
-    - [ ] All smoke tests pass
-    - [ ] No unjustified stubs remain in touched files
-    - [ ] All execution paths from design.md are live (traceable in code)
-    - [ ] All existing tests still pass: `uv run pytest -q`
+  - [x] 3.V Verify wiring group
+    - [x] All smoke tests pass
+    - [x] No unjustified stubs remain in touched files
+    - [x] All execution paths from design.md are live (traceable in code)
+    - [x] All existing tests still pass: `uv run pytest -q`
 
 ## Traceability
 
