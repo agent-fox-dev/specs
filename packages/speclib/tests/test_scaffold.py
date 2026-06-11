@@ -15,34 +15,47 @@ class TestProjectStructure:
     """Tests for pyproject.toml and build configuration."""
 
     def test_ts01_1_package_installable(self) -> None:
-        """TS-01-1: Package declares af-spec CLI entry point.
+        """TS-01-1: Package declares spec CLI entry point.
 
         Requirement: 01-REQ-1.1
-        Verifies pyproject.toml declares an af-spec entry point so that
-        ``uv pip install .`` produces a working ``af-spec`` CLI command.
+        Superseded by spec 10 (monorepo restructure): the CLI entry point
+        moved from root pyproject.toml (af-spec) to packages/spec-cli/
+        pyproject.toml (spec). This test verifies the new location.
         """
-        pyproject = PROJECT_ROOT / "pyproject.toml"
-        assert pyproject.exists(), "pyproject.toml must exist"
+        pyproject = PROJECT_ROOT / "packages" / "spec-cli" / "pyproject.toml"
+        assert pyproject.exists(), "spec-cli pyproject.toml must exist"
         with open(pyproject, "rb") as f:
             toml = tomllib.load(f)
         scripts = toml.get("project", {}).get("scripts", {})
-        assert "af-spec" in scripts, "af-spec CLI entry point must be declared"
+        assert "spec" in scripts, "spec CLI entry point must be declared"
 
     def test_ts01_2_runtime_deps(self) -> None:
-        """TS-01-2: pyproject.toml declares required runtime dependencies.
+        """TS-01-2: Packages declare required runtime dependencies.
 
         Requirement: 01-REQ-1.2
-        Dependencies: afspec, anthropic, click, pyyaml
+        Superseded by spec 10 (monorepo restructure): dependencies are now
+        split across packages. speclib declares afspec, anthropic, pyyaml;
+        spec-cli declares speclib, click, rich.
         """
-        pyproject = PROJECT_ROOT / "pyproject.toml"
-        with open(pyproject, "rb") as f:
-            toml = tomllib.load(f)
-        deps = toml.get("project", {}).get("dependencies", [])
-        deps_lower = " ".join(deps).lower()
-        assert "afspec" in deps_lower, "afspec must be a runtime dependency"
-        assert "anthropic" in deps_lower, "anthropic must be a runtime dependency"
-        assert "click" in deps_lower, "click must be a runtime dependency"
-        assert "pyyaml" in deps_lower, "pyyaml must be a runtime dependency"
+        # Check speclib dependencies
+        speclib_pyproject = PROJECT_ROOT / "packages" / "speclib" / "pyproject.toml"
+        with open(speclib_pyproject, "rb") as f:
+            speclib_toml = tomllib.load(f)
+        speclib_deps = " ".join(
+            speclib_toml.get("project", {}).get("dependencies", [])
+        ).lower()
+        assert "afspec" in speclib_deps, "afspec must be a speclib dependency"
+        assert "anthropic" in speclib_deps, "anthropic must be a speclib dependency"
+        assert "pyyaml" in speclib_deps, "pyyaml must be a speclib dependency"
+
+        # Check spec-cli dependencies
+        cli_pyproject = PROJECT_ROOT / "packages" / "spec-cli" / "pyproject.toml"
+        with open(cli_pyproject, "rb") as f:
+            cli_toml = tomllib.load(f)
+        cli_deps = " ".join(
+            cli_toml.get("project", {}).get("dependencies", [])
+        ).lower()
+        assert "click" in cli_deps, "click must be a spec-cli dependency"
 
     def test_ts01_3_dev_deps(self) -> None:
         """TS-01-3: pyproject.toml declares dev dependencies.

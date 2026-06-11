@@ -212,7 +212,7 @@ locations, import paths, and configuration files.
     - [x] Spec tests TS-10-E2, TS-10-P3 pass
     - [x] No linter warnings: `uv run ruff check packages/spec-cli/`
 
-- [ ] 7. Checkpoint - spec-cli Package Complete
+- [x] 7. Checkpoint - spec-cli Package Complete
   - Ensure all spec-cli spec tests pass
   - Verify `spec_cli` package is importable
   - Verify all CLI subcommands are registered
