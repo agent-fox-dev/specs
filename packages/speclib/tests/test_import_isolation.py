@@ -4,11 +4,12 @@ Verifies that speclib's imports are independent of CLI packages,
 modules are uniquely placed across packages, internal imports resolve,
 and patch targets remain valid.
 
-Test Spec Entries: TS-10-P1, TS-10-P4, TS-10-E3, TS-10-E10
+Test Spec Entries: TS-10-P1, TS-10-P4, TS-10-E3, TS-10-E4, TS-10-E10
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -128,3 +129,41 @@ def test_ts10_e10_patch_targets_resolve() -> None:
 
     with patch("speclib.auth.create_client") as mock_create:
         assert mock_create is not None
+
+
+# ---------------------------------------------------------------------------
+# TS-10-E4: speclib Import Without afspec
+# Requirement: 10-REQ-1.E2
+# ---------------------------------------------------------------------------
+
+
+def test_ts10_e4_speclib_without_afspec() -> None:
+    """TS-10-E4: Importing speclib without afspec raises ImportError.
+
+    Uses subprocess isolation to simulate an environment where afspec is
+    not available.  Setting ``sys.modules['afspec'] = None`` in a fresh
+    interpreter blocks the import of afspec (and any of its submodules)
+    before speclib is loaded, verifying that speclib correctly fails
+    with ImportError when its afspec dependency is missing.
+    """
+    code = "\n".join([
+        "import sys",
+        "# Block afspec and all its sub-modules",
+        "sys.modules['afspec'] = None",
+        "try:",
+        "    import speclib",
+        "    sys.exit(1)  # Should have raised ImportError",
+        "except ImportError:",
+        "    sys.exit(0)",
+    ])
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, (
+        "Expected ImportError when afspec is unavailable, but "
+        f"speclib imported successfully.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )

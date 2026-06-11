@@ -49,7 +49,9 @@ def test_ts10_smoke1_spec_new_creates_spec_directory(tmp_path: Path) -> None:
             f"spec new failed with exit code {result.exit_code}:\n"
             f"{result.output}"
         )
-        spec_dir = Path(td) / ".specs" / "01_test_spec"
+        # Campaign.new_spec() places specs at campaign_path / "NN_name",
+        # not inside a .specs subdirectory.
+        spec_dir = Path(td) / "01_test_spec"
         assert spec_dir.exists(), (
             f"Spec directory not created at {spec_dir}"
         )

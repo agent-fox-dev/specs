@@ -121,15 +121,25 @@ def test_ts10_15_dev_dependencies() -> None:
 
 
 def test_ts10_e7_no_spec_cli_imports_in_speclib_tests() -> None:
-    """TS-10-E7: No speclib test file imports from spec_cli."""
+    """TS-10-E7: No speclib test file imports from spec_cli.
+
+    Checks actual Python import statements (lines starting with
+    ``from spec_cli`` or ``import spec_cli``), not arbitrary string
+    occurrences — assertion messages and comments are excluded.
+    """
+    import re
+
     test_dir = SPECLIB_PKG / "tests"
     assert test_dir.exists(), f"Test directory not found: {test_dir}"
 
+    import_re = re.compile(
+        r"^\s*(?:from\s+spec_cli\b|import\s+spec_cli\b)"
+    )
     for test_file in test_dir.glob("*.py"):
-        source = test_file.read_text()
-        assert "from spec_cli" not in source, (
-            f"{test_file.name} imports from spec_cli"
-        )
-        assert "import spec_cli" not in source, (
-            f"{test_file.name} imports spec_cli"
-        )
+        for lineno, line in enumerate(
+            test_file.read_text().splitlines(), start=1
+        ):
+            assert not import_re.match(line), (
+                f"{test_file.name}:{lineno} imports from spec_cli: "
+                f"{line.strip()!r}"
+            )
