@@ -16,7 +16,7 @@ members = [
 
 [[package]]
 name = "afspec"
-version = "0.1.0"
+version = "0.9.0"
 source = { editable = "packages/afspec" }
 dependencies = [
     { name = "jsonschema" },
@@ -970,7 +970,7 @@ wheels = [
 
 [[package]]
 name = "spec-cli"
-version = "0.1.0"
+version = "0.9.0"
 source = { editable = "packages/spec-cli" }
 dependencies = [
     { name = "click" },
@@ -1002,7 +1002,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "speclib"
-version = "0.1.0"
+version = "0.9.0"
 source = { editable = "packages/speclib" }
 dependencies = [
     { name = "afspec" },
@@ -1036,7 +1036,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "speclib-workspace"
-version = "0.0.0"
+version = "0.9.0"
 source = { virtual = "." }
 dependencies = [
     { name = "spec-cli" },
