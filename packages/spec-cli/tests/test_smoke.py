@@ -31,7 +31,6 @@ def test_ts10_smoke1_spec_new_creates_spec_directory(tmp_path: Path) -> None:
         pytest.fail("spec_cli.cli is not importable - spec-cli package not installed")
 
     from click.testing import CliRunner
-
     from speclib import Campaign
 
     runner = CliRunner()

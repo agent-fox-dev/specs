@@ -1,6 +1,6 @@
-"""CLI entry point for the af-spec tool.
+"""CLI entry point for the spec tool.
 
-Provides the ``af-spec`` command group with subcommands for campaign
+Provides the ``spec`` command group with subcommands for campaign
 management and spec authoring.  Delegates all business logic to speclib's
 Campaign and SpecSession classes.
 """
@@ -19,7 +19,8 @@ import click
 from speclib.campaign import Campaign
 from speclib.errors import CampaignError, SessionError, SpeclibError
 from speclib.session import SpecSession
-from speclib.ui import StatusSpinner
+
+from spec_cli.ui import StatusSpinner
 
 _SPEC_DIR_RE = re.compile(r"^(\d{2})_(.+)$")
 
@@ -204,7 +205,7 @@ def _derive_spec_name(filename: str) -> str:
 @click.version_option(package_name="speclib")
 @click.pass_context
 def main(ctx: click.Context, campaign_dir: str | None, quiet: bool) -> None:
-    """af-spec: AI-powered spec creation tool."""
+    """spec: AI-powered spec creation tool."""
     ctx.ensure_object(dict)
     ctx.obj["campaign_dir"] = (
         Path(campaign_dir) if campaign_dir else Path.cwd()
@@ -681,8 +682,8 @@ def status_cmd(ctx: click.Context, spec: str | None) -> None:
     help="Target agent CLI (auto-detected if omitted)",
 )
 def install_skill(target: str | None) -> None:
-    """Install the af-spec skill to an agent CLI."""
-    from speclib.skill import AGENT_TARGETS, SKILL_FILE_PATH, detect_agent_cli
+    """Install the spec skill to an agent CLI."""
+    from spec_cli.skill import AGENT_TARGETS, SKILL_FILE_PATH, detect_agent_cli
 
     try:
         # Verify source file exists (guards against corrupt installation).

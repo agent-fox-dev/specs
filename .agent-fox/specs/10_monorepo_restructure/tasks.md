@@ -163,8 +163,8 @@ locations, import paths, and configuration files.
     - [x] Spec tests TS-10-6, TS-10-8 pass
     - [x] No linter warnings: `uv run ruff check packages/spec-cli/`
 
-- [ ] 5. Update CLI imports and program name
-  - [ ] 5.1 Update imports in cli.py
+- [x] 5. Update CLI imports and program name
+  - [x] 5.1 Update imports in cli.py
     - Keep `from speclib.campaign import Campaign` (unchanged)
     - Keep `from speclib.errors import ...` (unchanged)
     - Keep `from speclib.session import SpecSession` (unchanged)
@@ -174,16 +174,16 @@ locations, import paths, and configuration files.
       `from spec_cli.skill import ...`
     - _Requirements: 10-REQ-6.3, 10-REQ-6.4_
 
-  - [ ] 5.2 Update CLI group help text
+  - [x] 5.2 Update CLI group help text
     - Update CLI group help text from "af-spec" to "spec"
     - _Requirements: 10-REQ-2.E1_
 
-  - [ ] 5.V Verify task group 5
-    - [ ] `cli.py` imports business logic from `speclib`
-    - [ ] `cli.py` imports `StatusSpinner` from `spec_cli.ui`
-    - [ ] `cli.py` imports skill from `spec_cli.skill`
-    - [ ] Spec tests TS-10-5, TS-10-6, TS-10-7 pass
-    - [ ] No linter warnings: `uv run ruff check packages/spec-cli/`
+  - [x] 5.V Verify task group 5
+    - [x] `cli.py` imports business logic from `speclib`
+    - [x] `cli.py` imports `StatusSpinner` from `spec_cli.ui`
+    - [x] `cli.py` imports skill from `spec_cli.skill`
+    - [x] Spec tests TS-10-5, TS-10-6, TS-10-7 pass
+    - [x] No linter warnings: `uv run ruff check packages/spec-cli/`
 
 - [ ] 6. Move CLI tests and update test imports
   - [ ] 6.1 Move test files to `packages/spec-cli/tests/`
