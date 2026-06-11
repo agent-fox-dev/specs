@@ -16,7 +16,6 @@ import pytest
 import yaml
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-
 from speclib.campaign import Campaign
 from speclib.errors import CampaignError
 from speclib.session import SessionState

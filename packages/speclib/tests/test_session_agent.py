@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-
 from speclib.campaign import Campaign
 from speclib.errors import AgentError
 from speclib.session import Assessment, Question, SessionState, SpecSession

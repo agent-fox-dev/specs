@@ -28,9 +28,12 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["packages/speclib/speclib"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "packages/afspec/tests"]
+testpaths = ["tests", "packages/afspec/tests", "packages/speclib/tests"]
 import_mode = "importlib"
 
 [tool.ruff]

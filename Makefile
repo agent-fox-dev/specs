@@ -4,7 +4,7 @@ check: lint test
 
 lint:
 	uv run ruff check
-	uv run mypy speclib/
+	uv run mypy packages/speclib/speclib/
 
 test:
 	uv run pytest -q

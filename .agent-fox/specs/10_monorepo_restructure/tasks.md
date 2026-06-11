@@ -70,13 +70,13 @@ locations, import paths, and configuration files.
     - [x] All spec tests FAIL (red) — no implementation yet
     - [x] No linter warnings introduced: `uv run ruff check`
 
-- [ ] 2. Create speclib library package
-  - [ ] 2.1 Create `packages/speclib/` directory structure
+- [x] 2. Create speclib library package
+  - [x] 2.1 Create `packages/speclib/` directory structure
     - Create `packages/speclib/speclib/` directory
     - Create `packages/speclib/tests/` directory
     - _Requirements: 10-REQ-1.3_
 
-  - [ ] 2.2 Move library modules via git mv
+  - [x] 2.2 Move library modules via git mv
     - `git mv speclib/__init__.py packages/speclib/speclib/__init__.py`
     - `git mv speclib/agent.py packages/speclib/speclib/agent.py`
     - `git mv speclib/auth.py packages/speclib/speclib/auth.py`
@@ -88,7 +88,7 @@ locations, import paths, and configuration files.
     - `git mv speclib/tools.py packages/speclib/speclib/tools.py`
     - _Requirements: 10-REQ-1.3, 10-REQ-6.1_
 
-  - [ ] 2.3 Create `packages/speclib/pyproject.toml`
+  - [x] 2.3 Create `packages/speclib/pyproject.toml`
     - Set name to `speclib`, version `0.1.0`
     - Set `requires-python = ">=3.14"`
     - Declare dependencies: `afspec`, `anthropic[vertex,bedrock]`, `pyyaml`
@@ -99,7 +99,7 @@ locations, import paths, and configuration files.
     - Add `[tool.pytest.ini_options]` with `testpaths = ["tests"]`
     - _Requirements: 10-REQ-1.2, 10-REQ-1.4, 10-REQ-1.5_
 
-  - [ ] 2.4 Move library tests
+  - [x] 2.4 Move library tests
     - Move test files for library modules from `tests/` to
       `packages/speclib/tests/`: `test_agent.py`, `test_auth.py`,
       `test_campaign.py`, `test_config.py`, `test_prompts.py`,
@@ -110,12 +110,12 @@ locations, import paths, and configuration files.
     - Move `tests/__init__.py` to `packages/speclib/tests/`
     - _Requirements: 10-REQ-4.1_
 
-  - [ ] 2.V Verify task group 2
-    - [ ] Library modules exist at `packages/speclib/speclib/`
-    - [ ] `packages/speclib/pyproject.toml` is valid
-    - [ ] Library tests exist at `packages/speclib/tests/`
-    - [ ] Spec tests TS-10-1, TS-10-2, TS-10-14, TS-10-15 pass
-    - [ ] No linter warnings: `uv run ruff check packages/speclib/`
+  - [x] 2.V Verify task group 2
+    - [x] Library modules exist at `packages/speclib/speclib/`
+    - [x] `packages/speclib/pyproject.toml` is valid
+    - [x] Library tests exist at `packages/speclib/tests/`
+    - [x] Spec tests TS-10-1, TS-10-2, TS-10-14, TS-10-15 pass
+    - [x] No linter warnings: `uv run ruff check packages/speclib/`
 
 - [ ] 3. Create spec-cli package
   - [ ] 3.1 Create `packages/spec-cli/` directory structure

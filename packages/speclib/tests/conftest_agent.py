@@ -11,7 +11,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from speclib.session import Assessment, Question
 
 # ---------------------------------------------------------------------------

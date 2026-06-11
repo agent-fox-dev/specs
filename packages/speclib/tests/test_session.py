@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-
 from speclib.campaign import Campaign
 from speclib.errors import AgentError, SessionError
 from speclib.session import (
@@ -1259,8 +1258,7 @@ class TestQAExchangeNoSideEffects:
         questions and answer template, with no qa_exchanges data.
         """
         from click.testing import CliRunner
-
-        from speclib.cli import main
+        from spec_cli.cli import main
 
         # Set up campaign with a spec that has qa_exchanges populated
         camp_dir = tmp_path / "camp_export"

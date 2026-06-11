@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from speclib.agent import SpecAgent
 from speclib.errors import AgentError, SpeclibError
 from speclib.session import Assessment
