@@ -122,13 +122,13 @@ locations, import paths, and configuration files.
     - [x] Spec tests TS-10-1, TS-10-2, TS-10-14, TS-10-15 pass
     - [x] No linter warnings: `uv run ruff check packages/speclib/`
 
-- [ ] 3. Create spec-cli package skeleton
-  - [ ] 3.1 Create `packages/spec-cli/spec_cli/` directory
+- [x] 3. Create spec-cli package skeleton
+  - [x] 3.1 Create `packages/spec-cli/spec_cli/` directory
     - Create `packages/spec-cli/spec_cli/` source directory
     - Create `packages/spec-cli/spec_cli/__init__.py`
     - _Requirements: 10-REQ-2.5_
 
-  - [ ] 3.2 Create `packages/spec-cli/pyproject.toml`
+  - [x] 3.2 Create `packages/spec-cli/pyproject.toml`
     - Set name to `spec-cli`, version `0.1.0`
     - Set `requires-python = ">=3.14"`
     - Declare dependencies: `speclib`, `click`, `rich`
@@ -139,11 +139,11 @@ locations, import paths, and configuration files.
     - Add `[tool.pytest.ini_options]` with `testpaths = ["tests"]`
     - _Requirements: 10-REQ-2.1, 10-REQ-2.2, 10-REQ-2.3_
 
-  - [ ] 3.V Verify task group 3
-    - [ ] `packages/spec-cli/spec_cli/__init__.py` exists
-    - [ ] `packages/spec-cli/pyproject.toml` is valid TOML
-    - [ ] Spec tests TS-10-3, TS-10-4 pass
-    - [ ] No linter warnings: `uv run ruff check packages/spec-cli/`
+  - [x] 3.V Verify task group 3
+    - [x] `packages/spec-cli/spec_cli/__init__.py` exists
+    - [x] `packages/spec-cli/pyproject.toml` is valid TOML
+    - [x] Spec tests TS-10-3, TS-10-4 pass
+    - [x] No linter warnings: `uv run ruff check packages/spec-cli/`
 
 - [ ] 4. Move CLI source modules
   - [ ] 4.1 Move cli.py and ui.py via git mv

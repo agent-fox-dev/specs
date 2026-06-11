@@ -1,0 +1,34 @@
+[project]
+name = "spec-cli"
+version = "0.1.0"
+description = "CLI tool for AI-powered spec creation"
+requires-python = ">=3.14"
+dependencies = [
+    "speclib>=0.1.0",
+    "click>=8.1",
+    "rich>=13.0",
+]
+
+[project.scripts]
+spec = "spec_cli.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "hypothesis>=6.100",
+    "ruff>=0.8",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+speclib = { path = "../speclib", editable = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+import_mode = "importlib"
