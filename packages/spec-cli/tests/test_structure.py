@@ -5,12 +5,13 @@ and old directory removal after the monorepo restructure.
 
 Test Spec Entries: TS-10-3, TS-10-4, TS-10-5, TS-10-6, TS-10-7,
     TS-10-8, TS-10-9, TS-10-10, TS-10-11, TS-10-12, TS-10-13,
-    TS-10-E6, TS-10-E8, TS-10-E9
+    TS-10-E5, TS-10-E6, TS-10-E8, TS-10-E9
 """
 
 from __future__ import annotations
 
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -416,4 +417,45 @@ def test_cli_test_files_at_correct_location(test_file: str) -> None:
     path = SPEC_CLI_PKG / "tests" / test_file
     assert path.exists(), (
         f"CLI test file not found at expected location: {path}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TS-10-E5: spec CLI Without speclib
+# Requirement: 10-REQ-2.E2
+# ---------------------------------------------------------------------------
+
+
+def test_ts10_e5_cli_without_speclib() -> None:
+    """TS-10-E5: Importing spec_cli.cli without speclib raises ImportError.
+
+    Uses subprocess isolation to simulate an environment where speclib is
+    not available.  Setting ``sys.modules['speclib'] = None`` in a fresh
+    interpreter blocks the import of speclib (and any of its submodules)
+    before spec_cli.cli is loaded, verifying that the CLI correctly fails
+    with ImportError when its speclib dependency is missing.
+    """
+    code = "\n".join([
+        "import sys",
+        "# Block speclib and all its sub-modules",
+        "sys.modules['speclib'] = None",
+        "sys.modules['speclib.campaign'] = None",
+        "sys.modules['speclib.session'] = None",
+        "sys.modules['speclib.errors'] = None",
+        "try:",
+        "    import spec_cli.cli",
+        "    sys.exit(1)  # Should have raised ImportError",
+        "except ImportError:",
+        "    sys.exit(0)",
+    ])
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, (
+        "Expected ImportError when speclib is unavailable, but "
+        f"spec_cli.cli imported successfully.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
