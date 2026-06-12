@@ -14,7 +14,7 @@ agent lifecycle) is specified in [runtime-layer.md](runtime-layer.md). The
 services architecture (hub, CLI, storage, protocols, deployment) is
 specified in [services-architecture.md](services-architecture.md). The spec
 format itself is an independent standard at
-[spec-format_v1.2.md](../spec-format_v1.2.md); this document covers what the
+[spec-format_v1.2.md](spec-format_v1.2.md); this document covers what the
 harness builds on top of it.
 
 ---
@@ -84,7 +84,7 @@ graph TD
 | --- | --- |
 | Workspace | Isolated environment for one task: a worktree, a spec package, attached Contexts, agents, and an activity log. |
 | Worktree | A git working tree on a dedicated branch, giving each workspace its own files. |
-| Spec package | The validated set of four required artifacts (and one optional) that define and verify the work. Format details in [spec-format_v1.2.md](../spec-format_v1.2.md). |
+| Spec package | The validated set of four required artifacts (and one optional) that define and verify the work. Format details in [spec-format_v1.2.md](spec-format_v1.2.md). |
 | PRD (`prd.md`) | The human-authored narrative: intent, goals, non-goals, background, plus machine-read frontmatter and a hashed Intent section. |
 | Requirements (`requirements.json`) | EARS acceptance criteria, correctness properties, execution paths, and error handling. |
 | Test spec (`test_spec.json`) | A language-agnostic test contract derived from the requirements, with computed coverage. |
@@ -189,7 +189,7 @@ Every spec belongs to a campaign. A Campaign is the organizational unit that gro
 
 ### 4.1 What a Campaign is
 
-A Campaign is a named container that owns a set of specs, a dependency graph across them, a goal document, and orchestration state. It sits above the workspace: a Campaign references workspaces, it does not own their internals. Every spec is stored under its parent campaign in the spec store (see [services-architecture.md §7.1](services-architecture.md#81-filesystem-layout)).
+A Campaign is a named container that owns a set of specs, a dependency graph across them, a goal document, and orchestration state. It sits above the workspace: a Campaign references workspaces, it does not own their internals. Every spec is stored under its parent campaign in the spec store (see [services-architecture.md §8.1](services-architecture.md#81-filesystem-layout)).
 
 A Campaign does not decompose the goal upfront. Spec authoring happens one spec at a time (see §5). The human registers specs into the campaign incrementally — start with spec 01, see what it reveals, register spec 02 with a declared dependency on spec 01.
 
@@ -217,13 +217,13 @@ This is lighter than a spec PRD: no Intent hash, no schema validation, no freeze
 
 ### 4.3 The dependency graph
 
-Dependencies between specs in a campaign are declared inside each spec's `tasks.json`, using the `dependencies` array with `depends_on_spec`, `from_group`, and `to_group` fields (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)). Edges are authored as part of the spec, not stored separately in the campaign.
+Dependencies between specs in a campaign are declared inside each spec's `tasks.json`, using the `dependencies` array with `depends_on_spec`, `from_group`, and `to_group` fields (see [spec-format_v1.2.md §8.2](spec-format_v1.2.md#82-dependencies)). Edges are authored as part of the spec, not stored separately in the campaign.
 
 An edge reads: "spec B's workspace may not activate until spec A's task group N is complete." "Complete" means the group's verification subtask `{N}.V` has passed.
 
 Specs with no declared dependencies are ready immediately. Specs with dependencies stay blocked until their upstream groups clear. Independent specs may run in parallel.
 
-The hub evaluates the dependency graph at execution time by reading each spec's `tasks.json` dependencies. Because a downstream spec is often authored before its upstream is fully planned, `from_group: 0` serves as a sentinel for "upstream not yet planned" (see [spec-format_v1.2.md §8.2](../spec-format_v1.2.md#82-dependencies)).
+The hub evaluates the dependency graph at execution time by reading each spec's `tasks.json` dependencies. Because a downstream spec is often authored before its upstream is fully planned, `from_group: 0` serves as a sentinel for "upstream not yet planned" (see [spec-format_v1.2.md §8.2](spec-format_v1.2.md#82-dependencies)).
 
 **Sentinel handling at runtime.** When the hub encounters a `from_group: 0` edge, it treats the entire upstream spec as the dependency — the downstream workspace's bootstrap is deferred until the upstream spec is `sealed` (all task groups complete). Once the upstream spec's `tasks.json` exists with concrete groups, the sentinel resolves to the actual group but remains a whole-spec gate until the edge is updated. An unresolved sentinel never silently passes; the workspace stays in `Created` until the gate clears.
 
@@ -255,7 +255,7 @@ A Campaign is not a spec (no `requirements.json`, no freeze, no traceability). I
 
 The coordination layer is a validated package of artifacts, not a single prose
 note. The format reference is the **Spec Format Specification** at
-[spec-format_v1.2.md](../spec-format_v1.2.md); that document is the authority
+[spec-format_v1.2.md](spec-format_v1.2.md); that document is the authority
 on artifact structure, field-level schemas, EARS patterns, ID formats,
 validation rules, and rendering. Where this document and the format spec
 disagree on structure or field semantics, the format spec wins; where the
@@ -275,7 +275,7 @@ The spec separates four concerns:
 
 Architectural detail has an explicit, optional home in `architecture.md`. The harness treats the package as a unit: a workspace's spec is valid only when all four required artifacts are present and consistent.
 
-For artifact structure, field definitions, and schema details, see [spec-format_v1.2.md §4-8](../spec-format_v1.2.md).
+For artifact structure, field definitions, and schema details, see [spec-format_v1.2.md §4-8](spec-format_v1.2.md).
 
 ### 5.2 Identity, completeness, and bootstrap
 
@@ -283,7 +283,7 @@ Specs are stored in the spec store on the filesystem, organized under their pare
 
 Spec creation is handled by **speclib**, a shared library used by both the standalone `spec` CLI and the harness Planner. During creation speclib operates in bootstrap mode, writing the four artifacts sequentially and deferring cross-artifact validation until all four exist. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool) for the full spec creation tool description.
 
-A spec cannot move from `draft` to `active` while incomplete. See [spec-format_v1.2.md §3](../spec-format_v1.2.md#3-folder-layout-and-naming) for naming and completeness rules.
+A spec cannot move from `draft` to `active` while incomplete. See [spec-format_v1.2.md §3](spec-format_v1.2.md#3-folder-layout-and-naming) for naming and completeness rules.
 
 ### 5.3 Spec lifecycle and intent protection
 
@@ -297,7 +297,7 @@ The spec carries its own lifecycle in `prd.md` frontmatter, separate from the wo
 | `superseded` | Replaced by another spec; moved to archive | None; deprecation banner applied |
 | `archived` | Complete and put away; moved to archive | None |
 
-Both `superseded` and `archived` are terminal. A `superseded` spec was replaced; an `archived` spec completed normally. See [spec-format_v1.2.md §9](../spec-format_v1.2.md#9-lifecycle) for full lifecycle and transition details.
+Both `superseded` and `archived` are terminal. A `superseded` spec was replaced; an `archived` spec completed normally. See [spec-format_v1.2.md §9](spec-format_v1.2.md#9-lifecycle) for full lifecycle and transition details.
 
 At the `draft` to `active` transition the harness computes `intent_hash`:
 
@@ -365,7 +365,7 @@ Structural rules the harness enforces through schema validation:
 - `"checkpoint"` and `"standard"` groups may appear between.
 - Each group carries exactly one verification subtask `{group}.V`.
 
-For detailed task group structure, subtask fields, verification subtask format, wiring verification requirements, and traceability, see [spec-format_v1.2.md §8](../spec-format_v1.2.md#8-tasksjson).
+For detailed task group structure, subtask fields, verification subtask format, wiring verification requirements, and traceability, see [spec-format_v1.2.md §8](spec-format_v1.2.md#8-tasksjson).
 
 Subtask state is a fixed machine:
 
@@ -394,13 +394,13 @@ Validation is implemented in **speclib** and shared by the `spec` CLI, the harne
 
 A mutation that breaks integrity is rejected during drafting, so an inconsistent spec cannot be approved. speclib also exposes a standalone `validate()` for CI and pre-commit hooks.
 
-For the full list of validation rules, see [spec-format_v1.2.md §10](../spec-format_v1.2.md#10-validation).
+For the full list of validation rules, see [spec-format_v1.2.md §10](spec-format_v1.2.md#10-validation).
 
 speclib eases the path to a clean commit with a **repair pass**: a required field with an inferable value, EARS field names that map cleanly to the declared pattern, or an ID one transform from valid are auto-corrected and logged. Hard rejection is reserved for semantic failures that need a human or agent decision. Repair suggestions are recorded in the activity log (when running through the harness) or to stderr (when running standalone via `spec`).
 
 ### 5.8 Rendering
 
-The harness provides a deterministic renderer: same JSON in produces same markdown out, byte for byte. It offers per-file rendering and a combined view (PRD, then `architecture.md` if present, then requirements, test spec, and tasks). See [spec-format_v1.2.md §11](../spec-format_v1.2.md#11-rendering).
+The harness provides a deterministic renderer: same JSON in produces same markdown out, byte for byte. It offers per-file rendering and a combined view (PRD, then `architecture.md` if present, then requirements, test spec, and tasks). See [spec-format_v1.2.md §11](spec-format_v1.2.md#11-rendering).
 
 ### 5.9 Grounding: the Context
 
@@ -475,7 +475,6 @@ A specialist is a role: a system prompt, a tool policy, a model tier, and a beha
 | Implementor | Archetype        | Implements one assigned subtask; transitions only that subtask's state. |
 | Verifier    | Archetype        | Runs verification checks and wiring verification; reports pass or fail. |
 | UI Designer | Archetype        | Builds and visually checks interfaces for assigned subtasks. |
-| Ralph       | n/a              | Runs an autonomous loop outside the spec package. Uses harness infrastructure but bypasses spec authoring and the actor capability model. |
 | PR Reviewer | Archetype        | Reviews a pull request and gives feedback. |
 | PR Shepherd | Archetype        | Drives a PR to merge-ready. |
 
@@ -601,30 +600,6 @@ type Learning = { content: string; provenance: string; kind?: "episodic" | "sema
 
 `recall` pins a revision at run start. `consolidate` runs once at session end, advancing the revision. Memory grows between runs, never during one.
 
-### 6.7 Ralph: the autonomous loop
-
-Ralph is a distinct operating mode for tasks where the goal is clear but the path is not. Rather than a Planner producing a validated spec, Ralph runs a tight agent loop against a goal statement and a verifier, iterating until the verifier passes or a circuit breaker fires. It uses the full harness infrastructure (workspace, worktree, Contexts, tools, activity log) but operates entirely outside the spec package.
-
-**Input:**
-
-- *Goal* — a free-text statement of what success looks like.
-- *Verifier* — a machine-checkable exit condition: a shell command whose exit code determines pass or fail. Required.
-- *Contexts* — attached Contexts, pinned at run start. Optional but recommended.
-
-**The loop.** Each iteration: assemble the prompt from the goal, the verifier result from the previous iteration, the attached Contexts, and the conversation history; run one agent turn; execute tool calls; run the verifier; check circuit breakers; repeat.
-
-**Done.** The loop exits cleanly when the verifier passes. Ralph commits, records a `loop_complete` event, and signals ready for review.
-
-**Circuit breakers.** All three are always active; the first to fire wins:
-
-| Breaker | What it guards against | Default |
-| --- | --- | --- |
-| `max_tokens` | Runaway model spending | 2,000,000 tokens |
-| `max_iterations` | Tight loop with no progress | 30 iterations |
-| `max_duration` | Slow crawl tying up a workspace | 4 hours |
-
-When a breaker fires, Ralph commits partial progress, records a `loop_stopped` event, and stops. The branch is left open for review or manual continuation. No rollback.
-
 ---
 
 ## 7. Orchestration
@@ -673,7 +648,7 @@ Grounding sits outside this loop. Contexts are read-only and pinned, so groundin
 
 The agent transitions its subtask state as it progresses, ending at `awaiting_verification`. The harness moves it to `done` after verification passes or to `pending_reevaluation` on failure.
 
-The `awaiting_verification` state is a harness extension not present in the format spec's state machine (see [spec-format_v1.2.md §8.3.1](../spec-format_v1.2.md#831-subtask)). The format spec defines `in_progress → done`; the harness inserts `awaiting_verification` between them to gate completion on verification. This is a stricter operating policy, the same pattern as the freeze in §5.4.
+The `awaiting_verification` state is a harness extension not present in the format spec's state machine (see [spec-format_v1.2.md §8.3.1](spec-format_v1.2.md#831-subtask)). The format spec defines `in_progress → done`; the harness inserts `awaiting_verification` between them to gate completion on verification. This is a stricter operating policy, the same pattern as the freeze in §5.4.
 
 ### 7.4 Verification gate
 
@@ -739,19 +714,6 @@ Supersession is the modeled escape when the frozen plan is wrong.
 
 The workspace stays `Active`. The Operator authors a corrective spec (via `spec` or the Planner), then creates a new workspace referencing it on the same branch, so partial commits carry forward.
 
-### 8.4 The Ralph flow
-
-Ralph replaces phases 3-7 with a goal-and-verifier loop. Phases 1, 2, and 8 are identical.
-
-| Phase | Who acts | What happens |
-| --- | --- | --- |
-| **1. Provision** | Operator | Same as the generic flow. |
-| **2. Bootstrap** | Harness | Same. |
-| **3-7. Loop** | Ralph | Iterates: prompt → agent turn → tool calls → verifier → circuit breakers. On pass: commit and signal ready. On breaker: commit partial progress and stop. |
-| **8. Close** | Operator | Reviews the branch, merges, archives. |
-
-No spec is authored, frozen, or sealed. The deliverable is a branch.
-
 ---
 
 ## 9. Data model and persistence
@@ -797,10 +759,10 @@ The harness persists state across three stores so a process restart resumes clea
 
 | Entity | Key fields | Notes |
 | --- | --- | --- |
-| Run | id, workspace id, spec_id, kind, status, circuit breaker state, timestamps | The unit of execution. A spec-driven run covers phases 5-6; a Ralph run covers the loop. |
+| Run | id, workspace id, spec_id, kind, status, timestamps | The unit of execution. A spec-driven run covers phases 3-5. |
 | Agent | id, workspace id, run id, specialist role, actor capability, provider, model, phase, activity, parent agent id, timestamps | Phase tracks the container lifecycle; activity tracks what the agent is doing within `running`. See [runtime-layer.md §5](runtime-layer.md#5-agent-lifecycle). |
 | SubtaskExecution | workspace id, spec_id, subtask id, run id, assigned agent id, state, drop rationale, timestamps | The live execution state. Transitions are harness-enforced (§5.6). |
-| VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result, detail, recorded_at | One row per check. The Verifier reports; the harness records and transitions accordingly (§7.5). |
+| VerificationOutcome | workspace id, spec_id, run id, group id, verification subtask id, check id, result, detail, recorded_at | One row per check. The Verifier reports; the harness records and transitions accordingly (§7.4). |
 | ManagedScript | workspace id, agent id, run id, command, pid, status, timestamps | Long-running process tracked for cleanup. |
 
 **Conversation layer.**
@@ -814,7 +776,7 @@ The harness persists state across three stores so a process restart resumes clea
 | Entity | Key fields | Notes |
 | --- | --- | --- |
 | MemoryPin | workspace id, run id, memory scope, pinned revision, recorded_at | Records which memory revision a run read. |
-| ActivityEvent | id, workspace id, run id, agent id, type, payload, timestamp | Append-only event stream. Types: `text`, `thinking`, `tool_call`, `tool_result`, `spec_patch`, `context_pin`, `memory_pin`, `commit`, `status_change`, `verification_outcome`, `loop_iteration`, `loop_complete`, `loop_stopped`, `script_start`, `script_stop`. |
+| ActivityEvent | id, workspace id, run id, agent id, type, payload, timestamp | Append-only event stream. Types: `text`, `thinking`, `tool_call`, `tool_result`, `spec_patch`, `context_pin`, `memory_pin`, `commit`, `status_change`, `verification_outcome`, `script_start`, `script_stop`. |
 
 ### 9.4 Persistence and recovery
 
@@ -870,7 +832,6 @@ The API is split by audience. **Operator-facing** operations are for the human c
 **Runs.**
 
 - Start spec-driven: supply workspace and spec. The harness creates a Run, pins revisions, starts the Coordinator.
-- Start Ralph: supply workspace, goal, verifier, optional circuit breaker overrides. The harness creates a Run and starts the loop.
 - Get status; list runs.
 - Stop a run (stops agents, commits partial work).
 
@@ -917,7 +878,7 @@ Read-only; available to both the Operator and diagnostic tooling.
 
 - **Activity stream.** Subscribe to or page through `ActivityEvent` (see §9.3 for event types). Filterable by workspace, run, agent, event type, time range.
 - **Grounding read (debug).** Fetch the full prompt assembled for a given turn, including spec slice, Context content, recalled memory, and composed instructions. Fetch pinned Context and memory revisions for a run.
-- **Run history.** Completed runs with status, duration, circuit breaker state, and summary.
+- **Run history.** Completed runs with status, duration, and summary.
 
 ---
 
@@ -960,7 +921,7 @@ The af MCP bridge is the integration point between the two layers: it runs as a 
 | --- | --- |
 | Campaign | The organizational unit for specs. Every spec belongs to a campaign. Owns a goal document, workspaces, a dependency graph, and orchestration state. Also the top-level directory in the spec store filesystem. |
 | Worktree | Git working tree on the workspace's dedicated branch. |
-| Spec package | The validated four-artifact set (plus optional `architecture.md`). Format details in [spec-format_v1.2.md](../spec-format_v1.2.md). |
+| Spec package | The validated four-artifact set (plus optional `architecture.md`). Format details in [spec-format_v1.2.md](spec-format_v1.2.md). |
 | PRD | `prd.md`: human-authored intent, goals, non-goals, with hashed Intent and frontmatter. |
 | Requirements | `requirements.json`: EARS criteria, correctness properties, execution paths, error handling. |
 | Test spec | `test_spec.json`: language-agnostic test contract with computed coverage. |
@@ -972,7 +933,6 @@ The af MCP bridge is the integration point between the two layers: it runs as a 
 | Resolution strategy | `pinned` (full content in prompt every turn) or `retrieved` (indexed, pulled in per turn). |
 | Freshness contract | `snapshot` (fixed at a revision) or `live` (re-resolves on origin change). |
 | Pinned revision | The Context revision a workspace is fixed to for its runs. |
-| Ralph | Autonomous loop specialist outside the spec package. Goal + verifier + circuit breakers. |
 | Planner | Harness specialist that drafts JSON artifacts from PRD input during `draft`, using speclib. The harness-mediated path for spec authoring. |
 | speclib | The shared library for spec creation, validation, and rendering. Used by `spec`, the Planner, and the harness. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool). |
 | spec | Standalone CLI for spec authoring. Wraps speclib. Works without the hub. See [services-architecture.md §7](services-architecture.md#7-the-spec-creation-tool). |
