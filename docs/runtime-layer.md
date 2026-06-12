@@ -22,9 +22,10 @@ architecture (hub, CLI, storage, deployment) is specified in
    on specs, Contexts, coordination, or verification. It starts containers,
    manages worktrees, and exposes agent lifecycle operations.
 
-2. **Provider-agnostic.** Claude Code, Gemini CLI, Codex, and OpenCode are
-   interchangeable through one harness adapter interface. Adding a new
-   provider means implementing one adapter.
+2. **Provider-agnostic.** Anthropic, Google, open-weight, and local models
+   are interchangeable through one harness adapter interface. Provider SDK
+   adapters (Tier 1) and the generic LangGraph+litellm adapter (Tier 2)
+   implement the same interface.
 
 3. **Sandbox-first isolation.** Each agent runs in its own sandbox managed
    by [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell). The worktree
@@ -117,8 +118,8 @@ a stronger guarantee than tmpfs overlays.
 
 **Credential injection.** OpenShell manages credentials as *providers*:
 named credential bundles injected into sandboxes at creation. The CLI
-auto-discovers credentials for recognized agents (Claude Code, Codex,
-OpenCode, Copilot) from the host's shell environment, or the Operator can
+auto-discovers credentials for recognized providers (Anthropic, OpenAI,
+Google, GitHub) from the host's shell environment, or the Operator can
 create providers explicitly via `openshell provider create`. Credentials
 are injected as environment variables at runtime and never appear on the
 sandbox filesystem.
@@ -150,10 +151,11 @@ enables deployments where sensitive context stays on-device using local
 open-weight models while frontier models (Claude, GPT) are used only when
 policy allows. The router is model-agnostic by design.
 
-**Built-in agent support.** OpenShell ships with pre-configured support for
-Claude Code, Codex, OpenCode, and GitHub Copilot. Agents run unmodified
-inside sandboxes with zero code changes. The default sandbox image includes
-Python 3.14, Node 22, git, and standard developer tools.
+**Built-in provider support.** OpenShell ships with pre-configured
+credential auto-discovery for Anthropic, OpenAI, Google, and GitHub. The
+af harness adapters (SDK-based or generic) run inside sandboxes without
+modification. The default sandbox image includes Python 3.14, Node 22,
+git, and standard developer tools.
 
 ### 2.2 Kubernetes deployment
 
@@ -228,7 +230,24 @@ worktree is a full working directory checked out to its branch.
 
 A harness adapter integrates one provider into the runtime. It handles
 everything provider-specific so the coordination layer sees a uniform
-interface.
+interface. Adapters fall into two tiers:
+
+- **Tier 1 — Provider SDK adapters.** The
+  [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)
+  (Anthropic) and
+  [Google ADK](https://google.github.io/adk-docs/)
+  (Google) give full-fidelity access to their respective model families. The
+  provider SDK owns the agent loop, tool dispatch, and prompt engineering. The
+  adapter wraps the SDK, not a CLI.
+- **Tier 2 — Generic adapter.** For all other providers — open-weight models,
+  local inference, and the long tail of API-based services — the af runtime
+  owns the agent loop. [LangGraph](https://www.langchain.com/langgraph)
+  provides the runtime (durable execution, streaming, checkpointing) and
+  [litellm](https://github.com/BerriAI/litellm) provides provider routing
+  with tool-calling format translation across 100+ backends.
+
+Both tiers implement the same `HarnessAdapter` interface. The coordination
+layer does not know which tier is running.
 
 ```
 interface HarnessAdapter:
@@ -281,62 +300,131 @@ interface HarnessAdapter:
     interruptKey() → string
 ```
 
-### 4.1 Claude Code adapter
+### 4.1 Claude Agent SDK adapter (Tier 1)
 
-- **Command:** `claude --dangerously-skip-permissions` (or with a
-  permissions file). `--continue` on resume.
-- **System prompt:** Written to `CLAUDE.md` in the agent home or workspace
-  root.
-- **MCP servers:** Written to `.claude.json` or `.claude/settings.json`.
-- **Auth:** API key via `ANTHROPIC_API_KEY` env var, or Vertex AI / AWS
-  Bedrock credentials.
-- **Resume:** Supported. `--continue` flag resumes the last session.
+Wraps the
+[Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)
+for programmatic access to Anthropic models. The SDK owns the agent loop:
+it makes model calls, dispatches tool use, and manages conversation state.
+The adapter configures the SDK and maps its lifecycle to the
+`HarnessAdapter` interface.
 
-### 4.2 Gemini CLI adapter
+- **Agent loop:** SDK-managed. The SDK calls the Anthropic API, executes
+  tool calls, and loops until the task is complete. The af runtime does not
+  sit in this loop.
+- **System prompt:** Injected via the SDK's system prompt parameter at
+  agent creation.
+- **MCP servers:** The SDK speaks MCP natively. The af MCP bridge is
+  registered as an MCP server; the SDK discovers and calls its tools
+  alongside its built-in tools (file editing, shell, etc.).
+- **Model features:** Extended thinking, prompt caching, computer use, and
+  token-efficient tool results are available through the SDK as Anthropic
+  ships them — no adapter changes needed.
+- **Auth:** `ANTHROPIC_API_KEY` env var for direct API access. Vertex AI
+  and AWS Bedrock credentials for cloud deployments.
+- **Resume:** Supported. The SDK supports conversation continuations; the
+  adapter persists conversation state for suspend/resume.
+- **Models:** All Anthropic models (Opus, Sonnet, Haiku families).
 
-- **Command:** `gemini` with task as argument. `--resume` on resume.
-- **System prompt:** Written to `.gemini/system_prompt.md`.
-- **MCP servers:** Written to `.gemini/settings.json`.
-- **Auth:** Google Cloud credentials via `GOOGLE_APPLICATION_CREDENTIALS` or
-  `GEMINI_API_KEY`.
-- **Resume:** Supported. `--resume` flag continues the session.
+### 4.2 Google ADK adapter (Tier 1)
 
-### 4.3 Codex adapter
+Wraps the
+[Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/)
+for programmatic access to Gemini models. Like the Claude adapter, the SDK
+owns the agent loop.
 
-- **Command:** `codex` with task as argument.
-- **System prompt:** Written to `AGENTS.md` or provider-specific location.
-- **MCP servers:** Provider-specific configuration.
-- **Auth:** `OPENAI_API_KEY` env var.
-- **Resume:** Not supported; starts fresh.
+- **Agent loop:** ADK-managed. The ADK calls the Gemini API, dispatches
+  tool calls, and manages session state.
+- **System prompt:** Injected via the ADK's instruction parameter at agent
+  creation.
+- **MCP servers:** The ADK supports MCP tool integration. The af MCP bridge
+  is registered as an MCP server.
+- **Auth:** `GEMINI_API_KEY` for API access, or
+  `GOOGLE_APPLICATION_CREDENTIALS` for Google Cloud deployments.
+- **Resume:** Supported. The ADK supports session persistence; the adapter
+  maps this to the harness suspend/resume lifecycle.
+- **Models:** All Gemini models.
 
-### 4.4 OpenCode adapter
+### 4.3 Generic adapter (Tier 2 — LangGraph + litellm)
 
-- **Command:** `opencode` with task as argument.
-- **System prompt:** Written to provider-specific location.
-- **MCP servers:** Written to `opencode.json`.
-- **Auth:** Provider-specific API key env var.
-- **Resume:** Not supported; starts fresh.
+For all providers beyond Anthropic and Google: open-weight models, local
+inference, and the long tail of API-based services. The af runtime owns
+the agent loop in this tier.
 
-### 4.5 Credential injection under OpenShell
+**Architecture:**
+
+```
+af agent loop (Python)
+  └── LangGraph runtime (durability, streaming, checkpointing)
+       └── litellm (provider routing, tool-calling format translation)
+            ├── ollama:qwen3-32b        -- local, Apple Silicon
+            ├── ollama:deepseek-r1      -- local
+            ├── vllm:mistral-large      -- self-hosted
+            ├── openrouter:...          -- any OpenRouter model
+            ├── fireworks:...           -- Fireworks AI
+            ├── together:...            -- Together AI
+            └── ...100+ litellm-supported providers
+```
+
+- **Agent loop:** Owned by the af runtime. A Python process running on the
+  LangGraph runtime makes model calls through litellm, dispatches tool use,
+  and manages conversation state. The loop implements the same tool-calling
+  pattern as the Tier 1 adapters: call the model, execute any tool calls,
+  feed results back, repeat until done.
+- **LangGraph runtime:** Provides durable execution (agents survive crashes
+  and resume from the last checkpoint), streaming (token-level and event-
+  level), state persistence, and human-in-the-loop interrupts. The harness
+  `suspend()`/`resume()` lifecycle maps directly to LangGraph checkpoints.
+- **litellm routing:** Translates tool-calling formats between providers.
+  A single `completion()` call works with any backend — litellm handles
+  the provider-specific API translation. Provider switching is a
+  configuration change, not a code change.
+- **System prompt:** The af runtime owns the system prompt for this tier.
+  A base prompt template covers coding capabilities (file editing, shell
+  execution, git operations, verification). Model-tier-specific overrides
+  adjust for capability differences between frontier, mid-tier, and local
+  models.
+- **Tool set:** File read/write/edit, shell execution, git operations,
+  browser control (CDP) — the same capabilities as the Tier 1 adapters,
+  implemented as LangGraph tool nodes. The af MCP bridge is connected
+  programmatically; its tools appear alongside the built-in tools.
+- **MCP servers:** The generic adapter connects to MCP servers
+  programmatically using the MCP client protocol. The af MCP bridge and
+  any Context-sourced MCP servers are available.
+- **Auth:** Provider-specific API keys following litellm conventions
+  (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`). For
+  local inference via Ollama or vLLM, no API key is needed.
+- **Resume:** Supported via LangGraph checkpointing. Conversation state,
+  tool history, and agent context are persisted and restored on resume.
+- **Local inference:** Ollama (macOS, Linux), vLLM (GPU servers), and
+  llama.cpp are supported through litellm's local provider integrations.
+  Apple Silicon deployments use Ollama with quantized models (e.g.
+  `ollama:qwen3-32b`, `ollama:deepseek-r1:14b`).
+
+### 4.4 Credential injection under OpenShell
 
 When running under OpenShell (§2.1), credential injection is handled by
-OpenShell's provider mechanism rather than by each harness adapter
-individually. OpenShell auto-discovers credentials for recognized agents
-from the host's shell environment (e.g. `ANTHROPIC_API_KEY` for Claude
-Code, `OPENAI_API_KEY` for Codex) and injects them into the sandbox as
-environment variables. The adapter's `resolveAuth()` delegates to this
-mechanism: it declares which credential type the harness needs, and
-OpenShell resolves and injects it. The adapter does not handle raw API
-keys or credential files directly.
+OpenShell's provider mechanism rather than by each adapter individually.
+OpenShell auto-discovers credentials for recognized providers from the
+host's shell environment and injects them into the sandbox as environment
+variables. The adapter's `resolveAuth()` delegates to this mechanism.
 
-For agents or auth methods OpenShell does not recognize (Vertex AI, AWS
-Bedrock, custom providers), `resolveAuth()` falls back to explicit
-credential injection via `openshell provider create --type custom`.
+| Adapter | OpenShell auto-discovery | Fallback |
+| --- | --- | --- |
+| Claude Agent SDK | `ANTHROPIC_API_KEY` | `openshell provider create` for Vertex AI, Bedrock |
+| Google ADK | `GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS` | `openshell provider create` for Vertex AI |
+| Generic (litellm) | `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, etc. | `openshell provider create --type custom` |
+| Generic (local) | None needed | Ollama/vLLM run inside or alongside the sandbox |
 
-### 4.6 Adding a new adapter
+### 4.5 Adding a new adapter
 
 Implement the `HarnessAdapter` interface. Register it in the adapter
-registry. No changes to the coordination layer or the container runtime.
+registry. No changes to the coordination layer or the sandbox runtime.
+
+For providers with a mature agent SDK, implement a Tier 1 adapter that
+wraps the SDK. For providers accessible through litellm, no new adapter
+is needed — configure the generic adapter with the appropriate provider
+and model.
 
 ---
 
@@ -459,11 +547,14 @@ templates/
 
 ```yaml
 name: implementor
-harness: claude
+harness: claude-sdk                     # claude-sdk | google-adk | generic
 description: "Implements a subtask against a frozen spec."
 
 env:
   AF_ROLE: implementor
+
+# For generic adapter only: which model to use via litellm
+# model: ollama:qwen3-32b
 
 mcp_servers:
   af:
@@ -501,8 +592,9 @@ The runtime ships default templates for each specialist role:
 
 Each template includes the af MCP bridge as a sidecar service and
 pre-configures the MCP server declaration so the harness discovers it.
-The harness itself (Claude Code, Gemini CLI, etc.) is configurable per
-template.
+The adapter (Claude Agent SDK, Google ADK, or generic) is configurable
+per template via the `harness` field. When using the generic adapter,
+the `model` field selects the litellm provider and model.
 
 ---
 
@@ -548,8 +640,8 @@ override.
 
 The af MCP bridge is the key integration point between the runtime layer
 and the coordination layer. It runs as a sidecar service inside each agent
-container and exposes harness-specific capabilities as MCP tools that the
-harness (Claude Code, Gemini CLI, etc.) can call.
+sandbox and exposes harness-specific capabilities as MCP tools that the
+harness adapter (SDK-based or generic) can call.
 
 ### 8.1 Why an MCP bridge
 
@@ -577,12 +669,12 @@ layer's tools appear to the agent as standard MCP tools.
 ### 8.3 Architecture
 
 ```
-┌─── Agent Container ─────────────────────────────────────┐
+┌─── Agent Sandbox ───────────────────────────────────────┐
 │                                                         │
 │  ┌─────────────┐         ┌──────────────────────┐       │
 │  │   Harness    │◄──MCP──►│  af MCP Bridge    │       │
-│  │ (Claude Code │         │  (sidecar service)   │       │
-│  │  Gemini CLI) │         └──────────┬───────────┘       │
+│  │ (SDK adapter │         │  (sidecar service)   │       │
+│  │  or generic) │         └──────────┬───────────┘       │
 │  └──────┬──────┘                     │                   │
 │         │                            │ gRPC / HTTP       │
 │    /workspace                        │                   │
@@ -683,7 +775,8 @@ OpenShell supports three image sources:
 - **Container registry:** `--from registry.io/img:tag` pulls an existing
   OCI image. For organizations with private registries.
 
-The harness (Claude Code, Gemini CLI, etc.) is either pre-installed in the
+The provider SDK (Claude Agent SDK, Google ADK) or the generic adapter's
+Python dependencies (LangGraph, litellm) are either pre-installed in the
 image or installed during provisioning.
 
 The image does not include the af coordination service, the spec store,
@@ -710,8 +803,13 @@ runtime:
       allow_remote: true                # allow frontier model API calls
 
 defaults:
-  harness: claude
+  harness: claude-sdk          # claude-sdk | google-adk | generic
   template: implementor
+
+# Generic adapter defaults (used when harness is 'generic')
+generic:
+  model: ollama:qwen3-32b     # litellm provider:model string
+  prompt_tier: local           # frontier | mid-tier | local — selects prompt variant
 
 worktrees:
   prefix: af                # branch prefix: af/<workspace-name>
@@ -726,9 +824,9 @@ spec_tool:
 ```yaml
 # Set via the coordination layer's workspace config
 # (see coordination-layer.md §3.6)
-harness: gemini
+harness: generic
+model: openrouter:deepseek/deepseek-r1
 template: implementor
-image: af/agent:gemini
 env:
   CUSTOM_VAR: value
 ```

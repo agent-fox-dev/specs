@@ -94,7 +94,7 @@ graph TD
 | Source | A typed reference inside a Context, carrying a resolution strategy (pinned or retrieved) and a freshness contract (snapshot or live). Content sources and capability sources (MCP, skills, rules) are both sources. |
 | Agent | A running model instance, with a specialist role, an actor capability, a provider, a model, and a scoped tool set. |
 | Actor capability | The permission tier (Operator, Planner, Coordinator, or Archetype) that governs what an agent or human may write in the spec package. |
-| Provider | An external agent backend (for example Claude Code, Codex, OpenCode) the harness drives through one interface. |
+| Provider | An external model backend (for example Anthropic via Claude Agent SDK, Google via ADK, or any litellm-supported provider via the generic adapter) the harness drives through one interface. |
 | Agent memory | An agent-authored body of learnings that outlives a workspace, driven through one contract (`recall` at prompt assembly, `consolidate` at session end). Distinct from a Context: agent-authored and accumulated, not Operator-curated. |
 
 The relationship that matters most: agents do not message each other to
@@ -439,17 +439,59 @@ A Context is owned by a principal and carries an access policy. A source the act
 
 ### 6.1 The provider abstraction
 
-The harness contains no model. It drives an external provider, and "bring your own agent" is first-class. Each provider runs as an opaque process inside a container managed by the runtime layer (see [runtime-layer.md](runtime-layer.md)). The provider owns the model call, the tool loop, and which tool to call next.
+The harness contains no model. It drives an external provider, and "bring
+your own model" is first-class. Provider independence is achieved through
+a two-tier adapter model (see
+[runtime-layer.md §4](runtime-layer.md#4-harness-adapters)):
 
-The coordination layer extends the provider's tool set through the **af MCP bridge** (see [runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge)), a sidecar MCP server that exposes harness-specific tools alongside the provider's native tools.
+- **Tier 1 adapters** wrap a provider SDK (Claude Agent SDK for Anthropic,
+  Google ADK for Google). The SDK owns the agent loop, tool dispatch, and
+  prompt engineering. This gives full-fidelity access to each provider's
+  model features.
+- **Tier 2 (generic adapter)** runs an af-owned agent loop on
+  [LangGraph](https://www.langchain.com/langgraph), with model calls routed
+  through [litellm](https://github.com/BerriAI/litellm). This covers
+  open-weight models, local inference (Ollama, vLLM on Apple Silicon), and
+  any of 100+ litellm-supported providers.
 
-The coordination layer interacts with a running provider through two channels: it injects configuration before the provider starts (system prompt, instructions, MCP server declarations, environment variables), and it receives tool calls and state updates through the MCP bridge during execution.
+The coordination layer extends the provider's tool set through the **af MCP
+bridge** (see
+[runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge)), a sidecar MCP
+server that exposes harness-specific tools alongside the provider's native
+tools. Both adapter tiers connect to the bridge identically.
+
+The coordination layer interacts with a running provider through two
+channels: it injects configuration before the provider starts (system
+prompt, instructions, MCP server declarations, environment variables), and
+it receives tool calls and state updates through the MCP bridge during
+execution. This contract is the same regardless of which adapter tier runs.
 
 ### 6.2 The agent execution model
 
-The provider runs its own tool loop inside the container. It reads and writes files in the mounted worktree, executes shell commands, drives a browser, and calls MCP tools — including the af MCP bridge — according to its own reasoning. The coordination layer observes this through the MCP bridge and through the runtime's agent state reporting.
+Each agent runs inside an OpenShell sandbox. The execution model differs
+by adapter tier, but the coordination layer sees the same behavior:
 
-An agent can be stopped mid-execution with its session preserved for resume (if the harness supports it). The Coordinator can send follow-up messages to a running agent through the runtime's message injection.
+- **Tier 1 (provider SDK):** The SDK runs its own tool loop. It reads and
+  writes files in the mounted worktree, executes shell commands, drives a
+  browser, and calls MCP tools — including the af MCP bridge — according to
+  its own reasoning.
+- **Tier 2 (generic adapter):** The af runtime runs the tool loop on
+  LangGraph. It calls the model through litellm, dispatches tool use
+  (file operations, shell, git, browser, MCP), and feeds results back. The
+  tool set and capabilities match Tier 1; the agent loop is af-owned
+  instead of SDK-owned.
+
+From the coordination layer's perspective, both tiers produce the same
+observable behavior: an agent that reads the spec, edits files, runs
+commands, calls MCP tools, and transitions subtask state. The coordination
+layer observes this through the MCP bridge and through the runtime's agent
+state reporting.
+
+An agent can be stopped mid-execution with its session preserved for
+resume. Tier 1 adapters use the SDK's conversation continuation support;
+the generic adapter uses LangGraph checkpointing. The Coordinator can send
+follow-up messages to a running agent through the runtime's message
+injection.
 
 ### 6.3 Prompt assembly
 
@@ -990,10 +1032,16 @@ The af MCP bridge is the integration point between the two layers: it runs as a 
 | Actor capability | The permission tier (Operator, Planner, Coordinator, Archetype). |
 | Specialist | A named agent role: prompt, tool policy, model tier, behavior, and actor capability. |
 | Intent hash | SHA-256 of the PRD Intent section, set at draft-to-active and protected thereafter. |
-| Provider | External agent backend driven through one interface. |
+| Provider | External model backend (Anthropic, Google, OpenRouter, Ollama, etc.) driven through a harness adapter. |
+| Tier 1 adapter | Harness adapter wrapping a provider SDK (Claude Agent SDK or Google ADK). The SDK owns the agent loop. See [runtime-layer.md §4.1-4.2](runtime-layer.md#41-claude-agent-sdk-adapter-tier-1). |
+| Generic adapter | Tier 2 harness adapter: af-owned agent loop on LangGraph, model calls via litellm. Covers open-weight, local, and long-tail providers. See [runtime-layer.md §4.3](runtime-layer.md#43-generic-adapter-tier-2--langgraph--litellm). |
+| Claude Agent SDK | Anthropic's SDK for building agents with Claude models. Tier 1 adapter wraps this. |
+| Google ADK | Google's Agent Development Kit for building agents with Gemini models. Tier 1 adapter wraps this. |
+| LangGraph | LangChain's low-level orchestration runtime for stateful agents. Used by the generic adapter for durable execution, streaming, and checkpointing. |
+| litellm | Provider routing library supporting 100+ model backends with tool-calling format translation. Used by the generic adapter. |
 | Runtime layer | Infrastructure layer: sandboxes, worktrees, adapters, agent lifecycle. See [runtime-layer.md](runtime-layer.md). |
 | OpenShell | NVIDIA's open-source sandbox runtime for agent isolation. See [runtime-layer.md §2.1](runtime-layer.md#21-openshell-adapter-default). |
-| Harness adapter | Runtime adapter for a specific provider. See [runtime-layer.md §4](runtime-layer.md#4-harness-adapters). |
+| Harness adapter | Runtime adapter integrating a provider into the af runtime. Two tiers: provider SDK (Tier 1) and generic (Tier 2). See [runtime-layer.md §4](runtime-layer.md#4-harness-adapters). |
 | Template | Blueprint for agent configuration. See [runtime-layer.md §6](runtime-layer.md#6-templates). |
 | af MCP bridge | Sidecar MCP server inside each agent sandbox. See [runtime-layer.md §8](runtime-layer.md#8-the-af-mcp-bridge). |
 | af hub | Long-running host process owning the three stores. See [services-architecture.md §2](services-architecture.md#2-the-af-hub). |

@@ -26,9 +26,9 @@ layer (containers, worktrees, adapters, agent lifecycle) is specified in
    makes reasoning about consistency simple: one writer, many readers.
 
 3. **Process boundaries follow trust boundaries.** The hub runs on the
-   host with full access. The MCP bridge runs inside the agent container
-   with scoped identity. The harness (Claude Code, etc.) runs inside the
-   container with no direct access to harness state.
+   host with full access. The MCP bridge runs inside the agent sandbox
+   with scoped identity. The harness (provider SDK or generic adapter)
+   runs inside the sandbox with no direct access to hub state.
 
 4. **Pluggable where the coordination layer says pluggable.** Memory, issue
    tracker, web search, and the container runtime are behind interfaces.
@@ -660,8 +660,8 @@ Then `spec generate` produces the artifacts.
 
 ### 7.3 Spec skill
 
-An agent skill that exposes speclib capabilities to agent CLIs (Claude
-Code, Gemini CLI, etc.). The skill drives speclib's session model
+An agent skill that exposes speclib capabilities to agents (via the
+provider SDK or generic adapter). The skill drives speclib's session model
 programmatically rather than through the `spec` CLI.
 
 **Interactive mode.** The user asks the agent to create a spec (e.g.,
