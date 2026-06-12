@@ -1,5 +1,7 @@
 # agent-fox Agentic Development Harness
 
+DEPRECATED: the content from this repo was merged into `https://github.com/agent-fox-dev/af-core`.
+
 A headless harness for spec-driven, multi-agent software development. The
 harness gives each unit of work an isolated workspace with its own branch,
 files, and agents, and coordinates those agents through a validated
