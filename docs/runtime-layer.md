@@ -24,8 +24,8 @@ architecture (hub, CLI, storage, deployment) is specified in
 
 2. **Provider-agnostic.** Anthropic, Google, open-weight, and local models
    are interchangeable through one harness adapter interface. Provider SDK
-   adapters (Tier 1) and the generic LangGraph+litellm adapter (Tier 2)
-   implement the same interface.
+   adapters (Tier 1) and the generic LangGraph adapter (Tier 2) implement
+   the same interface.
 
 3. **Sandbox-first isolation.** Each agent runs in its own sandbox managed
    by [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell). The worktree
@@ -243,8 +243,9 @@ interface. Adapters fall into two tiers:
   local inference, and the long tail of API-based services — the af runtime
   owns the agent loop. [LangGraph](https://www.langchain.com/langgraph)
   provides the runtime (durable execution, streaming, checkpointing) and
-  [litellm](https://github.com/BerriAI/litellm) provides provider routing
-  with tool-calling format translation across 100+ backends.
+  [LangChain's chat model integrations](https://docs.langchain.com/oss/python/integrations/chat/)
+  provide provider routing across Ollama, OpenAI, OpenRouter, Together,
+  Fireworks, vLLM, and many more.
 
 Both tiers implement the same `HarnessAdapter` interface. The coordination
 layer does not know which tier is running.
@@ -345,7 +346,7 @@ owns the agent loop.
   maps this to the harness suspend/resume lifecycle.
 - **Models:** All Gemini models.
 
-### 4.3 Generic adapter (Tier 2 — LangGraph + litellm)
+### 4.3 Generic adapter (Tier 2 — LangGraph)
 
 For all providers beyond Anthropic and Google: open-weight models, local
 inference, and the long tail of API-based services. The af runtime owns
@@ -356,29 +357,29 @@ the agent loop in this tier.
 ```
 af agent loop (Python)
   └── LangGraph runtime (durability, streaming, checkpointing)
-       └── litellm (provider routing, tool-calling format translation)
-            ├── ollama:qwen3-32b        -- local, Apple Silicon
-            ├── ollama:deepseek-r1      -- local
-            ├── vllm:mistral-large      -- self-hosted
-            ├── openrouter:...          -- any OpenRouter model
-            ├── fireworks:...           -- Fireworks AI
-            ├── together:...            -- Together AI
-            └── ...100+ litellm-supported providers
+       └── LangChain chat models (provider routing)
+            ├── ChatOllama              -- local, Apple Silicon
+            ├── ChatOpenAI              -- OpenAI, OpenRouter, vLLM, llama.cpp
+            ├── ChatFireworks           -- Fireworks AI
+            ├── ChatTogether            -- Together AI
+            └── ...community chat model integrations
 ```
 
 - **Agent loop:** Owned by the af runtime. A Python process running on the
-  LangGraph runtime makes model calls through litellm, dispatches tool use,
-  and manages conversation state. The loop implements the same tool-calling
-  pattern as the Tier 1 adapters: call the model, execute any tool calls,
-  feed results back, repeat until done.
+  LangGraph runtime makes model calls through LangChain chat model
+  integrations, dispatches tool use, and manages conversation state. The
+  loop implements the same tool-calling pattern as the Tier 1 adapters:
+  call the model, execute any tool calls, feed results back, repeat until
+  done.
 - **LangGraph runtime:** Provides durable execution (agents survive crashes
   and resume from the last checkpoint), streaming (token-level and event-
   level), state persistence, and human-in-the-loop interrupts. The harness
   `suspend()`/`resume()` lifecycle maps directly to LangGraph checkpoints.
-- **litellm routing:** Translates tool-calling formats between providers.
-  A single `completion()` call works with any backend — litellm handles
-  the provider-specific API translation. Provider switching is a
-  configuration change, not a code change.
+- **Provider routing:** LangChain's chat model integrations handle provider-
+  specific API translation and tool-calling format differences. Each provider
+  has a dedicated chat model class (e.g. `ChatOllama`, `ChatOpenAI`,
+  `ChatTogether`). Provider switching is a configuration change, not a code
+  change.
 - **System prompt:** The af runtime owns the system prompt for this tier.
   A base prompt template covers coding capabilities (file editing, shell
   execution, git operations, verification). Model-tier-specific overrides
@@ -391,15 +392,18 @@ af agent loop (Python)
 - **MCP servers:** The generic adapter connects to MCP servers
   programmatically using the MCP client protocol. The af MCP bridge and
   any Context-sourced MCP servers are available.
-- **Auth:** Provider-specific API keys following litellm conventions
-  (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`). For
-  local inference via Ollama or vLLM, no API key is needed.
+- **Auth:** Provider-specific API keys following each chat model's
+  conventions (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+  `TOGETHER_API_KEY`). For local inference via Ollama or vLLM, no API key
+  is needed.
 - **Resume:** Supported via LangGraph checkpointing. Conversation state,
   tool history, and agent context are persisted and restored on resume.
-- **Local inference:** Ollama (macOS, Linux), vLLM (GPU servers), and
-  llama.cpp are supported through litellm's local provider integrations.
-  Apple Silicon deployments use Ollama with quantized models (e.g.
-  `ollama:qwen3-32b`, `ollama:deepseek-r1:14b`).
+- **Local inference:** Ollama (macOS, Linux) and vLLM (GPU servers) are
+  supported through LangChain's `ChatOllama` and OpenAI-compatible chat
+  model integrations. Apple Silicon deployments use Ollama with quantized
+  models (e.g. Qwen3-32B, DeepSeek-R1-14B). Any model server that exposes
+  an OpenAI-compatible API works through `ChatOpenAI` with a custom base
+  URL.
 
 ### 4.4 Credential injection under OpenShell
 
@@ -413,7 +417,7 @@ variables. The adapter's `resolveAuth()` delegates to this mechanism.
 | --- | --- | --- |
 | Claude Agent SDK | `ANTHROPIC_API_KEY` | `openshell provider create` for Vertex AI, Bedrock |
 | Google ADK | `GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS` | `openshell provider create` for Vertex AI |
-| Generic (litellm) | `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, etc. | `openshell provider create --type custom` |
+| Generic (LangGraph) | `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, etc. | `openshell provider create --type custom` |
 | Generic (local) | None needed | Ollama/vLLM run inside or alongside the sandbox |
 
 ### 4.5 Adding a new adapter
@@ -422,9 +426,9 @@ Implement the `HarnessAdapter` interface. Register it in the adapter
 registry. No changes to the coordination layer or the sandbox runtime.
 
 For providers with a mature agent SDK, implement a Tier 1 adapter that
-wraps the SDK. For providers accessible through litellm, no new adapter
-is needed — configure the generic adapter with the appropriate provider
-and model.
+wraps the SDK. For providers with a LangChain chat model integration (or
+an OpenAI-compatible API), no new adapter is needed — configure the
+generic adapter with the appropriate provider and model.
 
 ---
 
@@ -553,7 +557,7 @@ description: "Implements a subtask against a frozen spec."
 env:
   AF_ROLE: implementor
 
-# For generic adapter only: which model to use via litellm
+# For generic adapter only: LangChain chat model provider and model
 # model: ollama:qwen3-32b
 
 mcp_servers:
@@ -594,7 +598,7 @@ Each template includes the af MCP bridge as a sidecar service and
 pre-configures the MCP server declaration so the harness discovers it.
 The adapter (Claude Agent SDK, Google ADK, or generic) is configurable
 per template via the `harness` field. When using the generic adapter,
-the `model` field selects the litellm provider and model.
+the `model` field selects the LangChain chat model provider and model.
 
 ---
 
@@ -776,7 +780,7 @@ OpenShell supports three image sources:
   OCI image. For organizations with private registries.
 
 The provider SDK (Claude Agent SDK, Google ADK) or the generic adapter's
-Python dependencies (LangGraph, litellm) are either pre-installed in the
+Python dependencies (LangGraph, LangChain) are either pre-installed in the
 image or installed during provisioning.
 
 The image does not include the af coordination service, the spec store,
@@ -808,7 +812,7 @@ defaults:
 
 # Generic adapter defaults (used when harness is 'generic')
 generic:
-  model: ollama:qwen3-32b     # litellm provider:model string
+  model: ollama:qwen3-32b     # LangChain provider:model string
   prompt_tier: local           # frontier | mid-tier | local — selects prompt variant
 
 worktrees:

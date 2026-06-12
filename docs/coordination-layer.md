@@ -94,7 +94,7 @@ graph TD
 | Source | A typed reference inside a Context, carrying a resolution strategy (pinned or retrieved) and a freshness contract (snapshot or live). Content sources and capability sources (MCP, skills, rules) are both sources. |
 | Agent | A running model instance, with a specialist role, an actor capability, a provider, a model, and a scoped tool set. |
 | Actor capability | The permission tier (Operator, Planner, Coordinator, or Archetype) that governs what an agent or human may write in the spec package. |
-| Provider | An external model backend (for example Anthropic via Claude Agent SDK, Google via ADK, or any litellm-supported provider via the generic adapter) the harness drives through one interface. |
+| Provider | An external model backend (for example Anthropic via Claude Agent SDK, Google via ADK, or any LangChain-supported provider via the generic adapter) the harness drives through one interface. |
 | Agent memory | An agent-authored body of learnings that outlives a workspace, driven through one contract (`recall` at prompt assembly, `consolidate` at session end). Distinct from a Context: agent-authored and accumulated, not Operator-curated. |
 
 The relationship that matters most: agents do not message each other to
@@ -450,9 +450,9 @@ a two-tier adapter model (see
   model features.
 - **Tier 2 (generic adapter)** runs an af-owned agent loop on
   [LangGraph](https://www.langchain.com/langgraph), with model calls routed
-  through [litellm](https://github.com/BerriAI/litellm). This covers
-  open-weight models, local inference (Ollama, vLLM on Apple Silicon), and
-  any of 100+ litellm-supported providers.
+  through LangChain's chat model integrations. This covers open-weight
+  models, local inference (Ollama, vLLM on Apple Silicon), and any
+  provider with a LangChain integration or an OpenAI-compatible API.
 
 The coordination layer extends the provider's tool set through the **af MCP
 bridge** (see
@@ -476,7 +476,7 @@ by adapter tier, but the coordination layer sees the same behavior:
   browser, and calls MCP tools — including the af MCP bridge — according to
   its own reasoning.
 - **Tier 2 (generic adapter):** The af runtime runs the tool loop on
-  LangGraph. It calls the model through litellm, dispatches tool use
+  LangGraph. It calls the model through LangChain chat models, dispatches tool use
   (file operations, shell, git, browser, MCP), and feeds results back. The
   tool set and capabilities match Tier 1; the agent loop is af-owned
   instead of SDK-owned.
@@ -1034,11 +1034,11 @@ The af MCP bridge is the integration point between the two layers: it runs as a 
 | Intent hash | SHA-256 of the PRD Intent section, set at draft-to-active and protected thereafter. |
 | Provider | External model backend (Anthropic, Google, OpenRouter, Ollama, etc.) driven through a harness adapter. |
 | Tier 1 adapter | Harness adapter wrapping a provider SDK (Claude Agent SDK or Google ADK). The SDK owns the agent loop. See [runtime-layer.md §4.1-4.2](runtime-layer.md#41-claude-agent-sdk-adapter-tier-1). |
-| Generic adapter | Tier 2 harness adapter: af-owned agent loop on LangGraph, model calls via litellm. Covers open-weight, local, and long-tail providers. See [runtime-layer.md §4.3](runtime-layer.md#43-generic-adapter-tier-2--langgraph--litellm). |
+| Generic adapter | Tier 2 harness adapter: af-owned agent loop on LangGraph with LangChain chat models for provider routing. Covers open-weight, local, and long-tail providers. See [runtime-layer.md §4.3](runtime-layer.md#43-generic-adapter-tier-2--langgraph). |
 | Claude Agent SDK | Anthropic's SDK for building agents with Claude models. Tier 1 adapter wraps this. |
 | Google ADK | Google's Agent Development Kit for building agents with Gemini models. Tier 1 adapter wraps this. |
 | LangGraph | LangChain's low-level orchestration runtime for stateful agents. Used by the generic adapter for durable execution, streaming, and checkpointing. |
-| litellm | Provider routing library supporting 100+ model backends with tool-calling format translation. Used by the generic adapter. |
+| LangChain chat models | Provider-specific model integrations (ChatOllama, ChatOpenAI, etc.) that handle API translation and tool-calling format differences. Used by the generic adapter for provider routing. |
 | Runtime layer | Infrastructure layer: sandboxes, worktrees, adapters, agent lifecycle. See [runtime-layer.md](runtime-layer.md). |
 | OpenShell | NVIDIA's open-source sandbox runtime for agent isolation. See [runtime-layer.md §2.1](runtime-layer.md#21-openshell-adapter-default). |
 | Harness adapter | Runtime adapter integrating a provider into the af runtime. Two tiers: provider SDK (Tier 1) and generic (Tier 2). See [runtime-layer.md §4](runtime-layer.md#4-harness-adapters). |
