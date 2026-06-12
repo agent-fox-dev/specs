@@ -48,39 +48,35 @@ The runtime abstracts the container backend behind one interface. Every
 operation the coordination layer needs goes through it.
 
 ```
-interface ContainerRuntime {
-  create(spec: ContainerSpec): Promise<ContainerId>
-  start(id: ContainerId): Promise<void>
-  stop(id: ContainerId, timeout: Duration): Promise<void>
-  remove(id: ContainerId): Promise<void>
-  exec(id: ContainerId, command: string[]): Promise<ExecResult>
-  logs(id: ContainerId, follow: boolean): AsyncStream<string>
-  inspect(id: ContainerId): Promise<ContainerState>
-}
+interface ContainerRuntime:
+    create(spec: ContainerSpec) → ContainerId
+    start(id: ContainerId) → void
+    stop(id: ContainerId, timeout: Duration) → void
+    remove(id: ContainerId) → void
+    exec(id: ContainerId, command: list[string]) → ExecResult
+    logs(id: ContainerId, follow: boolean) → stream[string]
+    inspect(id: ContainerId) → ContainerState
 
-type ContainerSpec = {
-  image: string
-  name: string
-  mounts: Mount[]             // worktree, agent home, sidecar sockets
-  env: Record<string, string>
-  command: string[]
-  services: ServiceSpec[]     // sidecar processes
-  resources?: ResourceLimits  // CPU, memory caps
-}
+record ContainerSpec:
+    image:      string
+    name:       string
+    mounts:     list[Mount]              -- worktree, agent home, sidecar sockets
+    env:        map[string, string]
+    command:    list[string]
+    services:   list[ServiceSpec]        -- sidecar processes
+    resources:  ResourceLimits, optional -- CPU, memory caps
 
-type Mount = {
-  source: string              // host path
-  target: string              // container path
-  readonly: boolean
-}
+record Mount:
+    source:    string   -- host path
+    target:    string   -- container path
+    readonly:  boolean
 
-type ContainerState = {
-  id: ContainerId
-  status: "created" | "running" | "stopped" | "error"
-  exitCode: number | null
-  startedAt: string | null
-  stoppedAt: string | null
-}
+record ContainerState:
+    id:        ContainerId
+    status:    "created" | "running" | "stopped" | "error"
+    exitCode:  number or null
+    startedAt: string or null
+    stoppedAt: string or null
 ```
 
 ### 2.1 Podman adapter
@@ -109,24 +105,22 @@ The runtime manages per-workspace git worktrees. This is the mechanism behind
 workspace isolation (see [coordination-layer.md §3.2](coordination-layer.md#32-isolation-through-worktrees)).
 
 ```
-interface WorktreeManager {
-  create(input: {
-    repoPath: string          // path to the main repo
-    branch: string            // e.g. "af/add-dark-mode"
-    baseBranch: string        // e.g. "main"
-  }): Promise<WorktreeInfo>
+interface WorktreeManager:
+    create(input: {
+        repoPath:   string    -- path to the main repo
+        branch:     string    -- e.g. "af/add-dark-mode"
+        baseBranch: string    -- e.g. "main"
+    }) → WorktreeInfo
 
-  remove(worktreePath: string, deleteBranch: boolean): Promise<void>
+    remove(worktreePath: string, deleteBranch: boolean) → void
 
-  list(repoPath: string): Promise<WorktreeInfo[]>
-}
+    list(repoPath: string) → list[WorktreeInfo]
 
-type WorktreeInfo = {
-  path: string                // absolute path to the worktree directory
-  branch: string
-  baseBranch: string
-  head: string                // current commit SHA
-}
+record WorktreeInfo:
+    path:       string   -- absolute path to the worktree directory
+    branch:     string
+    baseBranch: string
+    head:       string   -- current commit SHA
 ```
 
 ### 3.1 Branch naming
@@ -160,55 +154,54 @@ everything provider-specific so the coordination layer sees a uniform
 interface.
 
 ```
-interface HarnessAdapter {
-  name(): string
+interface HarnessAdapter:
+    name() → string
 
-  // Build the container command to launch the harness.
-  // `resume` indicates whether to continue a prior session.
-  getCommand(input: {
-    task: string
-    resume: boolean
-    baseArgs: string[]
-  }): string[]
+    -- Build the container command to launch the harness.
+    -- `resume` indicates whether to continue a prior session.
+    getCommand(input: {
+        task:     string
+        resume:   boolean
+        baseArgs: list[string]
+    }) → list[string]
 
-  // Return harness-specific environment variables.
-  getEnv(input: {
-    agentName: string
-    agentHome: string
-  }): Record<string, string>
+    -- Return harness-specific environment variables.
+    getEnv(input: {
+        agentName: string
+        agentHome: string
+    }) → map[string, string]
 
-  // Perform harness-specific setup in the agent's home directory
-  // after templates are copied. Called once at agent creation.
-  provision(input: {
-    agentName: string
-    agentHome: string        // host path to agent home dir
-    workspacePath: string    // host path to worktree
-  }): Promise<void>
+    -- Perform harness-specific setup in the agent's home directory
+    -- after templates are copied. Called once at agent creation.
+    provision(input: {
+        agentName:     string
+        agentHome:     string   -- host path to agent home dir
+        workspacePath: string   -- host path to worktree
+    }) → void
 
-  // Inject system prompt content into the harness's expected location.
-  injectSystemPrompt(agentHome: string, content: string): Promise<void>
+    -- Inject system prompt content into the harness's expected location.
+    injectSystemPrompt(agentHome: string, content: string) → void
 
-  // Inject agent instructions (rules, conventions) into the harness's
-  // expected location.
-  injectInstructions(agentHome: string, content: string): Promise<void>
+    -- Inject agent instructions (rules, conventions) into the harness's
+    -- expected location.
+    injectInstructions(agentHome: string, content: string) → void
 
-  // Translate universal MCP server configs into the harness's native
-  // MCP configuration format.
-  applyMCPServers(
-    agentHome: string,
-    servers: Record<string, MCPServerConfig>
-  ): Promise<void>
+    -- Translate universal MCP server configs into the harness's native
+    -- MCP configuration format.
+    applyMCPServers(
+        agentHome: string,
+        servers: map[string, MCPServerConfig]
+    ) → void
 
-  // Resolve authentication: select the best auth method and return
-  // the env vars and file mounts needed to inject credentials.
-  resolveAuth(auth: AuthConfig): Promise<ResolvedAuth>
+    -- Resolve authentication: select the best auth method and return
+    -- the env vars and file mounts needed to inject credentials.
+    resolveAuth(auth: AuthConfig) → ResolvedAuth
 
-  // Whether this harness supports session suspend/resume.
-  supportsResume(): boolean
+    -- Whether this harness supports session suspend/resume.
+    supportsResume() → boolean
 
-  // The key sequence to interrupt the harness process (e.g. "Ctrl-C").
-  interruptKey(): string
-}
+    -- The key sequence to interrupt the harness process (e.g. "Ctrl-C").
+    interruptKey() → string
 ```
 
 ### 4.1 Claude Code adapter
@@ -293,47 +286,46 @@ A `stopped` or `error` phase triggers error handling in the run.
 ### 5.2 Lifecycle operations
 
 ```
-interface AgentLifecycle {
-  // Create an agent: build container spec, provision harness, copy
-  // template, inject system prompt and MCP config. Does not start.
-  create(input: {
-    name: string
-    workspace: WorkspaceRef
-    template: TemplateRef
-    systemPrompt: string
-    instructions: string
-    mcpServers: Record<string, MCPServerConfig>
-    env: Record<string, string>
-    services: ServiceSpec[]
-  }): Promise<AgentRef>
+interface AgentLifecycle:
+    -- Create an agent: build container spec, provision harness, copy
+    -- template, inject system prompt and MCP config. Does not start.
+    create(input: {
+        name:         string
+        workspace:    WorkspaceRef
+        template:     TemplateRef
+        systemPrompt: string
+        instructions: string
+        mcpServers:   map[string, MCPServerConfig]
+        env:          map[string, string]
+        services:     list[ServiceSpec]
+    }) → AgentRef
 
-  // Start a created or stopped agent. Fresh session.
-  start(ref: AgentRef, task: string): Promise<void>
+    -- Start a created or stopped agent. Fresh session.
+    start(ref: AgentRef, task: string) → void
 
-  // Resume a suspended agent. Continues the prior session.
-  // Falls back to fresh start if the harness doesn't support resume.
-  resume(ref: AgentRef, task?: string): Promise<void>
+    -- Resume a suspended agent. Continues the prior session.
+    -- Falls back to fresh start if the harness doesn't support resume.
+    resume(ref: AgentRef, task: string, optional) → void
 
-  // Graceful stop. Sends SIGTERM, waits for timeout, then SIGKILL.
-  stop(ref: AgentRef, timeout?: Duration): Promise<void>
+    -- Graceful stop. Sends SIGTERM, waits for timeout, then SIGKILL.
+    stop(ref: AgentRef, timeout: Duration, optional) → void
 
-  // Suspend: stop with intent to resume.
-  // Only for harnesses that support session resume.
-  suspend(ref: AgentRef): Promise<void>
+    -- Suspend: stop with intent to resume.
+    -- Only for harnesses that support session resume.
+    suspend(ref: AgentRef) → void
 
-  // Remove agent: stop if running, delete container, optionally
-  // delete home directory and worktree branch.
-  delete(ref: AgentRef, cleanup?: { branch: boolean; home: boolean }): Promise<void>
+    -- Remove agent: stop if running, delete container, optionally
+    -- delete home directory and worktree branch.
+    delete(ref: AgentRef, cleanup: { branch: boolean; home: boolean }, optional) → void
 
-  // Send a message to a running agent's input stream.
-  message(ref: AgentRef, text: string): Promise<void>
+    -- Send a message to a running agent's input stream.
+    message(ref: AgentRef, text: string) → void
 
-  // Query current state.
-  state(ref: AgentRef): Promise<{ phase: Phase; activity: Activity; detail?: string }>
+    -- Query current state.
+    state(ref: AgentRef) → { phase: Phase, activity: Activity, detail: string, optional }
 
-  // Stream agent output.
-  logs(ref: AgentRef, follow: boolean): AsyncStream<string>
-}
+    -- Stream agent output.
+    logs(ref: AgentRef, follow: boolean) → stream[string]
 ```
 
 ### 5.3 Session management
@@ -428,17 +420,15 @@ inside the agent's container. The runtime manages sidecar lifecycle: start
 before the harness, health-check, restart on failure, stop on agent stop.
 
 ```
-type ServiceSpec = {
-  name: string
-  command: string[]
-  restart: "always" | "on-failure" | "never"
-  env?: Record<string, string>
-  readyCheck?: {
-    type: "tcp" | "http" | "delay"
-    target: string            // "localhost:7400", "http://localhost:8080/health", "3s"
-    timeout: string           // max wait before giving up
-  }
-}
+record ServiceSpec:
+    name:       string
+    command:    list[string]
+    restart:    "always" | "on-failure" | "never"
+    env:        map[string, string], optional
+    readyCheck: optional
+        type:    "tcp" | "http" | "delay"
+        target:  string   -- "localhost:7400", "http://localhost:8080/health", "3s"
+        timeout: string   -- max wait before giving up
 ```
 
 The harness does not start until all sidecar services with readiness checks

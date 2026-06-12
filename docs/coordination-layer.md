@@ -506,35 +506,62 @@ There is no spec-write tool, no Context-write tool, and no memory-write tool. An
 **Issue tracker interface:**
 
 ```
-interface IssueTracker {
-  search(query: IssueQuery): Promise<IssueRef[]>
-  get(ref: IssueRef): Promise<Issue>
-  create(input: NewIssue): Promise<IssueRef>
-  comment(ref: IssueRef, body: string): Promise<void>
-  update(ref: IssueRef, patch: IssuePatch): Promise<void>
-}
+interface IssueTracker:
+    search(query: IssueQuery) → list[IssueRef]
+    get(ref: IssueRef) → Issue
+    create(input: NewIssue) → IssueRef
+    comment(ref: IssueRef, body: string) → void
+    update(ref: IssueRef, patch: IssuePatch) → void
 
-type IssueRef = { tracker: string; project: string; key: string }
-type IssueQuery = { text?: string; state?: "open" | "closed"; labels?: string[]; assignee?: string }
-type NewIssue = { title: string; body: string; labels?: string[]; assignee?: string }
-type IssuePatch = Partial<NewIssue> & { state?: "open" | "closed" }
-type Issue = IssueRef & { title: string; body: string; state: string; labels: string[]; comments: { author: string; body: string; at: string }[] }
+record IssueRef:
+    tracker: string
+    project: string
+    key:     string
+
+record IssueQuery:
+    text:     string, optional
+    state:    "open" | "closed", optional
+    labels:   list[string], optional
+    assignee: string, optional
+
+record NewIssue:
+    title:    string
+    body:     string
+    labels:   list[string], optional
+    assignee: string, optional
+
+record IssuePatch:                         -- all fields optional
+    title:    string, optional
+    body:     string, optional
+    labels:   list[string], optional
+    assignee: string, optional
+    state:    "open" | "closed", optional
+
+record Issue extends IssueRef:
+    title:    string
+    body:     string
+    state:    string
+    labels:   list[string]
+    comments: list[{ author: string, body: string, at: string }]
 ```
 
 **Web search interface:**
 
 ```
-interface WebSearch {
-  search(query: string, opts?: {
-    count?: number
-    site?: string
-    recency?: "day" | "week" | "month" | "year"
-  }): Promise<SearchResult[]>
+interface WebSearch:
+    search(query: string, opts: optional) → list[SearchResult]
+        opts:
+            count:   number, optional
+            site:    string, optional
+            recency: "day" | "week" | "month" | "year", optional
 
-  fetch(url: string): Promise<{ url: string; title: string; text: string; retrievedAt: string }>
-}
+    fetch(url: string) → { url: string, title: string, text: string, retrievedAt: string }
 
-type SearchResult = { title: string; url: string; snippet: string; publishedAt?: string }
+record SearchResult:
+    title:       string
+    url:         string
+    snippet:     string
+    publishedAt: string, optional
 ```
 
 **Untrusted external content.** Web search and `fetch` return content from arbitrary third parties. Results are injected as `tool_result` events with a fixed schema, not as free text in the system prompt.
@@ -542,24 +569,31 @@ type SearchResult = { title: string; url: string; snippet: string; publishedAt?:
 **CI/CD interface:**
 
 ```
-interface CIProvider {
-  listRuns(ref: CIRef): Promise<PipelineRun[]>
-  getRun(runId: string): Promise<PipelineRun>
-  getJobLog(jobId: string): Promise<string>
-}
+interface CIProvider:
+    listRuns(ref: CIRef) → list[PipelineRun]
+    getRun(runId: string) → PipelineRun
+    getJobLog(jobId: string) → string
 
-type CIRef = { branch?: string; sha?: string; pr?: number }
-type PipelineRun = {
-  id: string; ref: CIRef
-  status: "queued" | "running" | "passed" | "failed" | "cancelled"
-  startedAt: string; completedAt?: string
-  jobs: PipelineJob[]; url: string
-}
-type PipelineJob = {
-  id: string; name: string
-  status: "queued" | "running" | "passed" | "failed" | "cancelled" | "skipped"
-  startedAt?: string; completedAt?: string
-}
+record CIRef:
+    branch: string, optional
+    sha:    string, optional
+    pr:     number, optional
+
+record PipelineRun:
+    id:          string
+    ref:         CIRef
+    status:      "queued" | "running" | "passed" | "failed" | "cancelled"
+    startedAt:   string
+    completedAt: string, optional
+    jobs:        list[PipelineJob]
+    url:         string
+
+record PipelineJob:
+    id:          string
+    name:        string
+    status:      "queued" | "running" | "passed" | "failed" | "cancelled" | "skipped"
+    startedAt:   string, optional
+    completedAt: string, optional
 ```
 
 ### 6.6 The agent-memory contract
@@ -571,31 +605,45 @@ Memory is grounding, not coordination, so it never touches the spec package. It 
 Two operations carry the contract:
 
 ```
-interface AgentMemory {
-  recall(input: {
-    scope: MemoryScope
-    query: string
-    revision?: string
-    budget?: { maxItems?: number; maxTokens?: number }
-  }): Promise<{
-    revision: string
-    items: MemoryItem[]
-  }>
+interface AgentMemory:
+    recall(input: {
+        scope:    MemoryScope
+        query:    string
+        revision: string, optional
+        budget:   optional
+            maxItems:  number, optional
+            maxTokens: number, optional
+    }) → {
+        revision: string
+        items:    list[MemoryItem]
+    }
 
-  consolidate(input: {
-    scope: MemoryScope
-    baseRevision: string
-    learnings: Learning[]
-    session?: SessionRef
-  }): Promise<{
-    revision: string
-    accepted: number
-  }>
-}
+    consolidate(input: {
+        scope:        MemoryScope
+        baseRevision: string
+        learnings:    list[Learning]
+        session:      SessionRef, optional
+    }) → {
+        revision: string
+        accepted: number
+    }
 
-type MemoryScope = { principal: string; namespace: string }
-type MemoryItem = { id: string; content: string; provenance: string; recordedAt: string; confidence?: number; relevance?: number }
-type Learning = { content: string; provenance: string; kind?: "episodic" | "semantic" | "procedural" }
+record MemoryScope:
+    principal: string
+    namespace: string
+
+record MemoryItem:
+    id:         string
+    content:    string
+    provenance: string
+    recordedAt: string
+    confidence: number, optional
+    relevance:  number, optional
+
+record Learning:
+    content:    string
+    provenance: string
+    kind:       "episodic" | "semantic" | "procedural", optional
 ```
 
 `recall` pins a revision at run start. `consolidate` runs once at session end, advancing the revision. Memory grows between runs, never during one.
