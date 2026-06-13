@@ -1594,10 +1594,9 @@ class TestGenerateCommand:
         """
         gen_result = {
             "artifacts": [
-                "requirements.md",
-                "design.md",
-                "test_spec.md",
-                "tasks.md",
+                "requirements",
+                "test_spec",
+                "tasks",
             ],
         }
         with patch("spec_cli.cli.SpecSession") as mock_cls:
@@ -1772,7 +1771,7 @@ class TestValidateCommand:
         with patch("spec_cli.cli.SpecSession") as mock_cls:
             session = _mock_session(state="generated")
             session.validate.side_effect = SessionError(
-                "Missing required artifacts: design.md"
+                "Missing required artifacts: tasks.json"
             )
             mock_cls.resume.return_value = session
             result = cli_runner.invoke(
@@ -1861,8 +1860,8 @@ class TestRenderCommand:
         default.
         """
         rendered = {
-            "prd.md": "# PRD",
-            "design.md": "# Design",
+            "prd": "# PRD",
+            "requirements": "# Requirements",
         }
         with patch("spec_cli.cli.SpecSession") as mock_cls:
             session = _mock_session(state="generated")
@@ -2419,16 +2418,15 @@ class TestSmokeValidateAndRender:
         spec_dir = tmp_path / "01_test_spec"
         spec_dir.mkdir()
         (spec_dir / "prd.md").write_text("# PRD\n\nContent.")
-        (spec_dir / "requirements.md").write_text(
-            "# Requirements\n\nReqs."
+        (spec_dir / "requirements.json").write_text(
+            '{"placeholder": "requirements"}'
         )
-        (spec_dir / "design.md").write_text(
-            "# Design\n\nDesign."
+        (spec_dir / "test_spec.json").write_text(
+            '{"placeholder": "test_spec"}'
         )
-        (spec_dir / "test_spec.md").write_text(
-            "# Test Spec\n\nTests."
+        (spec_dir / "tasks.json").write_text(
+            '{"placeholder": "tasks"}'
         )
-        (spec_dir / "tasks.md").write_text("# Tasks\n\nTasks.")
         (spec_dir / "_session.json").write_text(
             json.dumps({
                 "state": "generated",
@@ -2437,10 +2435,9 @@ class TestSmokeValidateAndRender:
                 "assessment_history": [],
                 "qa_exchanges": [],
                 "generated_artifacts": [
-                    "requirements.md",
-                    "design.md",
-                    "test_spec.md",
-                    "tasks.md",
+                    "requirements",
+                    "test_spec",
+                    "tasks",
                 ],
             })
         )

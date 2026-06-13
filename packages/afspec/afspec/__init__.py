@@ -57,7 +57,7 @@ from afspec.models import (
     VerificationSubtask,
     valid_transition,
 )
-from afspec.render import render_combined, render_requirements, render_tasks, render_test_spec
+from afspec.render import render_combined, render_individual, render_requirements, render_tasks, render_test_spec
 from afspec.schemas import schemas
 from afspec.validation import ValidationError, validate, validate_cross_file, validate_schema
 
@@ -111,6 +111,7 @@ __all__ = [
     "render_test_spec",
     "render_tasks",
     "render_combined",
+    "render_individual",
     "render_ears_sentence",
     "discover_specs",
     "build_dependency_graph",

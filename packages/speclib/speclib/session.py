@@ -35,7 +35,7 @@ _DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # The four required artifacts for validate() and render()
 _REQUIRED_ARTIFACTS = frozenset(
-    {"prd.md", "requirements.md", "design.md", "test_spec.md"}
+    {"prd.md", "requirements.json", "test_spec.json", "tasks.json"}
 )
 
 
@@ -425,6 +425,10 @@ class SpecSession:
     def render(self, combined: bool = False) -> str | dict[str, str]:
         """Render the spec using afspec.
 
+        Tries ``afspec.load_spec()`` first.  When that fails (e.g. the
+        PRD lacks YAML frontmatter), falls back to loading each JSON
+        artifact individually and rendering it, reading ``prd.md`` as-is.
+
         Args:
             combined: If ``True``, returns a single combined markdown
                 string. If ``False``, returns a dict mapping artifact
@@ -438,13 +442,53 @@ class SpecSession:
         """
         self._check_artifacts()
 
-        spec = afspec.load_spec(self._spec_dir)
+        try:
+            spec = afspec.load_spec(self._spec_dir)
+        except Exception:
+            return self._render_from_artifacts(combined)
 
         if combined:
             rendered: str = afspec.render_combined(spec)
             return rendered
         individual: dict[str, str] = afspec.render_individual(spec)
         return individual
+
+    def _render_from_artifacts(
+        self, combined: bool
+    ) -> str | dict[str, str]:
+        """Render by loading each artifact file individually.
+
+        Used as a fallback when ``load_spec()`` fails (e.g. PRD lacks
+        frontmatter).
+        """
+        prd_text = (self._spec_dir / "prd.md").read_text()
+
+        req = Requirements.model_validate_json(
+            (self._spec_dir / "requirements.json").read_text()
+        )
+        ts = TestSpec.model_validate_json(
+            (self._spec_dir / "test_spec.json").read_text()
+        )
+        t = Tasks.model_validate_json(
+            (self._spec_dir / "tasks.json").read_text()
+        )
+
+        req_md = afspec.render_requirements(req)
+        ts_md = afspec.render_test_spec(ts)
+        tasks_md = afspec.render_tasks(t)
+
+        if combined:
+            parts = [prd_text.rstrip(), "", "---", "", req_md.rstrip(),
+                     "", "---", "", ts_md.rstrip(), "", "---", "",
+                     tasks_md.rstrip(), ""]
+            return "\n".join(parts)
+
+        return {
+            "prd": prd_text,
+            "requirements": req_md,
+            "test_spec": ts_md,
+            "tasks": tasks_md,
+        }
 
     @property
     def state(self) -> SessionState:

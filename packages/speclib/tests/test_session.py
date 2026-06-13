@@ -82,8 +82,8 @@ def _create_session_with_all_artifacts(tmp_path: Path) -> SpecSession:
 
     # Create the four required artifacts
     spec_dir = session.spec_dir
-    for artifact in ["requirements.md", "design.md", "test_spec.md"]:
-        (spec_dir / artifact).write_text(f"# {artifact}\n\nPlaceholder content")
+    for artifact in ["requirements.json", "test_spec.json", "tasks.json"]:
+        (spec_dir / artifact).write_text(f'{{"placeholder": "{artifact}"}}')
 
     return session
 
@@ -398,7 +398,7 @@ class TestSessionEdgeCases:
 
         Requirement: 02-REQ-6.E1
         """
-        # Session with only prd.md — missing requirements.md, design.md, test_spec.md
+        # Session with only prd.md — missing requirements.json, test_spec.json, tasks.json
         camp_dir = tmp_path / "missing_artifacts"
         camp = Campaign.create(camp_dir, "Test", "Desc")
         session = camp.new_spec("incomplete", "PRD content")
@@ -406,14 +406,14 @@ class TestSessionEdgeCases:
         with pytest.raises(SessionError) as exc_info:
             session.validate()
         error_msg = str(exc_info.value)
-        assert "requirements.md" in error_msg
-        assert "design.md" in error_msg
-        assert "test_spec.md" in error_msg
+        assert "requirements.json" in error_msg
+        assert "test_spec.json" in error_msg
+        assert "tasks.json" in error_msg
 
         with pytest.raises(SessionError) as exc_info:
             session.render()
         error_msg = str(exc_info.value)
-        assert "requirements.md" in error_msg
+        assert "requirements.json" in error_msg
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +434,7 @@ _LEGAL_TRANSITIONS: dict[tuple[str, str], str] = {
 
 # All four required artifacts for validate/render
 _REQUIRED_ARTIFACTS = frozenset(
-    {"prd.md", "requirements.md", "design.md", "test_spec.md"}
+    {"prd.md", "requirements.json", "test_spec.json", "tasks.json"}
 )
 
 
@@ -591,7 +591,7 @@ class TestSessionProperties:
         # prd.md is always created by new_spec, add the rest from subset
         for artifact in subset:
             if artifact != "prd.md":
-                (session.spec_dir / artifact).write_text(f"# {artifact}")
+                (session.spec_dir / artifact).write_text(f'{{"placeholder": "{artifact}"}}')
 
         missing = _REQUIRED_ARTIFACTS - subset - {"prd.md"}
 

@@ -534,24 +534,7 @@ def render_cmd(ctx: click.Context, spec: str, combined: bool) -> None:
         campaign = resolve_campaign(campaign_dir)
         spec_dir = resolve_spec(campaign, spec)
         session = SpecSession.resume(spec_dir)
-        try:
-            result = session.render(combined=combined)
-        except (CampaignError, SessionError):
-            raise
-        except Exception:
-            # Fallback: read spec markdown files directly when the
-            # afspec rendering backend is unavailable.
-            md_files = sorted(
-                f
-                for f in spec_dir.iterdir()
-                if f.is_file()
-                and f.suffix == ".md"
-                and not f.name.startswith("_")
-            )
-            if combined:
-                result = "\n\n".join(f.read_text() for f in md_files)
-            else:
-                result = {f.name: f.read_text() for f in md_files}
+        result = session.render(combined=combined)
 
         if isinstance(result, str):
             click.echo(result)

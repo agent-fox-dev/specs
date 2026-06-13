@@ -414,6 +414,24 @@ def render_tasks(t: Tasks) -> str:
 # ---------------------------------------------------------------------------
 
 
+def render_individual(spec: Spec) -> dict[str, str]:
+    """Render each spec artifact to its own markdown string.
+
+    Returns a dict mapping artifact name to rendered markdown.
+    The PRD body is included as-is; requirements, test_spec, and tasks
+    are rendered via their respective renderers. Architecture is included
+    when present.
+    """
+    result: dict[str, str] = {}
+    result["prd"] = spec.prd.body
+    if spec.architecture is not None:
+        result["architecture"] = spec.architecture
+    result["requirements"] = render_requirements(spec.requirements)
+    result["test_spec"] = render_test_spec(spec.test_spec)
+    result["tasks"] = render_tasks(spec.tasks)
+    return result
+
+
 def render_combined(spec: Spec) -> str:
     """Render all spec artifacts to a single markdown document.
 
