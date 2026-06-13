@@ -164,8 +164,8 @@ Subsequent groups implement modules to make those tests pass.
     - [x] No linter warnings: `uv run ruff check packages/coder/ && uv run mypy packages/coder/coder/`
     - [x] Requirements 2.1-2.5, 3.1-3.5 met
 
-- [ ] 4. Prompt templates & assembly
-  - [ ] 4.1 Implement TemplateLoader
+- [x] 4. Prompt templates & assembly
+  - [x] 4.1 Implement TemplateLoader
     - Create `packages/coder/coder/templates.py`
     - Implement search path resolution (project → package)
     - Implement name validation (regex, no traversal)
@@ -173,27 +173,27 @@ Subsequent groups implement modules to make those tests pass.
     - Implement frontmatter stripping
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 4.2 Create default prompt templates
+  - [x] 4.2 Create default prompt templates
     - Create `packages/coder/coder/_templates/agent.md` — base agent profile
     - Create `packages/coder/coder/_templates/coder.md` — coding persona
     - Create `packages/coder/coder/_templates/reviewer.md` — reviewer persona
     - _Requirements: 5.6_
 
-  - [ ] 4.3 Implement PromptAssembler
+  - [x] 4.3 Implement PromptAssembler
     - Create `packages/coder/coder/prompts.py`
     - Implement 3-layer composition (base + persona + context)
     - Implement `$variable` substitution via `string.Template`
     - Handle missing base profile gracefully
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 4.V Verify task group 4
-    - [ ] Spec tests pass: TS-12-12 through TS-12-16
-    - [ ] Edge case tests pass: TS-12-E5, TS-12-E6
-    - [ ] Property tests pass: TS-12-P3, TS-12-P4, TS-12-P5
-    - [ ] Smoke test pass: TS-12-SMOKE-2
-    - [ ] All existing tests still pass: `uv run pytest -q packages/coder/tests/ -v`
-    - [ ] No linter warnings: `uv run ruff check packages/coder/ && uv run mypy packages/coder/coder/`
-    - [ ] Requirements 5.1-5.6, 6.1-6.4 met
+  - [x] 4.V Verify task group 4
+    - [x] Spec tests pass: TS-12-12 through TS-12-16
+    - [x] Edge case tests pass: TS-12-E5, TS-12-E6
+    - [x] Property tests pass: TS-12-P3, TS-12-P4, TS-12-P5
+    - [x] Smoke test pass: TS-12-SMOKE-2
+    - [x] All existing tests still pass: `uv run pytest -q packages/coder/tests/ -v`
+    - [x] No linter warnings: `uv run ruff check packages/coder/ && uv run mypy packages/coder/coder/`
+    - [x] Requirements 5.1-5.6, 6.1-6.4 met
 
 - [ ] 5. CLI entry point
   - [ ] 5.1 Implement CLI commands
