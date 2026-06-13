@@ -25,8 +25,8 @@ tests. This is the largest spec with 7 task groups.
 
 ## Tasks
 
-- [ ] 1. Write failing spec tests
-  - [ ] 1.1 Create test file structure
+- [x] 1. Write failing spec tests
+  - [x] 1.1 Create test file structure
     - Create `packages/coder/tests/test_graph.py`
     - Create `packages/coder/tests/test_nodes.py`
     - Create `packages/coder/tests/test_tools.py`
@@ -37,16 +37,16 @@ tests. This is the largest spec with 7 task groups.
     - Add git repo fixtures to conftest.py
     - _Test Spec: TS-14-1 through TS-14-25_
 
-  - [ ] 1.2 Translate acceptance-criterion tests
+  - [x] 1.2 Translate acceptance-criterion tests
     - TS-14-1 through TS-14-25 (all acceptance criterion tests)
     - _Test Spec: TS-14-1 through TS-14-25_
 
-  - [ ] 1.3 Translate edge-case tests
+  - [x] 1.3 Translate edge-case tests
     - TS-14-E1 through TS-14-E12
     - TS-14-E8: Unhandled exception caught by campaign
     - _Test Spec: TS-14-E1 through TS-14-E12_
 
-  - [ ] 1.4 Translate property tests
+  - [x] 1.4 Translate property tests
     - TS-14-P1: Monotonic task group progress
     - TS-14-P2: Retry never exceeds max_attempts
     - TS-14-P3: Path containment
@@ -56,16 +56,16 @@ tests. This is the largest spec with 7 task groups.
     - TS-14-P7: Verification exit code semantics
     - _Test Spec: TS-14-P1 through TS-14-P7_
 
-  - [ ] 1.5 Translate integration smoke tests
+  - [x] 1.5 Translate integration smoke tests
     - TS-14-SMOKE-1: Full graph execution
     - TS-14-SMOKE-2: Worktree lifecycle
     - TS-14-SMOKE-3: Campaign runs multiple specs
     - _Test Spec: TS-14-SMOKE-1 through TS-14-SMOKE-3_
 
-  - [ ] 1.V Verify task group 1
-    - [ ] All spec tests exist and are syntactically valid
-    - [ ] All spec tests FAIL (red) — no implementation yet
-    - [ ] No linter warnings: `uv run ruff check packages/coder/tests/`
+  - [x] 1.V Verify task group 1
+    - [x] All spec tests exist and are syntactically valid
+    - [x] All spec tests FAIL (red) — no implementation yet
+    - [x] No linter warnings: `uv run ruff check packages/coder/tests/`
 
 - [ ] 2. State schema & LangChain tools
   - [ ] 2.1 Define CoderState TypedDict

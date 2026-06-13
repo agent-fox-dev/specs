@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "smoke: smoke / integration tests"
+    )
 
 
 @pytest.fixture()
@@ -222,3 +230,62 @@ def create_spec_pack(
     )
 
     return spec_dir
+
+
+# ---------------------------------------------------------------------------
+# Spec 14: Git repo helpers and fixtures for worktree / runner tests
+# ---------------------------------------------------------------------------
+
+
+def init_git_repo(path: Path) -> Path:
+    """Initialize a git repository with an initial commit.
+
+    Creates the directory if it does not exist, runs ``git init``,
+    writes a README.md, and commits it so the repo has at least one
+    commit (required before worktrees can be created).
+
+    Parameters
+    ----------
+    path:
+        Directory path for the new git repo.
+
+    Returns
+    -------
+    Path to the initialized repository (same as *path*).
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "init", str(path)],
+        check=True,
+        capture_output=True,
+    )
+    readme = path / "README.md"
+    readme.write_text("# Test repo\n")
+    subprocess.run(
+        ["git", "-C", str(path), "add", "."],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-m", "Initial commit"],
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@test.com",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@test.com",
+        },
+    )
+    return path
+
+
+@pytest.fixture()
+def git_repo(tmp_path: Path) -> Path:
+    """Create a temporary git repository with one commit.
+
+    Suitable for worktree and runner integration tests that need a
+    real git repository to operate on.
+    """
+    return init_git_repo(tmp_path / "repo")
