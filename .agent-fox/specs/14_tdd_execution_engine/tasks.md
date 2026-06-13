@@ -118,8 +118,8 @@ tests. This is the largest spec with 7 task groups.
   - Ensure all tests pass. All infrastructure modules (state, tools, verify)
     are working. Ask the user if questions arise.
 
-- [ ] 5. LangGraph nodes & routing
-  - [ ] 5.1 Implement workflow nodes
+- [x] 5. LangGraph nodes & routing
+  - [x] 5.1 Implement workflow nodes
     - Create `packages/coder/coder/nodes.py`
     - Implement `understand_spec` node (LLM reads spec, writes context)
     - Implement `analyze_codebase` node (LLM analyzes code)
@@ -131,7 +131,7 @@ tests. This is the largest spec with 7 task groups.
     - Each node reads from and writes to CoderState
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
-  - [ ] 5.2 Implement conditional edge routing
+  - [x] 5.2 Implement conditional edge routing
     - Add routing functions to `packages/coder/coder/graph.py`
     - `route_after_coverage`: coverage_ok → implement, else → write_tests
     - `route_after_tests`: pass → verify_intent, fail+attempts → implement,
@@ -142,7 +142,7 @@ tests. This is the largest spec with 7 task groups.
     - Implement `next_task_group` node that advances group counter
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-  - [ ] 5.3 Build graph constructor
+  - [x] 5.3 Build graph constructor
     - Implement `build_graph(provider, tools, config)` in graph.py
     - Add all nodes to the graph
     - Wire conditional edges
@@ -150,13 +150,13 @@ tests. This is the largest spec with 7 task groups.
     - Compile the graph
     - _Requirements: 9.1 (partial)_
 
-  - [ ] 5.V Verify task group 5
-    - [ ] Spec tests pass: TS-14-2 through TS-14-12
-    - [ ] Edge case tests pass: TS-14-E1, TS-14-E2
-    - [ ] Property tests pass: TS-14-P1, TS-14-P2
-    - [ ] All existing tests still pass: `uv run pytest -q packages/coder/tests/ -v`
-    - [ ] No linter warnings: `uv run ruff check packages/coder/ && uv run mypy packages/coder/coder/`
-    - [ ] Requirements 2.1-2.7, 3.1-3.6 met
+  - [x] 5.V Verify task group 5
+    - [x] Spec tests pass: TS-14-2 through TS-14-12
+    - [x] Edge case tests pass: TS-14-E1, TS-14-E2
+    - [x] Property tests pass: TS-14-P1, TS-14-P2
+    - [x] All existing tests still pass: `uv run pytest -q packages/coder/tests/ -v`
+    - [x] No linter warnings: `uv run ruff check packages/coder/ && uv run mypy packages/coder/coder/`
+    - [x] Requirements 2.1-2.7, 3.1-3.6 met
 
 - [ ] 6. Worktree, git, & runner entry points
   - [ ] 6.1 Implement worktree lifecycle

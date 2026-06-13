@@ -298,3 +298,27 @@ def next_task_group(state: dict[str, Any]) -> dict[str, Any]:
     )
     new_state["attempt_count"] = 0
     return new_state
+
+
+def complete_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Terminal node marking the workflow as successfully completed.
+
+    Sets ``current_phase`` to ``"complete"`` per 14-REQ-7.4.
+    """
+    new_state = _with_defaults(state)
+    new_state["current_phase"] = "complete"
+    return new_state
+
+
+def halted_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Terminal node marking the workflow as halted due to exceeded attempts.
+
+    Ensures ``halted`` is True and preserves the halt reason.
+    """
+    new_state = _with_defaults(state)
+    new_state["halted"] = True
+    if not new_state.get("halt_reason"):
+        new_state["halt_reason"] = (
+            f"Max attempts ({new_state.get('max_attempts', 5)}) exceeded"
+        )
+    return new_state
