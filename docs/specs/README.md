@@ -33,6 +33,7 @@ optional artifact:
 The full specification — field-level schemas, EARS pattern definitions, ID
 formats, validation rules, subtask state machine, and rendering — is at
 **[spec-format_v1.2.md](spec-format_v1.2.md)**.
+
 ---
 
 ## Implementation

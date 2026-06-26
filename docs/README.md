@@ -33,7 +33,7 @@ services, and the af MCP bridge.
 process), CLI, storage layout, communication protocols, security and isolation,
 retrieval engine, CI/CD bridge, notification service, and web dashboard.
 
-## Layer Specifications
+## Documents
 
 | Document | Description |
 | --- | --- |
