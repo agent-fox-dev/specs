@@ -40,11 +40,3 @@ retrieval engine, CI/CD bridge, notification service, and web dashboard.
 | [Coordination Layer](coordination-layer.md) | Domain model, workspaces, campaigns, spec package integration, agents, orchestration, data model, and API surface. |
 | [Runtime Layer](runtime-layer.md) | Container runtime interface, git worktree management, harness adapters, agent lifecycle, templates, sidecar services, and the af SDK. |
 | [Services Architecture](services-architecture.md) | Deployable components (hub, CLI, runtime engine, memory service), the spec creation tool, storage layout, communication protocols, security, and deployment modes. |
-
-## Spec Format
-
-| Document | Description |
-| --- | --- |
-| [Spec Format Overview](specs/README.md) | Overview of the specification package: artifacts, EARS patterns, validation, lifecycle, and traceability. |
-| [Spec Format Specification](specs/spec-format_v1.2.md) | Full on-disk format. Field-level schemas, validation rules, ID formats, and rendering. |
-| [Spec Tooling Reference](specs/spec-tooling.md) | Python packages: `afspec`, `agentspec`, and the `spec` CLI. |
