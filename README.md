@@ -16,21 +16,6 @@ Start with the **[Architecture overview](docs/README.md)** for the
 three-layer system design, or the **[Spec Format overview](docs/specs/README.md)**
 for the specification package that drives every unit of work.
 
-## Repository Layout
-
-```
-README.md                           ← you are here
-docs/
-  README.md                         Architecture overview and layer diagram
-  coordination-layer.md             Domain model, workspaces, orchestration
-  runtime-layer.md                  Containers, worktrees, provider adapters
-  services-architecture.md          Deployable components and deployment modes
-  specs/
-    README.md                       Spec format overview
-    spec-format_v1.2.md             Full on-disk format specification
-    spec-tooling.md                 Python packages: afspec, agentspec, spec CLI
-```
-
 ## Documents
 
 ### Architecture
@@ -48,7 +33,6 @@ docs/
 | --- | --- |
 | [Spec Format Overview](docs/specs/README.md) | Overview of the specification package: artifacts, EARS patterns, validation, lifecycle, and traceability. |
 | [Spec Format Specification](docs/specs/spec-format_v1.2.md) | Full on-disk format for a spec package. Field-level schemas, EARS patterns, validation rules, ID formats, and rendering. |
-| [Spec Tooling Reference](docs/specs/spec-tooling.md) | Python packages that implement the spec format: `afspec`, `agentspec`, and the `spec` CLI. |
 
 ## Key Concepts
 
